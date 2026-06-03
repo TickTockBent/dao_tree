@@ -43,8 +43,11 @@ var REALM_DATA = [
         symbol: "Qi",
         color: "#5fc9e0",
         resource: "qi condensation",
-        reqBase: 50,
-        gainExp: 0.5,
+        // Pass-2 tune (pacing, §1): reqBase 50 -> 20 and gainExp 0.5 -> 0.6 so q.best
+        // climbs to 6th Level (at:90) fast enough that Foundation unlocks in ~30 min,
+        // not ~255 (see js/build/pacing-sim.js). Unlock stays at 50 Qi (> reqBase).
+        reqBase: 20,
+        gainExp: 0.6,
         unlock: { qi: 50 },
         substages: [
             { label: "1st Level",  at: 1,   qiMult: 1.10 },
@@ -71,9 +74,17 @@ var REALM_DATA = [
         symbol: "Fnd",
         color: "#d8b25a",
         resource: "foundation",
-        reqBase: 5000,
-        gainExp: 0.5,
-        unlock: { realm: ["q", 6], meridians: 4 },
+        // Pass-2 tune (pacing, §1): reqBase 5000 -> 1000 and gainExp 0.5 -> 0.6 so
+        // f.best reaches Great Circle (at:45) in a few-million-Qi budget rather than
+        // ~10M. This also offsets the f-gain slowdown from fixing the gradeScore
+        // blocker (which removed the inadvertent Heaven 3.5x). See pacing-sim.js.
+        reqBase: 1000,
+        gainExp: 0.6,
+        // §5b: unlock at Qi Condensation 6th Level (best>=90) AND >=4 meridians.
+        // String stage label (resolved via substageThreshold) — NOT a numeric token,
+        // which would gate at best>=6 (~3rd Level region) and let Foundation unlock
+        // before its "6th Level reveals Foundation" coupling fires (§5a).
+        unlock: { realm: ["q", "6th Level"], meridians: 4 },
         substages: [
             { label: "Early Foundation", at: 1,  qiMult: 1.25 },
             { label: "Mid Foundation",   at: 4,  qiMult: 1.25 },
@@ -93,7 +104,13 @@ var REALM_DATA = [
             weightRealm: 0.20,
             meridianDenominator: 12,   // primary meridian cap (§4a)
             temperDenominator: 20,     // temper saturates at Marrow entry (§4b/§6)
-            realmDenominator: 6,       // q.best needed for Foundation (6th Level)
+            // realmDenominator is a SUB-STAGE COUNT, not a q.best currency value:
+            // the realm term is realmReachedSubstageCount(q) / 6, where 6 = the
+            // number of q sub-stages to reach 6th Level (the Foundation gate). The
+            // factory divides the count of reached sub-stages (a small ~6 index) by
+            // this — NOT raw q.best — so the realm term tops out at its 0.20 weight
+            // and cannot alone saturate the whole gradeScore (blocker fix, §6/§9.2).
+            realmDenominator: 6,
             // gradeScore band -> { tier label, f-gain mult, core ceiling key,
             //                      baseCore key }.
             // floor is the inclusive lower bound on gradeScore.

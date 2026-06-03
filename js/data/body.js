@@ -49,7 +49,11 @@ var BODY_DATA = {
     resource: "body refinement",
 
     qi: {
-        baseRate: 1,
+        // baseRate is the linear floor of Qi/sec (§2). Pass-2 tune: raised 1 -> 2
+        // so the early grind (before meridians/realm mults compound) clears fast
+        // enough to hit the §1 45-90 min target after the gradeScore blocker fix
+        // removed the inadvertent 3.5x Heaven f-gain speedup (see pacing-sim.js).
+        baseRate: 2,
         coreGradeStartIndex: -1   // -1 = no core forged yet (sentinel below Cracked)
     },
 
@@ -76,7 +80,10 @@ var BODY_DATA = {
             effectBase: 1.25,
             limit: 8,
             // Unlocks after all 12 primary open AND Qi Condensation 10th Level (§4a/§5a).
-            unlock: { primaryMeridiansAll: true, realm: ["q", 10] }
+            // String stage label (resolves to best>=800), NOT numeric 10 — a numeric
+            // token would gate at best>=10 (~3rd/4th Level), the same scale bug fixed
+            // for f.unlock. Standardize realm gates on named stage labels (§5a).
+            unlock: { primaryMeridiansAll: true, realm: ["q", "10th Level"] }
         },
         {
             id: 13,
@@ -84,7 +91,10 @@ var BODY_DATA = {
             title: "Temper Body",
             resourceWord: "Foundation ceiling",
             costBase: 25,
-            costRatio: 2.2,
+            // costRatio pass-2 tune: 2.2 -> 1.7 so reaching Tendon (level 10, the
+            // Core Formation gate §5c) isn't a Qi wall. At 2.2 the 10th temper level
+            // alone cost ~30k cumulative; 1.7 keeps tempering a real choice, not a tax.
+            costRatio: 1.7,
             // Temper's immediate Qi/sec payoff comes from the per-tier milestones
             // (§4b), not a per-level mult, so its per-level effectBase is neutral (1).
             effectBase: 1,

@@ -76,6 +76,22 @@ function realmBest(realmId) {
     return factoryDecimalZero();
 }
 
+// Count the realm's reached sub-stage LEVELS (sub-stages whose `at` threshold
+// the realm's high-water `best` meets) — i.e. the small level index (~6 at 6th
+// Level), NOT the raw prestige currency `best`. This is the §6 realm-term input:
+// the realm's sub-stage progress, so the gradeScore realm term measures "how
+// deep into the realm" rather than "how much currency banked" (the blocker fix —
+// raw q.best climbs into the dozens/hundreds and would saturate the score alone).
+function realmReachedSubstageCount(realmId) {
+    var realmData = findRealmData(realmId);
+    var best = realmBest(realmId);
+    var reached = factoryDecimalZero();
+    realmData.substages.forEach(function (stage) {
+        if (best.gte(stage.at)) reached = reached.add(FACTORY_ONE);
+    });
+    return reached;
+}
+
 // Resolve a sub-stage label to its `at` threshold for a realm.
 function substageThreshold(realmId, label) {
     var realmData = findRealmData(realmId);
@@ -251,8 +267,16 @@ function foundationGradeScore() {
         .div(temperDenominator)
         .times(grade.weightTemper);
 
-    var realmTerm = realmBest("q")
-        .div(grade.realmDenominator)
+    // §6 realm term: the realm's reached sub-stage level count (small index, ~6
+    // at 6th Level) over the denominator (the 6th-Level milestone), NOT raw
+    // q.best. Clamped to the denominator (like the temper term) so progress past
+    // 6th Level does not keep adding grade — the term saturates at its weight, so
+    // no single term can clamp the whole score (the blocker fix, §6/§9.2).
+    var realmDenominator = new Decimal(grade.realmDenominator);
+    var realmReached = realmReachedSubstageCount("q");
+    if (realmReached.gt(realmDenominator)) realmReached = realmDenominator;
+    var realmTerm = realmReached
+        .div(realmDenominator)
         .times(grade.weightRealm);
 
     return clampUnitInterval(meridianTerm.add(temperTerm).add(realmTerm));

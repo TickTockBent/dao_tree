@@ -152,6 +152,18 @@
             if (condition.realm !== undefined) {
                 var targetId = condition.realm[ZERO];
                 var stage = condition.realm[ONE];
+                // §5a standard: realm gates use NAMED stage labels, not numeric
+                // best thresholds. A numeric token is the scale bug that gated
+                // Foundation at best>=6 instead of "6th Level" (best>=90): the raw
+                // number is read as a currency high-water, ~15x too early. Require
+                // strings so a stage label can never be mistaken for a count.
+                if (typeof stage !== "string") {
+                    errors.push(label + ": realm token must be a named stage label (e.g. \""
+                        + ((REALM_DATA.find(function (r) { return r.id === targetId; }) || { substages: [{ label: "1st Level" }] })
+                            .substages[ZERO].label)
+                        + "\"), not the numeric " + stage
+                        + " — a number is read as a raw best threshold, not a stage (§5a/§6).");
+                }
                 var threshold = realmStageThreshold(targetId, stage);
                 if (threshold === null) {
                     errors.push(label + ": references unknown realm/stage "
@@ -247,6 +259,70 @@
             errors.push("Root realm '" + firstRealm.id
                 + "' must unlock from Qi alone for a fresh save to progress.");
         }
+    }
+
+    // ----- §6 gradeScore term scaling (no-clamp-saturation) --------------
+    // The gradeScore blocker (a term whose data-defined max input swamped the
+    // others and clamped the whole score to 1.0) is invisible to the dead-mult
+    // check — that only proves fMult has a consumer, not that the SCORE INPUTS
+    // are well-scaled. So assert it directly: for each graded realm, the weights
+    // must sum to 1, and each term, fed its MAXIMUM reachable input, must
+    // contribute <= its own weight. If maxInput > denominator the term can exceed
+    // its weight and (with the [0,1] clamp) silently dominate the score.
+    //   meridian term: maxInput = primary meridian limit,  denom = meridianDenominator
+    //   temper   term: maxInput = temper buyable limit,    denom = temperDenominator
+    //   realm    term: maxInput = count of q sub-stages,   denom = realmDenominator
+    // The factory clamps the realm/temper inputs to their denominators, so this is
+    // belt-and-suspenders: it catches a DATA mis-scaling (e.g. a denominator typo)
+    // even if a future factory edit drops the clamp.
+    function checkGradeScoreScaling(errors) {
+        var weightTolerance = ONE / FACTORY_NUMERICS.hundred; // 0.01 tolerance on the weight sum
+        var primaryRow = BODY_DATA.buyables.find(function (b) { return b.key === "primaryMeridian"; });
+        var temperRow = BODY_DATA.buyables.find(function (b) { return b.key === "temper"; });
+
+        REALM_DATA.forEach(function (realm) {
+            if (!realm.graded || !realm.grade) return;
+            var g = realm.grade;
+
+            var weightSum = g.weightMeridian + g.weightTemper + g.weightRealm;
+            if (Math.abs(weightSum - ONE) > weightTolerance) {
+                errors.push("Realm " + realm.id + " gradeScore weights sum to " + weightSum
+                    + ", expected 1 (§6).");
+            }
+
+            // Per-term: each term's MAX reachable input over its denominator must be
+            // <= 1, so weight*(ratio) <= weight and no term can alone clamp the score.
+            //   - "clamped" terms (temper, realm) are clamped to their denominator IN
+            //     THE FACTORY by design (§6: temper saturates at Marrow entry even
+            //     though the buyable limit is a few levels higher; realm saturates at
+            //     6th Level). For those the effective input is min(maxInput, denom),
+            //     so they are safe as long as the FACTORY clamp is present — which the
+            //     no-dead-multiplier consumer check confirms exists. We assert the
+            //     clamp is meaningful (denom <= maxInput, else the clamp is inert and a
+            //     denom typo could still under-scale) and that denom > 0.
+            //   - the "unclamped" meridian term is NOT clamped in the factory, so its
+            //     raw maxInput (the meridian limit) MUST be <= denominator.
+            var terms = [
+                { name: "meridian", maxInput: primaryRow.limit, denom: g.meridianDenominator, clamped: false },
+                { name: "temper", maxInput: temperRow.limit, denom: g.temperDenominator, clamped: true },
+                { name: "realm", maxInput: realm.substages.length, denom: g.realmDenominator, clamped: true }
+            ];
+            terms.forEach(function (term) {
+                if (!(term.denom > ZERO)) {
+                    errors.push("Realm " + realm.id + " gradeScore " + term.name
+                        + " denominator must be > 0 (§6).");
+                    return;
+                }
+                if (!term.clamped && term.maxInput > term.denom) {
+                    errors.push("Realm " + realm.id + " gradeScore " + term.name
+                        + " term can exceed its weight: unclamped max input " + term.maxInput
+                        + " > denominator " + term.denom
+                        + " (ratio " + (term.maxInput / term.denom).toFixed(FACTORY_NUMERICS.one + ONE)
+                        + " > 1), so this term alone could clamp the score — the "
+                        + "gradeScore blocker class (§6/§9.2).");
+                }
+            });
+        });
     }
 
     // ----- §8/§9.1 story-gate discipline ---------------------------------
@@ -354,6 +430,8 @@
         checks.noDeadMultipliers = "ran";
         checkCompletability(errors);
         checks.completability = "ran";
+        checkGradeScoreScaling(errors);
+        checks.gradeScoreScaling = "ran";
         checkStoryGateDiscipline(errors);
         checks.storyGateDiscipline = "ran";
         checks.noNumericLiterals = checkNoNumericLiterals(errors, sourceTexts);

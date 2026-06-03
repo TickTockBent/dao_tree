@@ -1,0 +1,7 @@
+# Study-only reference implementation — STUDY for pitfalls, never committed into
+# this game's history (it is out of scope and has known defects; see task notes).
+docs/internal/reference/
+docs/internal/immortal-tree-build.zip
+
+# Local tooling / session state.
+.claude/
