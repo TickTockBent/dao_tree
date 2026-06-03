@@ -1,28 +1,16 @@
-addLayer("p", {
-    name: "prestige", // This is optional, only used in a few places, If absent it just uses the layer id.
-    symbol: "P", // This appears on the layer's node. Default is the id with the first letter capitalized
-    position: 0, // Horizontal position within a row. By default it uses the layer id and sorts in alphabetical order
-    startData() { return {
-        unlocked: true,
-		points: new Decimal(0),
-    }},
-    color: "#4BDC13",
-    requires: new Decimal(10), // Can be a function that takes requirement increases into account
-    resource: "prestige points", // Name of prestige currency
-    baseResource: "points", // Name of resource prestige is based on
-    baseAmount() {return player.points}, // Get the current amount of baseResource
-    type: "normal", // normal: cost to gain currency depends on amount gained. static: cost depends on how much you already have
-    exponent: 0.5, // Prestige currency exponent
-    gainMult() { // Calculate the multiplier for main currency from bonuses
-        mult = new Decimal(1)
-        return mult
-    },
-    gainExp() { // Calculate the exponent on main currency from bonuses
-        return new Decimal(1)
-    },
-    row: 0, // Row the layer is in on the tree (0 is the first row)
-    hotkeys: [
-        {key: "p", description: "P: Reset for prestige points", onPress(){if (canReset(this.layer)) doReset(this.layer)}},
-    ],
-    layerShown(){return true}
-})
+// js/layers.js — intentionally empty.
+//
+// In this mod the game's layers are NOT hand-authored here. They are generated
+// from the plain-JS data tables (js/data/*.js) by the config->layer factory
+// (js/build/layerFactory.js, spec §11), which calls addLayer(...) for the Body
+// side layer ("b"), the Sect Standing gate ("gate"), and the realm chain
+// ("q","f","c") at load time — before this file is injected by the modFiles
+// loader.
+//
+// The stock TMT demo "prestige" layer ("p") that shipped here has been removed:
+// it was a placeholder on row 0 that would have collided with the Qi
+// Condensation realm and is not part of the cultivation design. Leaving this
+// file present (and listed in modInfo.modFiles) keeps the loader happy without
+// registering any extra layers.
+//
+// To add or tune game content, edit the data tables in js/data/, not this file.
