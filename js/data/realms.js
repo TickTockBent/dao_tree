@@ -94,13 +94,30 @@ var REALM_DATA = [
             meridianDenominator: 12,   // primary meridian cap (§4a)
             temperDenominator: 20,     // temper saturates at Marrow entry (§4b/§6)
             realmDenominator: 6,       // q.best needed for Foundation (6th Level)
-            // gradeScore band -> { tier label, f-gain mult, core ceiling key }.
+            // gradeScore band -> { tier label, f-gain mult, core ceiling key,
+            //                      baseCore key }.
             // floor is the inclusive lower bound on gradeScore.
+            //
+            // baseCore (§7a, the previously-open item — now pinned as data) is the
+            // STARTING Core grade the forge produces before any push offset, mapped
+            // from the Foundation Grade that fed it:
+            //   Flawed       -> Cracked   (floor; a sloppy foundation births a flawed core)
+            //   Stable       -> Lower
+            //   Solid        -> Middle
+            //   Heaven-grade -> Upper
+            // coreCeiling is the hard cap a foundation of this grade can ever reach
+            // (push offset + refinement both clamp to it). The push offset is +0/+1/+2
+            // (Steady/Forceful/Reckless), so each band's baseCore + the max +2 Reckless
+            // offset exactly reaches that band's coreCeiling — i.e. a Heaven-grade
+            // foundation (baseCore Upper) can push to Perfect, and every weaker band can
+            // push to its own ceiling. Refinement (§7b) is the slow route to the same cap.
+            // Keys reference REALM_DATA(c).forge.grades[].key; the factory resolves a key
+            // to its ceilingIndex (the ordered ladder position) — no numeric grades here.
             bands: [
-                { floor: 0.00, tier: "Flawed",       fMult: 1.0, coreCeiling: "lower"  },
-                { floor: 0.35, tier: "Stable",       fMult: 1.5, coreCeiling: "middle" },
-                { floor: 0.60, tier: "Solid",        fMult: 2.2, coreCeiling: "upper"  },
-                { floor: 0.85, tier: "Heaven-grade", fMult: 3.5, coreCeiling: "perfect" }
+                { floor: 0.00, tier: "Flawed",       fMult: 1.0, coreCeiling: "lower",   baseCore: "cracked" },
+                { floor: 0.35, tier: "Stable",       fMult: 1.5, coreCeiling: "middle",  baseCore: "lower"   },
+                { floor: 0.60, tier: "Solid",        fMult: 2.2, coreCeiling: "upper",   baseCore: "middle"  },
+                { floor: 0.85, tier: "Heaven-grade", fMult: 3.5, coreCeiling: "perfect", baseCore: "upper"   }
             ]
         }
     },
@@ -119,12 +136,16 @@ var REALM_DATA = [
             { label: "Core Refined",  at: 2, qiMult: 1.75 },
             { label: "Core Tempered", at: 3, qiMult: 2.00 }
         ],
-        // One-time forge then a refinement loop — never a repeatable prestige
-        // (§5c). Forge logic lands in a later phase; the data lives here now so
-        // the schema and linter targets are fixed.
+        // One-time forge (§7a) then a refinement loop (§7b) — never a repeatable
+        // prestige (§5c). All forge/refinement tuning + UI dimensions live here as
+        // data so the factory/layer code stays literal-free (§11).
         forge: {
-            // Requirement: Core Formation unlocked + f.points >= forgeReq (§7a).
+            // Requirement to OPEN the forge: Core Formation unlocked + f.points >= forgeReq (§7a).
             forgeReq: 25,
+            // Base fuel the 1x (Steady) push spends; each push spends fuelBase * fuelMult
+            // of f.points. Set equal to forgeReq so Steady is affordable the moment the
+            // forge opens, while Forceful/Reckless demand banking more Foundation fuel.
+            fuelBase: 25,
             // Discrete push options (§7a). fuelMult multiplies the base fuel cost,
             // offset shifts the produced grade, crackChance is the drop-one-tier risk.
             pushOptions: [
@@ -135,11 +156,14 @@ var REALM_DATA = [
             // A crack drops exactly one tier; cracked is the floor (§7a/§9.3).
             crackTierDrop: 1,
             // Refinement loop (§7b): "Warm the Core" accrues progress; a full bar
-            // raises grade one tier, capped at the Foundation ceiling.
+            // raises grade one tier, capped at the Foundation ceiling. Slow/safe route
+            // to the same ceiling the fast/risky push reaches.
             refinement: {
-                goal: 100,           // progress units for one tier (§7b)
-                ratePerSecond: 1,    // base accrual per second
-                tierStep: 1          // tiers gained per full bar
+                goal: 100,            // progress units for one tier (§7b)
+                ratePerSecond: 1,     // base accrual per second while warming
+                tierStep: 1,          // tiers gained per full bar
+                barWidth: 360,        // refinement bar width  (px) — UI dimension as data (§11)
+                barHeight: 28         // refinement bar height (px)
             },
             // Core Grade ladder (§7): grade key -> global Qi/sec + cultivation mult.
             // ceilingIndex orders the ladder so a Foundation coreCeiling caps it.

@@ -291,6 +291,167 @@ function computeAndStoreFoundationGrade() {
 }
 
 // ---------------------------------------------------------------------------
+// Core forge + refinement (§7). The Core grade is a single stored integer INDEX
+// on the reset-immune Body layer (player.b.coreGrade), set at the one-time forge
+// (§7a) and raised by the slow refinement loop (§7b). All thresholds, offsets,
+// crack chances, fuel costs and the Foundation->Core baseCore mapping come from
+// REALM_DATA — zero numeric literals here (§11). Decimal helpers come from
+// FACTORY_NUMERICS via factoryDecimal*.
+// ---------------------------------------------------------------------------
+function coreRealmData() { return findRealmData("c"); }
+function coreForgeData() { return coreRealmData().forge; }
+function coreGradeLadder() { return coreForgeData().grades; }
+
+// Resolve a core-grade key ("cracked".."perfect") to its ordered ladder index
+// (ceilingIndex). Keys live in data; this is the only place key<->index crosses.
+function coreGradeIndexForKey(gradeKey) {
+    var matched = coreGradeLadder().find(function (grade) { return grade.key === gradeKey; });
+    return matched ? matched.ceilingIndex : (FACTORY_ZERO - FACTORY_ONE);
+}
+
+// Resolve a stored ladder index back to its data row (or null if none/sentinel).
+function coreGradeRowForIndex(storedIndex) {
+    return coreGradeLadder().find(function (grade) { return grade.ceilingIndex === storedIndex; }) || null;
+}
+
+// The Foundation Grade band currently stored on the Body layer (or null if the
+// player has not yet established a Foundation).
+function storedFoundationBand() {
+    var bandIndex = getFoundationGradeIndex();
+    if (bandIndex < FACTORY_ZERO) return null;
+    var bands = findRealmData("f").grade.bands;
+    return bands[bandIndex] || null;
+}
+
+// baseCore index: the STARTING core grade the forge produces before any push
+// offset, mapped from the stored Foundation Grade band's baseCore key (§7a data).
+function coreBaseGradeIndex() {
+    var band = storedFoundationBand();
+    if (!band) return FACTORY_ZERO - FACTORY_ONE;
+    return coreGradeIndexForKey(band.baseCore);
+}
+
+// coreCeiling index: the hard cap a forged core can reach, from the stored
+// Foundation band's coreCeiling key (push offset + refinement both clamp here).
+function coreCeilingGradeIndex() {
+    var band = storedFoundationBand();
+    if (!band) return FACTORY_ZERO - FACTORY_ONE;
+    return coreGradeIndexForKey(band.coreCeiling);
+}
+
+// Has a core already been forged? (stored index at/above the first ladder grade.)
+function coreIsForged() {
+    return getCoreGradeIndex() >= FACTORY_ZERO;
+}
+
+// Fuel (f.points) a given push option spends: fuelBase * fuelMult, as a Decimal.
+function forgeFuelCost(pushOption) {
+    return new Decimal(coreForgeData().fuelBase).times(pushOption.fuelMult);
+}
+
+// Is the forge OPEN? Core Formation unlocked + Foundation fuel >= forgeReq, and not
+// already forged. Reads f.points live (the Foundation prestige currency = fuel, §7a).
+function forgeIsAvailable() {
+    if (coreIsForged()) return false;
+    if (!(player[coreRealmData().id] && player[coreRealmData().id].unlocked)) return false;
+    return realmBest(coreRealmData().id) !== undefined
+        && player.f !== undefined
+        && player.f.points.gte(coreForgeData().forgeReq);
+}
+
+// Can a SPECIFIC push option be afforded right now (its own fuel cost)?
+function canAffordForgePush(pushOption) {
+    if (coreIsForged()) return false;
+    if (player.f === undefined) return false;
+    return player.f.points.gte(forgeFuelCost(pushOption));
+}
+
+// Execute a one-time forge with the chosen push option (§7a). Spends the fuel,
+// computes finalGrade = min(baseCore + offset (minus crackTierDrop on a crack
+// roll), foundationCeiling), clamps to the Cracked floor, and stores the index on
+// the Body layer. Returns the resolved core-grade data row.
+function performForge(pushOption) {
+    var fuelCost = forgeFuelCost(pushOption);
+    player.f.points = player.f.points.sub(fuelCost).max(factoryDecimalZero());
+
+    var producedIndex = coreBaseGradeIndex() + pushOption.offset;
+
+    // Crack roll: a crack drops exactly crackTierDrop tier(s); never destroyed,
+    // never a hard wall (invariant §9.3). crackChance/crackTierDrop are data.
+    var cracked = false;
+    if (Math.random() < pushOption.crackChance) {
+        cracked = true;
+        producedIndex = producedIndex - coreForgeData().crackTierDrop;
+    }
+
+    // Clamp to [Cracked floor, Foundation ceiling]. Floor is the first ladder
+    // index; ceiling is the stored Foundation band's coreCeiling.
+    var floorIndex = coreGradeLadder()[FACTORY_ZERO].ceilingIndex;
+    var ceilingIndex = coreCeilingGradeIndex();
+    if (producedIndex < floorIndex) producedIndex = floorIndex;
+    if (producedIndex > ceilingIndex) producedIndex = ceilingIndex;
+
+    setCoreGradeIndex(producedIndex);
+    player[coreRealmData().id].lastForgeCracked = cracked;
+    return coreGradeRowForIndex(producedIndex);
+}
+
+// ---- Refinement (§7b): slow/safe accrual that raises the grade one tier per
+// full bar, capped at the Foundation ceiling. Progress + warming toggle live on
+// the never-reset c layer's startData.
+function refinementData() { return coreForgeData().refinement; }
+
+function refinementProgress() {
+    var realmId = coreRealmData().id;
+    if (player[realmId] && player[realmId].refinementProgress !== undefined) {
+        return player[realmId].refinementProgress;
+    }
+    return factoryDecimalZero();
+}
+
+function refinementIsWarming() {
+    var realmId = coreRealmData().id;
+    return !!(player[realmId] && player[realmId].warming);
+}
+
+// True once the core is forged but below its Foundation ceiling — i.e. there is
+// still a tier to gain. At the ceiling, refinement is inert (no dead progress).
+function refinementCanProgress() {
+    if (!coreIsForged()) return false;
+    return getCoreGradeIndex() < coreCeilingGradeIndex();
+}
+
+// Fraction [0,1] of the current refinement bar, for the bar's progress().
+function refinementBarFraction() {
+    var fraction = refinementProgress().div(refinementData().goal);
+    if (fraction.lt(factoryDecimalZero())) return factoryDecimalZero();
+    if (fraction.gt(factoryDecimalOne())) return factoryDecimalOne();
+    return fraction;
+}
+
+// Per-tick accrual (called from the c layer's update(diff)). Accrues only while
+// warming AND a tier remains; on a full bar raises the grade one tier (tierStep),
+// capped at the Foundation ceiling, and carries the remainder.
+function refinementTick(diff) {
+    if (!refinementIsWarming() || !refinementCanProgress()) return;
+    var realmId = coreRealmData().id;
+    var goal = new Decimal(refinementData().goal);
+    var gained = new Decimal(refinementData().ratePerSecond).times(diff);
+    var progress = refinementProgress().add(gained);
+
+    while (progress.gte(goal) && refinementCanProgress()) {
+        progress = progress.sub(goal);
+        var raised = getCoreGradeIndex() + refinementData().tierStep;
+        var ceilingIndex = coreCeilingGradeIndex();
+        if (raised > ceilingIndex) raised = ceilingIndex;
+        setCoreGradeIndex(raised);
+    }
+    // At the ceiling, drain any leftover so the bar reads full-and-done, not stuck.
+    if (!refinementCanProgress()) progress = factoryDecimalZero();
+    player[realmId].refinementProgress = progress;
+}
+
+// ---------------------------------------------------------------------------
 // makeBuyable(row) — one parameterized buyable (§4a/§4b).
 //   cost(x)   = costBase * costRatio^x
 //   effect(x) = effectBase^x
@@ -417,12 +578,113 @@ function makeMilestones(realmData) {
 }
 
 // ---------------------------------------------------------------------------
+// Forge UI builders (§7). One clickable per push option (Steady/Forceful/
+// Reckless): clickables are the right primitive for a discrete, one-time action
+// (the doc's anti-pattern is repeated-click bonuses, which this is not). Each
+// click confirm()s, then performs the forge. A bar + toggle drive refinement.
+// All numbers come from REALM_DATA(c).forge — no literals here (§11).
+// ---------------------------------------------------------------------------
+
+// Human label for a stored core-grade index ("—" before forging).
+function coreGradeLabelForIndex(storedIndex) {
+    var row = coreGradeRowForIndex(storedIndex);
+    return row ? row.label : "—";
+}
+
+// Build one push-option clickable. id is the option's order in pushOptions.
+function makeForgePushClickable(pushOption) {
+    var percentBase = new Decimal(FACTORY_HUNDRED);
+    return {
+        title: pushOption.label,
+        display: function () {
+            var fuelCost = forgeFuelCost(pushOption);
+            var crackPercent = new Decimal(pushOption.crackChance).times(percentBase);
+            var offsetSign = pushOption.offset > FACTORY_ZERO ? "+" : "";
+            var line = "Push +" + formatWhole(new Decimal(pushOption.offset)) + " grade<br>";
+            line += "Fuel: " + format(fuelCost) + " " + coreRealmData().resource + "<br>";
+            line += "Crack risk: " + format(crackPercent) + "%";
+            return line;
+        },
+        unlocked: function () { return forgeIsAvailable(); },
+        canClick: function () { return canAffordForgePush(pushOption); },
+        onClick: function () {
+            var fuelCost = forgeFuelCost(pushOption);
+            var crackPercent = new Decimal(pushOption.crackChance).times(percentBase);
+            var prompt = "Forge with " + pushOption.label + "? Spends " + format(fuelCost)
+                + " " + coreRealmData().resource + "; " + format(crackPercent)
+                + "% chance to crack and drop one grade. This forges your core once.";
+            if (!confirm(prompt)) return;
+            var resultRow = performForge(pushOption);
+            var cracked = player[coreRealmData().id].lastForgeCracked;
+            var resultText = "You forged a " + (resultRow ? resultRow.label : coreGradeLabelForIndex(getCoreGradeIndex()))
+                + " core" + (cracked ? " (it cracked under the strain)." : ".");
+            if (typeof doPopup === "function") {
+                doPopup("none", resultText, "Core Forged", FACTORY_NUMERICS.one, coreRealmData().color);
+            }
+        }
+    };
+}
+
+// Build the clickables object for the forge realm: one per push option.
+function makeForgeClickables() {
+    var clickablesObject = {};
+    coreForgeData().pushOptions.forEach(function (pushOption, index) {
+        clickablesObject[index] = makeForgePushClickable(pushOption);
+    });
+    return clickablesObject;
+}
+
+// Build the refinement bar ("Warm the Core" progress, §7b).
+function makeForgeBars() {
+    var refine = refinementData();
+    return {
+        refinement: {
+            direction: RIGHT,
+            width: refine.barWidth,
+            height: refine.barHeight,
+            unlocked: function () { return coreIsForged(); },
+            progress: function () {
+                if (!refinementCanProgress()) return factoryDecimalOne();
+                return refinementBarFraction();
+            },
+            display: function () {
+                if (!refinementCanProgress()) {
+                    return "Core at its Foundation ceiling (" + coreGradeLabelForIndex(getCoreGradeIndex()) + ")";
+                }
+                var pct = refinementBarFraction().times(FACTORY_HUNDRED);
+                return "Warming: " + format(pct) + "% to next grade";
+            }
+        }
+    };
+}
+
+// The "Warm the Core" toggle (§7b): a dedicated clickable appended after the push
+// options. Toggling it starts/pauses slow, safe refinement accrual.
+function makeWarmToggleClickable() {
+    return {
+        title: "Warm the Core",
+        display: function () {
+            return refinementIsWarming()
+                ? "Warming (slow, safe). Click to pause."
+                : "Paused. Click to warm the core toward its next grade.";
+        },
+        unlocked: function () { return refinementCanProgress(); },
+        canClick: function () { return true; },
+        onClick: function () {
+            var realmId = coreRealmData().id;
+            player[realmId].warming = !refinementIsWarming();
+        }
+    };
+}
+
+// ---------------------------------------------------------------------------
 // makeRealmLayer(r) — one parameterized realm prestige layer (§5). Numbered rows
-// reset the chain below them via the default rowReset cascade. Forge/grade logic
-// is stubbed (lands in a later phase) but the layer registers and prestiges now.
+// reset the chain below them via the default rowReset cascade. The forge realm
+// (carrying realmData.forge) additionally mounts the one-time forge clickables,
+// the refinement bar + warm toggle, refinement state, and an update() accruer.
 // ---------------------------------------------------------------------------
 function makeRealmLayer(realmData) {
-    return {
+    var layerData = {
         name: realmData.name,
         symbol: realmData.symbol,
         color: realmData.color,
@@ -466,6 +728,64 @@ function makeRealmLayer(realmData) {
             return product;
         }
     };
+
+    // Forge realm augmentation (§7): the one-time forge + refinement loop. Only the
+    // realm carrying a forge config (Core Formation) gets these; the math/UI all
+    // resolve from REALM_DATA(c).forge, so no other realm is touched.
+    if (realmData.forge) {
+        var warmToggleId = realmData.forge.pushOptions.length;
+        var forgeClickables = makeForgeClickables();
+        forgeClickables[warmToggleId] = makeWarmToggleClickable();
+
+        layerData.clickables = forgeClickables;
+        layerData.bars = makeForgeBars();
+
+        // Refinement state on the never-reset top realm: progress toward the next
+        // tier and whether the player is actively warming the core.
+        layerData.startData = function () {
+            return {
+                unlocked: false,
+                points: factoryDecimalZero(),
+                best: factoryDecimalZero(),
+                total: factoryDecimalZero(),
+                refinementProgress: factoryDecimalZero(),
+                warming: false,
+                lastForgeCracked: false
+            };
+        };
+
+        // Accrue refinement each tick while warming and below the ceiling (§7b).
+        layerData.update = function (diff) { refinementTick(diff); };
+
+        layerData.tabFormat = [
+            "main-display",
+            "prestige-button",
+            "resource-display",
+            "blank",
+            "milestones",
+            "blank",
+            ["display-text", function () {
+                if (!coreIsForged()) {
+                    var band = storedFoundationBand();
+                    var baseLabel = band ? coreGradeLabelForIndex(coreBaseGradeIndex()) : "—";
+                    var ceilingLabel = band ? coreGradeLabelForIndex(coreCeilingGradeIndex()) : "—";
+                    return "Forge your Golden Core. Your " + (band ? band.tier : "—")
+                        + " Foundation yields a base " + baseLabel
+                        + " core (ceiling: " + ceilingLabel
+                        + "). Push harder for a higher grade at the risk of a crack.";
+                }
+                return "Your core is forged: <b>" + coreGradeLabelForIndex(getCoreGradeIndex())
+                    + "</b> (ceiling " + coreGradeLabelForIndex(coreCeilingGradeIndex())
+                    + "). Warm it slowly to climb toward the ceiling without risk.";
+            }],
+            "blank",
+            "clickables",
+            "blank",
+            ["bar", "refinement"]
+        ];
+    }
+
+    return layerData;
 }
 
 // ---------------------------------------------------------------------------

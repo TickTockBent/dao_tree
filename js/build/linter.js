@@ -198,6 +198,48 @@
             }
         });
 
+        // Forge reachability (§7): every Foundation band's baseCore and coreCeiling
+        // must resolve to a real Core grade, baseCore must not exceed its ceiling,
+        // and the strongest push (max offset) plus the band's baseCore must reach
+        // the band's ceiling — otherwise the ceiling is unreachable by the fast
+        // route (a dead push) or refinement alone, breaking completability (§9.3).
+        var coreRealm = REALM_DATA.find(function (r) { return r.id === "c"; });
+        var gradedRealm = REALM_DATA.find(function (r) { return r.graded && r.grade && r.grade.bands; });
+        if (coreRealm && coreRealm.forge && coreRealm.forge.grades && gradedRealm) {
+            var ladder = coreRealm.forge.grades;
+            function ladderIndexForKey(key) {
+                var row = ladder.find(function (g) { return g.key === key; });
+                return row ? row.ceilingIndex : null;
+            }
+            var maxOffset = ZERO;
+            coreRealm.forge.pushOptions.forEach(function (opt) {
+                if (opt.offset > maxOffset) maxOffset = opt.offset;
+            });
+            gradedRealm.grade.bands.forEach(function (band) {
+                var baseIdx = ladderIndexForKey(band.baseCore);
+                var ceilIdx = ladderIndexForKey(band.coreCeiling);
+                if (baseIdx === null) {
+                    errors.push("Foundation band '" + band.tier
+                        + "' baseCore '" + band.baseCore + "' is not a known Core grade.");
+                }
+                if (ceilIdx === null) {
+                    errors.push("Foundation band '" + band.tier
+                        + "' coreCeiling '" + band.coreCeiling + "' is not a known Core grade.");
+                }
+                if (baseIdx !== null && ceilIdx !== null) {
+                    if (baseIdx > ceilIdx) {
+                        errors.push("Foundation band '" + band.tier
+                            + "': baseCore exceeds coreCeiling (impossible forge).");
+                    }
+                    if (baseIdx + maxOffset < ceilIdx) {
+                        errors.push("Foundation band '" + band.tier
+                            + "': strongest push cannot reach the coreCeiling "
+                            + band.coreCeiling + " (unreachable ceiling, §9.3).");
+                    }
+                }
+            });
+        }
+
         // The fresh-save bootstrap: the first realm must unlock from Qi alone, so a
         // brand-new player can begin (no circular dependency at the root).
         var firstRealm = REALM_DATA[ZERO];
@@ -205,6 +247,43 @@
             errors.push("Root realm '" + firstRealm.id
                 + "' must unlock from Qi alone for a fresh save to progress.");
         }
+    }
+
+    // ----- §8/§9.1 story-gate discipline ---------------------------------
+    // Story gates must be achievements (fire-once, read live state, grant a buff,
+    // reset NOTHING) — never reset-based challenges. Each gate tagged
+    // kind:"checkpoint" must declare a live-state done() condition and a buff
+    // effect, and must NOT carry any challenge/reset shape. If a gate walls a
+    // later layer (gates != null) it must be an unlock-condition object (a token
+    // a later layer reads via hasAchievement), never a reset/challenge primitive.
+    function checkStoryGateDiscipline(errors) {
+        var checkpointKind = "checkpoint";
+        GATE_DATA.achievements.forEach(function (ach) {
+            if (ach.kind === checkpointKind) {
+                if (!ach.done) {
+                    errors.push("Checkpoint gate '" + ach.key
+                        + "' has no done() live-state condition (§8).");
+                }
+                if (!ach.effect) {
+                    errors.push("Checkpoint gate '" + ach.key
+                        + "' grants no effect — a checkpoint must pay off (§8).");
+                }
+            }
+            // A gate must never be a reset-based challenge (§9.1). Reject any
+            // challenge/reset-flavoured fields smuggled onto a gate row.
+            if (ach.challenge !== undefined || ach.resets !== undefined
+                || ach.canComplete !== undefined) {
+                errors.push("Gate '" + ach.key
+                    + "' carries a challenge/reset shape — story gates are achievements, not challenges (§9.1).");
+            }
+            // A non-null wall token must be an object (unlock condition), not a flag
+            // standing in for a reset-based challenge.
+            if (ach.gates !== undefined && ach.gates !== null && typeof ach.gates !== "object") {
+                errors.push("Gate '" + ach.key
+                    + "' wall token must be an unlock-condition object, not "
+                    + typeof ach.gates + " (§8).");
+            }
+        });
     }
 
     // ----- §11 no numeric literals in js/build/*.js -----------------------
@@ -275,6 +354,8 @@
         checks.noDeadMultipliers = "ran";
         checkCompletability(errors);
         checks.completability = "ran";
+        checkStoryGateDiscipline(errors);
+        checks.storyGateDiscipline = "ran";
         checks.noNumericLiterals = checkNoNumericLiterals(errors, sourceTexts);
         return { ok: errors.length === ZERO, errors: errors, checks: checks };
     }
