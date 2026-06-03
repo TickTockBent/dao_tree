@@ -218,6 +218,79 @@ function setCoreGradeIndex(index) {
 }
 
 // ---------------------------------------------------------------------------
+// Foundation Grade computation (§6). Computed ONCE at the Foundation
+// breakthrough (onPrestige on f), then stored on the reset-immune Body layer
+// via setFoundationGradeIndex. gradeScore is a weighted blend of meridians,
+// temper level (saturating at the temper denominator), and q.best (vs. the
+// q.best required to reach Foundation), clamped to [0,1] and mapped to a band.
+// EVERY number resolves from REALM_DATA(f).grade or FACTORY_NUMERICS — the
+// band fMult is consumed live in foundationGradeMult() (no dead mult §9.2).
+// ---------------------------------------------------------------------------
+function clampUnitInterval(value) {
+    var lowerBound = new Decimal(FACTORY_ZERO);
+    var upperBound = new Decimal(FACTORY_ONE);
+    if (value.lt(lowerBound)) return lowerBound;
+    if (value.gt(upperBound)) return upperBound;
+    return value;
+}
+
+// gradeScore = clamp( wMer*(meridians/merDen) + wTemper*(min(temper,tempDen)/tempDen)
+//                     + wRealm*(q.best/realmDen), 0, 1 ).  All weights/denominators
+// from REALM_DATA(f).grade. Returns a Decimal in [0,1].
+function foundationGradeScore() {
+    var grade = findRealmData("f").grade;
+
+    var meridianTerm = meridiansOpened()
+        .div(grade.meridianDenominator)
+        .times(grade.weightMeridian);
+
+    var temperDenominator = new Decimal(grade.temperDenominator);
+    var temperCapped = temperLevel();
+    if (temperCapped.gt(temperDenominator)) temperCapped = temperDenominator;
+    var temperTerm = temperCapped
+        .div(temperDenominator)
+        .times(grade.weightTemper);
+
+    var realmTerm = realmBest("q")
+        .div(grade.realmDenominator)
+        .times(grade.weightRealm);
+
+    return clampUnitInterval(meridianTerm.add(temperTerm).add(realmTerm));
+}
+
+// Highest band index whose inclusive floor the score meets. Bands are ordered
+// ascending by floor in data, so we walk and keep the last satisfied one.
+function foundationBandIndexForScore(score) {
+    var bands = findRealmData("f").grade.bands;
+    var chosenIndex = FACTORY_ZERO - FACTORY_ONE;
+    bands.forEach(function (band, index) {
+        if (score.gte(band.floor)) chosenIndex = index;
+    });
+    return chosenIndex;
+}
+
+// Live consumer of the stored Foundation band's fMult — multiplies f prestige
+// gain. index < 0 (no breakthrough yet) yields identity, so the very first
+// breakthrough is ungraded by construction and later ones compound the bonus.
+function foundationGradeMult() {
+    var storedIndex = getFoundationGradeIndex();
+    if (storedIndex < FACTORY_ZERO) return factoryDecimalOne();
+    var bands = findRealmData("f").grade.bands;
+    var band = bands[storedIndex];
+    if (!band) return factoryDecimalOne();
+    return new Decimal(band.fMult);
+}
+
+// Compute the Foundation Grade at breakthrough and store the BEST band reached
+// on the Body layer (never downgrade a higher grade on a later weaker run).
+function computeAndStoreFoundationGrade() {
+    var score = foundationGradeScore();
+    var bandIndex = foundationBandIndexForScore(score);
+    if (bandIndex > getFoundationGradeIndex()) setFoundationGradeIndex(bandIndex);
+    return getFoundationGradeIndex();
+}
+
+// ---------------------------------------------------------------------------
 // makeBuyable(row) — one parameterized buyable (§4a/§4b).
 //   cost(x)   = costBase * costRatio^x
 //   effect(x) = effectBase^x
@@ -360,8 +433,21 @@ function makeRealmLayer(realmData) {
         type: "normal",
         requires: function () { return new Decimal(realmData.reqBase); },
         exponent: realmData.gainExp,
-        gainMult: function () { return factoryDecimalOne(); },
+        // Graded realms (Foundation, §6) multiply prestige gain by the stored
+        // Foundation grade's fMult; ungraded realms gain the identity. This is the
+        // live consumer of grade.bands[].fMult — no dead multiplier (§9.2).
+        gainMult: function () {
+            if (realmData.graded) return foundationGradeMult();
+            return factoryDecimalOne();
+        },
         gainExp: function () { return factoryDecimalOne(); },
+        // Graded breakthrough (§6): at the Foundation reset, compute gradeScore
+        // from live meridian / temper / q.best state and store the band index on
+        // the reset-immune Body layer. Runs before the gain is applied and before
+        // the row cascade resets q (game.js doReset order), so inputs are intact.
+        onPrestige: function () {
+            if (realmData.graded) computeAndStoreFoundationGrade();
+        },
         milestones: makeMilestones(realmData),
         unlocked: function () {
             if (player[this.layer].unlocked) return true;

@@ -29,7 +29,8 @@
             substageQiMult: "realmMult",
             temperQiBonus: "temperMult",
             gateQiMult: "gateMult",
-            coreGlobalMult: "coreGradeMult"
+            coreGlobalMult: "coreGradeMult",
+            foundationFMult: "foundationGradeMult"
         };
 
         // A consumer is "live" if the named factory function references the data
@@ -81,6 +82,23 @@
                     errors.push("Dead multiplier: gate '" + ach.key
                         + "' qiMult has no consumer (gateMult).");
                 }
+            }
+        });
+
+        // Foundation grade band fMult -> foundationGradeMult (§6). Every graded
+        // realm's bands must declare an fMult and have a live consumer, or the
+        // graded breakthrough is a price floor in disguise (§9.2).
+        REALM_DATA.forEach(function (realm) {
+            if (!realm.graded || !realm.grade || !realm.grade.bands) return;
+            realm.grade.bands.forEach(function (band) {
+                if (band.fMult === undefined) {
+                    errors.push("Foundation band '" + band.tier
+                        + "' declares no fMult.");
+                }
+            });
+            if (!consumerReferences(consumers.foundationFMult, "fMult")) {
+                errors.push("Dead multiplier: graded realm '" + realm.id
+                    + "' band fMult has no consumer (foundationGradeMult).");
             }
         });
 
