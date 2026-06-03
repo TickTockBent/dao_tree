@@ -17,6 +17,16 @@
 	<script src="js/technical/break_eternity.js"></script>
 	<script src="js/technical/layerSupport.js"></script>
 
+	<!-- Cultivation: data tables (single source of truth, spec §11), then the
+	     linter, then the factory that registers layers via addLayer. Loaded
+	     after Decimal + addLayer exist and before mod.js/loader/tree build. -->
+	<script src="js/data/constants.js"></script>
+	<script src="js/data/realms.js"></script>
+	<script src="js/data/body.js"></script>
+	<script src="js/data/gates.js"></script>
+	<script src="js/build/linter.js"></script>
+	<script src="js/build/layerFactory.js"></script>
+
 	<script src="js/mod.js"></script>
 	<script src="js/technical/loader.js"></script>
 

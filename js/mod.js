@@ -36,13 +36,19 @@ function canGenPoints(){
 	return true
 }
 
-// Calculate points/sec!
+// Calculate Qi/sec (points are Qi, modInfo.pointsName = "points").
+// Qi/sec = baseRate x meridianMult x temperMult x realmMult x gateMult x coreMult,
+// every factor read from live layer state by the factory. baseRate and all
+// multipliers resolve from data rows (spec §2/§11) — no literals here.
 function getPointGen() {
 	if(!canGenPoints())
-		return new Decimal(0)
+		return new Decimal(FACTORY_NUMERICS.zero)
 
-	let gain = new Decimal(1)
-	return gain
+	if (typeof cultivationQiPerSecond === "function")
+		return cultivationQiPerSecond()
+
+	// Factory not yet loaded (defensive): fall back to the data-defined base rate.
+	return new Decimal(BODY_DATA.qi.baseRate)
 }
 
 // You can add non-layer related variables that should to into "player" and be saved here, along with default values

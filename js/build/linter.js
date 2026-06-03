@@ -1,0 +1,267 @@
+// js/build/linter.js — load-time invariant checker over the data tables (spec §9).
+//
+// Asserts the spec §9 invariants against REALM_DATA / BODY_DATA / GATE_DATA:
+//   §9.2 no dead multipliers   — every declared multiplier has a live consumer.
+//   §9.3 completability        — every unlock/done condition is reachable from a
+//                                fresh save and no gate requires what it suppresses.
+//   §11  no numeric literals   — scan js/build/*.js source for bare numeric
+//                                literals (run by the node harness; in-browser
+//                                this check is reported as skipped).
+//
+// HARD RULE (§11): ZERO numeric literals in THIS file too — it lives in
+// js/build/ and is part of the generated/factory surface. All numbers come from
+// FACTORY_NUMERICS or the data rows.
+//
+// runCultivationLinter() -> { ok:boolean, errors:[string], checks:{...} }
+// The factory calls this before addLayer and hard-stops load on failure.
+
+(function (root) {
+    var ZERO = FACTORY_NUMERICS.zero;
+    var ONE = FACTORY_NUMERICS.one;
+
+    // ----- §9.2 no dead multipliers --------------------------------------
+    // Every multiplier declared in data must be consumed by a factory function.
+    // We verify the consumer function exists and that its source references the
+    // data field that carries the multiplier, so a declared multiplier cannot be
+    // computed-into-nothing (the reference's Nascent Soul defect).
+    function checkNoDeadMultipliers(errors, factorySource) {
+        var consumers = {
+            substageQiMult: "realmMult",
+            temperQiBonus: "temperMult",
+            gateQiMult: "gateMult",
+            coreGlobalMult: "coreGradeMult"
+        };
+
+        // A consumer is "live" if the named factory function references the data
+        // field token. In the browser the function is a global we can stringify;
+        // in the node harness the factory is not executed, so we scan its source
+        // text instead. Either way: the consumer function AND the field token must
+        // co-occur, proving the declared multiplier is wired into a real path.
+        function consumerReferences(consumerName, fieldToken) {
+            var fn = root[consumerName];
+            if (typeof fn === "function") {
+                return fn.toString().indexOf(fieldToken) !== ZERO - ONE;
+            }
+            if (factorySource) {
+                return factorySource.indexOf("function " + consumerName) !== ZERO - ONE
+                    && factorySource.indexOf(fieldToken) !== ZERO - ONE;
+            }
+            return false;
+        }
+
+        // Substage qiMult -> realmMult (and realm effect()).
+        var substageCount = ZERO;
+        REALM_DATA.forEach(function (realm) {
+            realm.substages.forEach(function (stage) {
+                substageCount = substageCount + ONE;
+                if (stage.qiMult === undefined) {
+                    errors.push("Realm " + realm.id + " substage '" + stage.label
+                        + "' declares no qiMult.");
+                }
+            });
+        });
+        if (substageCount > ZERO && !consumerReferences(consumers.substageQiMult, "qiMult")) {
+            errors.push("Dead multiplier: substage qiMult has no consumer (realmMult).");
+        }
+
+        // Temper tier qiBonus -> temperMult.
+        BODY_DATA.temperTiers.forEach(function (tier) {
+            if (tier.qiBonus === undefined) {
+                errors.push("Temper tier '" + tier.label + "' declares no qiBonus.");
+            }
+        });
+        if (!consumerReferences(consumers.temperQiBonus, "qiBonus")) {
+            errors.push("Dead multiplier: temper qiBonus has no consumer (temperMult).");
+        }
+
+        // Gate effect.qiMult -> gateMult.
+        GATE_DATA.achievements.forEach(function (ach) {
+            if (ach.effect && ach.effect.qiMult !== undefined) {
+                if (!consumerReferences(consumers.gateQiMult, "qiMult")) {
+                    errors.push("Dead multiplier: gate '" + ach.key
+                        + "' qiMult has no consumer (gateMult).");
+                }
+            }
+        });
+
+        // Core grade globalMult -> coreGradeMult.
+        var coreRealm = REALM_DATA.find(function (r) { return r.id === "c"; });
+        if (coreRealm && coreRealm.forge && coreRealm.forge.grades) {
+            coreRealm.forge.grades.forEach(function (grade) {
+                if (grade.globalMult === undefined) {
+                    errors.push("Core grade '" + grade.key + "' declares no globalMult.");
+                }
+            });
+            if (!consumerReferences(consumers.coreGlobalMult, "globalMult")) {
+                errors.push("Dead multiplier: core globalMult has no consumer (coreGradeMult).");
+            }
+        }
+    }
+
+    // ----- §9.3 completability -------------------------------------------
+    // Walk every unlock/done condition; each must be reachable from a fresh save
+    // under current modifiers, and no gate may require the resource it suppresses.
+    function checkCompletability(errors) {
+        function realmStageThreshold(realmId, stage) {
+            var realm = REALM_DATA.find(function (r) { return r.id === realmId; });
+            if (!realm) return null;
+            if (typeof stage === "string") {
+                var matched = realm.substages.find(function (s) { return s.label === stage; });
+                return matched ? matched.at : null;
+            }
+            return stage;
+        }
+
+        function checkCondition(label, condition) {
+            if (!condition) return;
+
+            if (condition.qi !== undefined && !(condition.qi > ZERO)) {
+                errors.push(label + ": qi requirement must be > 0.");
+            }
+            if (condition.meridians !== undefined) {
+                var primary = BODY_DATA.buyables.find(function (b) { return b.key === "primaryMeridian"; });
+                if (condition.meridians > primary.limit) {
+                    errors.push(label + ": requires " + condition.meridians
+                        + " meridians but cap is " + primary.limit + " (unreachable).");
+                }
+            }
+            if (condition.primaryMeridiansAll !== undefined && condition.primaryMeridiansAll) {
+                var primaryRow = BODY_DATA.buyables.find(function (b) { return b.key === "primaryMeridian"; });
+                if (!(primaryRow.limit > ZERO)) {
+                    errors.push(label + ": primaryMeridiansAll but primary limit is not positive.");
+                }
+            }
+            if (condition.realm !== undefined) {
+                var targetId = condition.realm[ZERO];
+                var stage = condition.realm[ONE];
+                var threshold = realmStageThreshold(targetId, stage);
+                if (threshold === null) {
+                    errors.push(label + ": references unknown realm/stage "
+                        + targetId + "/" + stage + ".");
+                } else {
+                    var realm = REALM_DATA.find(function (r) { return r.id === targetId; });
+                    var maxStage = realm.substages[realm.substages.length - ONE];
+                    if (threshold > maxStage.at) {
+                        errors.push(label + ": realm " + targetId + " threshold " + threshold
+                            + " exceeds top sub-stage " + maxStage.at + " (unreachable).");
+                    }
+                }
+            }
+            if (condition.temperTier !== undefined) {
+                var tier = BODY_DATA.temperTiers.find(function (t) {
+                    return t.key === condition.temperTier || t.label === condition.temperTier;
+                });
+                if (!tier) {
+                    errors.push(label + ": references unknown temper tier "
+                        + condition.temperTier + ".");
+                } else {
+                    var temperRow = BODY_DATA.buyables.find(function (b) { return b.key === "temper"; });
+                    if (tier.fromLevel > temperRow.limit) {
+                        errors.push(label + ": temper tier " + tier.label + " needs level "
+                            + tier.fromLevel + " but temper cap is " + temperRow.limit + ".");
+                    }
+                }
+            }
+        }
+
+        REALM_DATA.forEach(function (realm) {
+            checkCondition("Realm " + realm.id + " unlock", realm.unlock);
+        });
+        BODY_DATA.buyables.forEach(function (b) {
+            checkCondition("Body buyable " + b.key + " unlock", b.unlock);
+        });
+        GATE_DATA.achievements.forEach(function (ach) {
+            checkCondition("Gate " + ach.key + " done", ach.done);
+            // A gate must not suppress the resource it requires. In v0.1 gates grant
+            // a Qi buff and require Qi-derived progress; assert no gate both requires
+            // qi-derived progress AND declares a negative/suppressing effect.
+            if (ach.effect && ach.effect.qiMult !== undefined && !(ach.effect.qiMult >= ONE)) {
+                errors.push("Gate " + ach.key + ": qiMult < 1 would suppress the resource it gates.");
+            }
+        });
+
+        // The fresh-save bootstrap: the first realm must unlock from Qi alone, so a
+        // brand-new player can begin (no circular dependency at the root).
+        var firstRealm = REALM_DATA[ZERO];
+        if (!firstRealm.unlock || firstRealm.unlock.qi === undefined) {
+            errors.push("Root realm '" + firstRealm.id
+                + "' must unlock from Qi alone for a fresh save to progress.");
+        }
+    }
+
+    // ----- §11 no numeric literals in js/build/*.js -----------------------
+    // sourceTexts: { filename -> source string }. The node harness supplies these
+    // by reading files; in-browser we cannot read source, so the check is skipped
+    // (the harness is the gate of record, run in CI / pre-commit).
+    function checkNoNumericLiterals(errors, sourceTexts) {
+        if (!sourceTexts) return "skipped";
+        // Match bare numeric literals NOT preceded by an identifier char, a dot, or
+        // an underscore (so identifiers like break_eternity / utf-8 names are safe),
+        // and not part of a larger word. We strip strings and comments first.
+        var numberPattern = /(^|[^\w.$])(\d[\d_]*(\.\d+)?([eE][+-]?\d+)?)/g;
+
+        Object.keys(sourceTexts).forEach(function (fileName) {
+            var stripped = stripStringsAndComments(sourceTexts[fileName]);
+            var match;
+            var hits = [];
+            while ((match = numberPattern.exec(stripped)) !== null) {
+                hits.push(match[ONE + ONE]);
+            }
+            if (hits.length > ZERO) {
+                errors.push("Numeric literal(s) in " + fileName + ": " + hits.join(", ")
+                    + " — every number must come from a data row.");
+            }
+        });
+        return "ran";
+    }
+
+    // Remove // and /* */ comments and the contents of string/template/regex
+    // literals so a number inside text (e.g. "10th Level") is not flagged.
+    function stripStringsAndComments(source) {
+        var out = "";
+        var i = ZERO;
+        var len = source.length;
+        var state = "code";
+        var quote = "";
+        while (i < len) {
+            var ch = source.charAt(i);
+            var next = i + ONE < len ? source.charAt(i + ONE) : "";
+            if (state === "code") {
+                if (ch === "/" && next === "/") { state = "line"; i = i + ONE + ONE; continue; }
+                if (ch === "/" && next === "*") { state = "block"; i = i + ONE + ONE; continue; }
+                if (ch === "\"" || ch === "'" || ch === "`") { state = "string"; quote = ch; i = i + ONE; continue; }
+                out += ch; i = i + ONE; continue;
+            }
+            if (state === "line") {
+                if (ch === "\n") { state = "code"; out += ch; }
+                i = i + ONE; continue;
+            }
+            if (state === "block") {
+                if (ch === "*" && next === "/") { state = "code"; i = i + ONE + ONE; continue; }
+                i = i + ONE; continue;
+            }
+            if (state === "string") {
+                if (ch === "\\") { i = i + ONE + ONE; continue; }
+                if (ch === quote) { state = "code"; }
+                i = i + ONE; continue;
+            }
+        }
+        return out;
+    }
+
+    function runCultivationLinter(sourceTexts) {
+        var errors = [];
+        var checks = {};
+        var factorySource = sourceTexts ? sourceTexts["layerFactory.js"] : undefined;
+        checkNoDeadMultipliers(errors, factorySource);
+        checks.noDeadMultipliers = "ran";
+        checkCompletability(errors);
+        checks.completability = "ran";
+        checks.noNumericLiterals = checkNoNumericLiterals(errors, sourceTexts);
+        return { ok: errors.length === ZERO, errors: errors, checks: checks };
+    }
+
+    // Expose for both the in-game factory and the node harness.
+    root.runCultivationLinter = runCultivationLinter;
+    root.cultivationStripStringsAndComments = stripStringsAndComments;
+})(typeof globalThis !== "undefined" ? globalThis : this);
