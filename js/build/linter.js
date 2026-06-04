@@ -196,6 +196,9 @@
 
         REALM_DATA.forEach(function (realm) {
             checkCondition("Realm " + realm.id + " unlock", realm.unlock);
+            // §5a reveal markers must also be reachable, and a reveal must never be
+            // STRICTER than its unlock (it gates visibility, a weaker step).
+            if (realm.reveal) checkCondition("Realm " + realm.id + " reveal", realm.reveal);
         });
         BODY_DATA.buyables.forEach(function (b) {
             checkCondition("Body buyable " + b.key + " unlock", b.unlock);

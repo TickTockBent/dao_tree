@@ -27,6 +27,39 @@ function findRealmData(realmId) {
     return REALM_DATA.find(function (row) { return row.id === realmId; });
 }
 
+// Realm node REVEAL condition (§5a): a realm becomes VISIBLE on this (weaker) gate,
+// distinct from `unlock` (§5b) which gates the actual breakthrough. Falls back to
+// the full unlock when a realm declares no separate reveal, so "6th Level reveals
+// Foundation; 4 meridians unlocks it" is expressible purely as data.
+function realmRevealCondition(realmData) {
+    return realmData.reveal ? realmData.reveal : realmData.unlock;
+}
+
+// Plain-language description of an unlock condition for a revealed-but-locked realm
+// node tooltip (§5a UX). Every number comes from the condition row (data, §11).
+function describeUnlockCondition(condition) {
+    var requirementParts = [];
+    if (condition.realm !== undefined) {
+        var targetRealm = findRealmData(condition.realm[FACTORY_ZERO]);
+        var stageToken = condition.realm[FACTORY_ONE];
+        var stageText = (typeof stageToken === "string") ? stageToken : (targetRealm.resource + " " + stageToken);
+        requirementParts.push("reach " + targetRealm.name + " " + stageText);
+    }
+    if (condition.meridians !== undefined) {
+        requirementParts.push("open " + condition.meridians + " meridians");
+    }
+    if (condition.primaryMeridiansAll) {
+        requirementParts.push("open all primary meridians");
+    }
+    if (condition.temperTier !== undefined) {
+        requirementParts.push("temper your body to " + condition.temperTier);
+    }
+    if (condition.qi !== undefined) {
+        requirementParts.push("gather " + condition.qi + " Qi");
+    }
+    return requirementParts.join(" and ");
+}
+
 function bodyBuyableByKey(key) {
     return BODY_DATA.buyables.find(function (row) { return row.key === key; });
 }
@@ -756,7 +789,24 @@ function makeRealmLayer(realmData) {
             return meets(realmData.unlock);
         },
         layerShown: function () {
-            return player[this.layer].unlocked || meets(realmData.unlock);
+            // §5a reveal: show the node on the (weaker) reveal gate so the next realm
+            // visibly appears, while the breakthrough stays gated below.
+            return player[this.layer].unlocked || meets(realmRevealCondition(realmData));
+        },
+        // §5b breakthrough gate: the first prestige needs the FULL unlock (e.g. 6th
+        // Level AND >=4 meridians); afterwards the unlock is latched (game.js sets
+        // player[layer].unlocked on first reset) and the realm prestiges on its Qi
+        // requirement alone. Without this a revealed realm would prestige early —
+        // game.js canReset gates the reset; `unlocked` does not.
+        canReset: function () {
+            if (!player[this.layer].unlocked && !meets(realmData.unlock)) return false;
+            return player.points.gte(new Decimal(realmData.reqBase));
+        },
+        // Tooltip on the revealed-but-locked node: state exactly what the breakthrough
+        // still needs (the feedback a bare reveal would otherwise omit).
+        tooltipLocked: function () {
+            return "Locked — " + describeUnlockCondition(realmData.unlock)
+                + ", then gather " + format(new Decimal(realmData.reqBase)) + " " + modInfo.pointsName + ".";
         },
         // effect() exposes the realm's reached-substage Qi multiplier so it is
         // observable in tmp[id].effect (no dead multiplier §9.2).

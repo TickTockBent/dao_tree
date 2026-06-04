@@ -84,6 +84,7 @@ var REALM_DATA = [
         // String stage label (resolved via substageThreshold) — NOT a numeric token,
         // which would gate at best>=6 (~3rd Level region) and let Foundation unlock
         // before its "6th Level reveals Foundation" coupling fires (§5a).
+        reveal: { realm: ["q", "6th Level"] }, // §5a: 6th Level reveals the node
         unlock: { realm: ["q", "6th Level"], meridians: 4 },
         substages: [
             { label: "Early Foundation", at: 1,  qiMult: 1.25 },
@@ -147,6 +148,7 @@ var REALM_DATA = [
         resource: "core formation",
         reqBase: 250000,
         gainExp: 0.5,
+        reveal: { realm: ["f", "Great Circle"] }, // §5a: Great Circle reveals the node
         unlock: { realm: ["f", "Great Circle"], temperTier: "Tendon" },
         substages: [
             { label: "Core Forged",   at: 1, qiMult: 1.50 },
