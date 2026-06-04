@@ -524,7 +524,7 @@ function makeTemperMilestones() {
         var bonusPercent = new Decimal(tier.qiBonus).times(percentGain).sub(percentGain);
         milestones[index] = {
             requirementDescription: "Temper Body to " + tier.label + " (level " + tier.fromLevel + ")",
-            effectDescription: "+" + format(bonusPercent) + "% Qi/sec and a step toward Foundation Grade",
+            effectDescription: function () { return "+" + format(bonusPercent) + "% Qi/sec and a step toward Foundation Grade"; },
             done: function () {
                 return getBuyableAmount(BODY_DATA.id, BODY_DATA.temperBuyableId).gte(tier.fromLevel);
             }
@@ -549,6 +549,7 @@ function makeBodyLayer() {
         symbol: BODY_DATA.symbol,
         color: BODY_DATA.color,
         row: "side",
+        type: "none", // container layer: meridians/temper are buyables, no prestige resource line
         resource: BODY_DATA.resource,
         startData: function () {
             return {
@@ -558,6 +559,7 @@ function makeBodyLayer() {
                 coreGrade: BODY_DATA.grades.coreGrade.startIndex
             };
         },
+        tooltip: function () { return BODY_DATA.name + " — permanent cultivation (never resets)"; },
         buyables: buyablesObject,
         milestones: makeTemperMilestones(),
         // No doReset: a row:"side" layer with no doReset is reset-immune (rowReset's
@@ -590,9 +592,9 @@ function makeMilestones(realmData) {
         var percentGain = new Decimal(FACTORY_HUNDRED);
         var stageBonus = new Decimal(stage.qiMult).times(percentGain).sub(percentGain);
         milestones[index] = {
-            requirementDescription: stage.label + " (" + formatWhole(new Decimal(stage.at)) + " "
+            requirementDescription: stage.label + " (" + stage.at + " "
                 + realmData.resource + ")" + revealText,
-            effectDescription: "+" + format(stageBonus) + "% Qi/sec",
+            effectDescription: function () { return "+" + format(stageBonus) + "% Qi/sec"; },
             done: function () {
                 return player[realmData.id].best.gte(stage.at);
             }
@@ -714,7 +716,7 @@ function makeRealmLayer(realmData) {
         color: realmData.color,
         row: realmData.row,
         resource: realmData.resource,
-        baseResource: modInfo.pointsName,
+        baseResource: function () { return modInfo.pointsName; },
         baseAmount: function () { return player.points; },
         type: "normal",
         requires: function () { return new Decimal(realmData.reqBase); },
@@ -733,6 +735,20 @@ function makeRealmLayer(realmData) {
         // the row cascade resets q (game.js doReset order), so inputs are intact.
         onPrestige: function () {
             if (realmData.graded) computeAndStoreFoundationGrade();
+        },
+        // Base prestige-layer state. getStartLayerData (save.js) does NOT seed
+        // points and defaults unlocked->true, so every normal realm must declare
+        // its own: points (the prestige currency, read as player[id].points) and
+        // unlocked:false so the realm starts gated (layerShown reveals it via the
+        // unlock condition). The forge realm (c) overrides this below with its
+        // richer refinement state. All values resolve from FACTORY_NUMERICS (§11).
+        startData: function () {
+            return {
+                unlocked: false,
+                points: factoryDecimalZero(),
+                best: factoryDecimalZero(),
+                total: factoryDecimalZero()
+            };
         },
         milestones: makeMilestones(realmData),
         unlocked: function () {
@@ -821,15 +837,14 @@ function makeGateLayer() {
     var achievementsObject = {};
     GATE_DATA.achievements.forEach(function (ach) {
         var percentGain = new Decimal(FACTORY_HUNDRED);
-        var buffText = "";
+        var qiMultBonusPercent = null;
         if (ach.effect && ach.effect.qiMult !== undefined) {
-            var pct = new Decimal(ach.effect.qiMult).times(percentGain).sub(percentGain);
-            buffText = "+" + format(pct) + "% Qi/sec";
+            qiMultBonusPercent = new Decimal(ach.effect.qiMult).times(percentGain).sub(percentGain);
         }
         achievementsObject[ach.id] = {
             name: ach.name,
             done: function () { return meets(ach.done); },
-            tooltip: buffText
+            tooltip: function () { return qiMultBonusPercent === null ? "" : "+" + format(qiMultBonusPercent) + "% Qi/sec"; }
         };
     });
 
@@ -838,7 +853,9 @@ function makeGateLayer() {
         symbol: GATE_DATA.symbol,
         color: GATE_DATA.color,
         row: "side",
+        type: "none", // story-gate achievements only; no prestige resource line
         startData: function () { return { unlocked: true }; },
+        tooltip: function () { return GATE_DATA.name + " — milestones grant permanent boons"; },
         achievements: achievementsObject,
         layerShown: function () { return true; },
         tabFormat: [

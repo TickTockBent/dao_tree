@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "charlotte": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "/home/ticktockbent/projects/infrastructure/charlotte/dist/index.js"
+      ],
+      "env": {}
+    }
+  }
+}
