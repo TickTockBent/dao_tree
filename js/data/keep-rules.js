@@ -37,5 +37,17 @@ var KEEP_RULES = [
         onResetOf: "f",     // when f prestiges...
         target: "q",        // ...the q layer keeps:
         keep: ["best"]      // q.best survives, so q sub-stage milestones recompute as kept
+    },
+    {
+        // Nascent Soul carries the Foundation forward (expansion §5 / §11 slice 4):
+        // once the soul matures, a NS breakthrough no longer wipes the Foundation
+        // climb below it. n milestone ids are NS sub-stage indices; 2 = "Late Nascent
+        // Soul" (n.best >= 12), a mid sub-stage — felt permanence earned partway up
+        // the realm, the keep-rule reward class (long-tail, zero new content). ⟨tune⟩
+        key: "foundationSurvivesNascentSoul",
+        grantedBy: { layer: "n", milestone: 2 },
+        onResetOf: "n",     // when Nascent Soul prestiges...
+        target: "f",        // ...the Foundation layer keeps:
+        keep: ["best"]      // f.best survives, so f sub-stage milestones recompute as kept
     }
 ];

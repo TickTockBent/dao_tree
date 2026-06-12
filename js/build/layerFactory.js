@@ -303,13 +303,15 @@ function insightPerSecond() {
     if (!daoIsRevealed()) return factoryDecimalZero();
     return new Decimal(LATTICE_DATA.insight.baseRate)
         .times(daoNodeInsightMult())
-        .times(stanceInsightMult());
+        .times(stanceInsightMult())
+        .times(soulAspectInsightMult());
 }
 
 // ---------------------------------------------------------------------------
 // meets(condition) — uniform unlock / done evaluator over a condition object.
 // Keys combine with AND. Supports: qi, realm:[id, numberOrLabel], meridians,
-// temperTier, primaryMeridiansAll, daoNode:[nodeKey, tier]. (§5 unlock / §8 done.)
+// temperTier, primaryMeridiansAll, daoNode:[nodeKey, tier], anyDaoNode:tier,
+// daoElementTier:[element, tier]. (§5 unlock / §8 done.)
 // ---------------------------------------------------------------------------
 function meets(condition) {
     if (!condition) return true;
@@ -352,6 +354,37 @@ function meets(condition) {
         var requiredNodeKey = condition.daoNode[FACTORY_ZERO];
         var requiredNodeTier = condition.daoNode[FACTORY_ONE];
         if (daoNodeTierOwned(requiredNodeKey).lt(requiredNodeTier)) satisfied = false;
+    }
+
+    // anyDaoNode: N — ANY lattice node owns tier >= N (expansion §5 grammar; pinned).
+    // Distinct from daoNode (a SPECIFIC node): this is the "held a Seed of anything"
+    // signal. Defensive when the dao layer is absent (daoNodeTierOwned returns zero
+    // pre-reveal, the existing cross-layer pattern), so a pre-lattice save fails it.
+    if (condition.anyDaoNode !== undefined) {
+        var anyNodeMet = false;
+        if (typeof LATTICE_DATA !== "undefined" && LATTICE_DATA && LATTICE_DATA.nodes) {
+            LATTICE_DATA.nodes.forEach(function (node) {
+                if (daoNodeTierOwned(node.key).gte(condition.anyDaoNode)) anyNodeMet = true;
+            });
+        }
+        if (!anyNodeMet) satisfied = false;
+    }
+
+    // daoElementTier: [element, N] — ANY node of that element owns tier >= N
+    // (expansion §5 grammar; pinned). The Soul Aspect element gates read this: a
+    // "metal" aspect needs a held Seed (tier 2) of ANY metal-element node. Defensive
+    // on LATTICE_DATA / the dao layer absence exactly like daoNode/anyDaoNode.
+    if (condition.daoElementTier !== undefined) {
+        var requiredElement = condition.daoElementTier[FACTORY_ZERO];
+        var requiredElementTier = condition.daoElementTier[FACTORY_ONE];
+        var elementMet = false;
+        if (typeof LATTICE_DATA !== "undefined" && LATTICE_DATA && LATTICE_DATA.nodes) {
+            LATTICE_DATA.nodes.forEach(function (node) {
+                if (node.element === requiredElement
+                    && daoNodeTierOwned(node.key).gte(requiredElementTier)) elementMet = true;
+            });
+        }
+        if (!elementMet) satisfied = false;
     }
 
     return satisfied;
@@ -421,10 +454,50 @@ function coreGradeMult() {
     return new Decimal(matched.globalMult);
 }
 
+// ---------------------------------------------------------------------------
+// Soul Aspect readers (expansion §5). The chosen aspect (player.b.soulAspect) is a
+// run-long passive identity: its effect multipliers fold into the Qi and Insight
+// pipelines once exactly each. Defensive when unchosen / no body — both readers
+// return identity, so a pre-NS save is byte-for-byte the prior product (no dead
+// mult §9.2). The realm row carrying the aspect set is REALM_DATA(n).soulAspect.
+// ---------------------------------------------------------------------------
+function soulAspectRealmData() {
+    return REALM_DATA.find(function (realmData) { return !!realmData.soulAspect; });
+}
+
+// The data row of the currently-chosen aspect, or null (unchosen / no body / no
+// aspect realm registered). The single key<->row crossing for the Soul Aspect.
+function soulAspectRow() {
+    var aspectKey = getSoulAspectKey();
+    if (!aspectKey) return null;
+    var realmData = soulAspectRealmData();
+    if (!realmData) return null;
+    return realmData.soulAspect.aspects.find(function (aspect) {
+        return aspect.key === aspectKey;
+    }) || null;
+}
+
+// Chosen aspect's qiMult (identity when unchosen / the aspect declares none) —
+// folded into cultivationQiPerSecond().
+function soulAspectQiMult() {
+    var aspect = soulAspectRow();
+    if (!aspect || aspect.effect.qiMult === undefined) return factoryDecimalOne();
+    return new Decimal(aspect.effect.qiMult);
+}
+
+// Chosen aspect's insightMult (identity when unchosen / the aspect declares none) —
+// folded into insightPerSecond().
+function soulAspectInsightMult() {
+    var aspect = soulAspectRow();
+    if (!aspect || aspect.effect.insightMult === undefined) return factoryDecimalOne();
+    return new Decimal(aspect.effect.insightMult);
+}
+
 // The one public entry the rewritten getPointGen multiplies into baseRate. The Dao
-// lattice (daoNodeQiMult, design §4.2) and the active stance (stanceQiMult, §6.1) join
-// the pipeline here — both identity until the lattice is revealed / a stance is active,
-// so this is byte-for-byte the prior product for any pre-lattice save (no dead mult §9.2).
+// lattice (daoNodeQiMult, design §4.2), the active stance (stanceQiMult, §6.1), and
+// the chosen Soul Aspect (soulAspectQiMult, expansion §5) join the pipeline here —
+// all identity until the lattice is revealed / a stance is active / an aspect is
+// chosen, so this is byte-for-byte the prior product for a pre-NS save (no dead mult §9.2).
 function cultivationQiPerSecond() {
     return qiBaseRate()
         .times(meridianMult())
@@ -433,7 +506,8 @@ function cultivationQiPerSecond() {
         .times(gateMult())
         .times(coreGradeMult())
         .times(daoNodeQiMult())
-        .times(stanceQiMult());
+        .times(stanceQiMult())
+        .times(soulAspectQiMult());
 }
 
 // ---------------------------------------------------------------------------
@@ -453,6 +527,17 @@ function getCoreGradeIndex() {
 }
 function setCoreGradeIndex(index) {
     player[bodyLayerId()].coreGrade = index;
+}
+
+// Soul Aspect store (expansion §5). The chosen aspect key lives LIFE-scoped on the
+// never-reset Body layer (player.b.soulAspect), the grade-storage precedent — so it
+// survives every realm breakthrough. "" = unchosen (the BODY_DATA.soulAspect.startKey).
+function getSoulAspectKey() {
+    if (!bodyExists()) return BODY_DATA.soulAspect.startKey;
+    return player[bodyLayerId()].soulAspect;
+}
+function setSoulAspectKey(aspectKey) {
+    player[bodyLayerId()].soulAspect = aspectKey;
 }
 
 // ---------------------------------------------------------------------------
@@ -698,6 +783,97 @@ function refinementTick(diff) {
 }
 
 // ---------------------------------------------------------------------------
+// Automation ladder (design §1.7/§7.5; AUTOMATION_DATA). Automation is a REWARD,
+// never a settings toggle: a row is ACTIVE the instant its grantedBy milestone is
+// earned (hasMilestone) and stays on forever — there is no user-facing on/off. The
+// readers below decide "is this grant live", and the wiring (q autoPrestige + the
+// Body automate() autobuy) consults them each tick.
+// ---------------------------------------------------------------------------
+
+// True once the automation row's grantedBy milestone is held. Defensive when the
+// granting layer is not yet in player (a milestone of an unregistered/unseeded layer
+// is simply not held) — mirrors the cross-layer reader discipline.
+function automationGranted(automationRow) {
+    var grant = automationRow.grantedBy;
+    if (!grant) return false;
+    if (!(player[grant.layer] && player[grant.layer].unlocked)) return false;
+    return hasMilestone(grant.layer, grant.milestone);
+}
+
+// Is the prestige of `layerId` automated? True iff any granted "prestige" row
+// targets it. Read as the layer's tmp.autoPrestige (game.js gameLoop consumes it:
+// `if (autoPrestige && canReset) doReset(layer)` — the engine's own prestige path).
+function layerPrestigeAutomated(layerId) {
+    if (typeof AUTOMATION_DATA === "undefined" || !AUTOMATION_DATA) return false;
+    var automated = false;
+    AUTOMATION_DATA.forEach(function (automationRow) {
+        var auto = automationRow.automates;
+        if (auto.action !== "prestige" || auto.layer !== layerId) return;
+        if (!automationGranted(automationRow)) return;
+        if (!prestigeGainWorthwhile(layerId, auto.gainFraction)) return;
+        automated = true;
+    });
+    return automated;
+}
+
+// "Auto-prestige AT THRESHOLD" (design §5): the automated breakthrough fires only
+// when the pending gain is at least gainFraction of the layer's current currency.
+// gameLoop runs the tree loop (where auto-prestige zeroes Qi) BEFORE the side loop
+// (where meridian autobuy spends it); without this gate, a granted q auto-prestige
+// would reset at bare canReset every tick and starve every Qi sink in the game.
+// The fraction is data (the automation row); the gain reads the engine's own
+// getResetGain so the automated decision matches what a manual click would earn.
+function prestigeGainWorthwhile(layerId, gainFraction) {
+    if (typeof getResetGain !== "function") return true; // engine absent (lint sandbox)
+    var currentPoints = player[layerId].points;
+    var pendingGain = getResetGain(layerId);
+    return pendingGain.gte(currentPoints.times(gainFraction));
+}
+
+// Run every granted "buyable" autobuy targeting `layerId`. Called from that layer's
+// automate() tick hook (game.js calls layers[layer].automate() each loop). Auto-buys
+// while affordable, respecting the buyable's own unlocked flag + purchaseLimit EXACTLY
+// as a manual click would (it routes through buyBuyable, the same path the UI uses, so
+// canBuy — which folds unlocked + canAfford + the purchase limit — gates every buy).
+function runBuyableAutomationFor(layerId) {
+    if (typeof AUTOMATION_DATA === "undefined" || !AUTOMATION_DATA) return;
+    AUTOMATION_DATA.forEach(function (automationRow) {
+        var auto = automationRow.automates;
+        if (auto.action !== "buyable" || auto.layer !== layerId) return;
+        if (!automationGranted(automationRow)) return;
+        var buyableRow = bodyBuyableByKey(auto.buyableKey);
+        if (!buyableRow) return;
+        // Buy while the engine reports the buyable buyable. tmp[layer].buyables[id].canBuy
+        // is true only when unlocked AND affordable AND below purchaseLimit (TMT's own
+        // composite), so this loop terminates at the cap or when Qi runs out — identical
+        // to the player holding the buy button (no automation-only fast path, §1.7).
+        var safetyBound = new Decimal(buyableRow.limit);
+        var guardCount = factoryDecimalZero();
+        while (tmp[layerId] && tmp[layerId].buyables && tmp[layerId].buyables[buyableRow.id]
+            && tmp[layerId].buyables[buyableRow.id].canBuy
+            && guardCount.lte(safetyBound)) {
+            buyBuyable(layerId, buyableRow.id);
+            guardCount = guardCount.add(FACTORY_ONE);
+        }
+    });
+}
+
+// The current cultivation frontier endgame (expansion §5; consumed by mod.js
+// isEndgame()). The "demo complete" beat moves from the v0.1 forged-core to the
+// Nascent Soul frontier: the game is endgame once the HIGHEST-row realm's LAST
+// sub-stage is reached on its high-water best. Reads the top realm by row from
+// REALM_DATA (data-driven — adding a higher realm row automatically advances the
+// frontier), defensive when that realm is unseeded (realmBest returns zero).
+function cultivationEndgameReached() {
+    var topRealm = REALM_DATA[FACTORY_ZERO];
+    REALM_DATA.forEach(function (realmData) {
+        if (realmData.row > topRealm.row) topRealm = realmData;
+    });
+    var lastSubstage = topRealm.substages[topRealm.substages.length - FACTORY_ONE];
+    return realmBest(topRealm.id).gte(lastSubstage.at);
+}
+
+// ---------------------------------------------------------------------------
 // makeBuyable(row) — one parameterized buyable (§4a/§4b).
 //   cost(x)   = costBase * costRatio^x
 //   effect(x) = effectBase^x
@@ -778,12 +954,20 @@ function makeBodyLayer() {
                 unlocked: true,
                 points: factoryDecimalZero(),
                 foundationGrade: BODY_DATA.grades.foundationGrade.startIndex,
-                coreGrade: BODY_DATA.grades.coreGrade.startIndex
+                coreGrade: BODY_DATA.grades.coreGrade.startIndex,
+                // Chosen Soul Aspect key (expansion §5), life-scoped here so it
+                // survives every realm reset. "" = unchosen (BODY_DATA.soulAspect.startKey).
+                soulAspect: BODY_DATA.soulAspect.startKey
             };
         },
         tooltip: function () { return BODY_DATA.name + " — permanent cultivation (never resets)"; },
         buyables: buyablesObject,
         milestones: makeTemperMilestones(),
+        // Automation tick hook (design §1.7/§7.5): game.js calls layers[b].automate()
+        // each loop. The meridian buyables (primary + extraordinary) auto-open here once
+        // their AUTOMATION_DATA grants are live — Temper is DELIBERATELY excluded (a grade
+        // decision, not hands, §4b), so it is never auto-bought. No-op until granted.
+        automate: function () { runBuyableAutomationFor(BODY_DATA.id); },
         // No doReset: a row:"side" layer with no doReset is reset-immune (rowReset's
         // auto-reset branch requires !isNaN(row), which is false for "side").
         layerShown: function () { return true; },
@@ -926,6 +1110,105 @@ function makeWarmToggleClickable() {
 }
 
 // ---------------------------------------------------------------------------
+// Soul Aspect UI builders (expansion §5). The aspect pick is the Nascent Soul's
+// set-piece, mounted on the n layer the same way the forge mounts on c — one
+// clickable per aspect, keyed off realmData.soulAspect. Pinned pick semantics:
+//   - clickables are VISIBLE only after the first n prestige AND while unchosen
+//     (player.b.soulAspect === ""); once an aspect is picked they all vanish (the
+//     pick is ONCE per life, no respec).
+//   - Formless (requires {}) is ALWAYS clickable — the completability floor.
+//   - an element aspect's clickable is visible but UNCLICKABLE (canClick false, with
+//     its requirement shown) until its daoElementTier gate is met.
+//   - picking costs NOTHING; it confirm()s, then stores the key.
+// ---------------------------------------------------------------------------
+
+// True once the soul has taken any form (an aspect is chosen this life).
+function soulAspectChosen() {
+    return getSoulAspectKey() !== BODY_DATA.soulAspect.startKey;
+}
+
+// True once Nascent Soul has been broken through at least once this life — the soul
+// exists, so it may take a form. realmBest reads the n layer's high-water (defensive
+// when n is unseeded). The aspect pick opens "after first n prestige" (pinned).
+function nascentSoulBrokenThrough(realmData) {
+    return realmBest(realmData.id).gte(realmData.substages[FACTORY_ZERO].at);
+}
+
+// Plain-language requirement for a still-locked element aspect's clickable tooltip.
+function describeAspectRequirement(aspect) {
+    if (!aspect.requires || aspect.requires.daoElementTier === undefined) return "";
+    var element = aspect.requires.daoElementTier[FACTORY_ZERO];
+    var tierNumber = aspect.requires.daoElementTier[FACTORY_ONE];
+    var tierLabel = LATTICE_DATA && LATTICE_DATA.tiers && LATTICE_DATA.tiers[tierNumber - FACTORY_ONE]
+        ? LATTICE_DATA.tiers[tierNumber - FACTORY_ONE].label
+        : "";
+    return "Requires a " + tierLabel + " of a " + element + " Dao node.";
+}
+
+// One aspect-pick clickable. `realmData` is the aspect-bearing realm (for the
+// visibility gate); `aspect` is the aspect data row.
+function makeSoulAspectClickable(realmData, aspect) {
+    var percentBase = new Decimal(FACTORY_HUNDRED);
+    function effectLine() {
+        var parts = [];
+        if (aspect.effect.qiMult !== undefined) {
+            var qiPercent = new Decimal(aspect.effect.qiMult).times(percentBase).sub(percentBase);
+            parts.push("+" + format(qiPercent) + "% Qi/sec");
+        }
+        if (aspect.effect.insightMult !== undefined) {
+            var insightPercent = new Decimal(aspect.effect.insightMult).times(percentBase).sub(percentBase);
+            parts.push("+" + format(insightPercent) + "% Insight/sec");
+        }
+        return parts.join(", ");
+    }
+    return {
+        title: aspect.label,
+        display: function () {
+            var line = aspect.label + "<br>" + effectLine();
+            if (!meets(aspect.requires)) {
+                line += "<br><i>" + describeAspectRequirement(aspect) + "</i>";
+            } else {
+                line += "<br>Click to bind your soul to this aspect (permanent this life).";
+            }
+            return line;
+        },
+        // Visible only after first NS breakthrough AND while no aspect is chosen.
+        unlocked: function () {
+            return nascentSoulBrokenThrough(realmData) && !soulAspectChosen();
+        },
+        // Formless (requires {}) is always clickable; element aspects gate on their
+        // daoElementTier requirement (held Seed of that element).
+        canClick: function () {
+            return !soulAspectChosen() && meets(aspect.requires);
+        },
+        onClick: function () {
+            if (soulAspectChosen()) return; // once per life (defensive against double-fire)
+            // Re-verify the gate at fire time, not just in canClick: a future slice
+            // (reincarnation resets lattice Seeds) could otherwise race a cached
+            // clickable into storing an aspect whose requirement no longer holds.
+            if (!meets(aspect.requires)) return;
+            var prompt = "Bind your nascent soul to the " + aspect.label
+                + "? This is permanent for this life — the soul takes one form and keeps it.";
+            if (!confirm(prompt)) return;
+            setSoulAspectKey(aspect.key);
+            if (typeof doPopup === "function") {
+                doPopup("none", "Your soul takes form: " + aspect.label + ".",
+                    "Soul Aspect", FACTORY_NUMERICS.one, realmData.color);
+            }
+        }
+    };
+}
+
+// Build the aspect clickables object: one per aspect, id = its order in the set.
+function makeSoulAspectClickables(realmData) {
+    var clickablesObject = {};
+    realmData.soulAspect.aspects.forEach(function (aspect, index) {
+        clickablesObject[index] = makeSoulAspectClickable(realmData, aspect);
+    });
+    return clickablesObject;
+}
+
+// ---------------------------------------------------------------------------
 // makeRealmLayer(r) — one parameterized realm prestige layer (§5). Numbered rows
 // reset the chain below them via the default rowReset cascade. The forge realm
 // (carrying realmData.forge) additionally mounts the one-time forge clickables,
@@ -997,6 +1280,13 @@ function makeRealmLayer(realmData) {
             return "Locked — " + describeUnlockCondition(realmData.unlock)
                 + ", then gather " + format(new Decimal(realmData.reqBase)) + " " + modInfo.pointsName + ".";
         },
+        // Automation (design §1.7/§7.5): a realm auto-prestiges once an AUTOMATION_DATA
+        // "prestige" row targeting it is granted. game.js's gameLoop reads tmp[id].
+        // autoPrestige and runs `if (autoPrestige && canReset) doReset(id)` — the
+        // engine's own prestige path, so the automated breakthrough is identical to a
+        // manual one (same canReset gate, same gain). Identity (false) until granted,
+        // so a pre-Nascent-Soul save behaves exactly as before (no auto-prestige).
+        autoPrestige: function () { return layerPrestigeAutomated(realmData.id); },
         // effect() exposes the realm's reached-substage Qi multiplier so it is
         // observable in tmp[id].effect (no dead multiplier §9.2).
         effect: function () {
@@ -1076,6 +1366,39 @@ function makeRealmLayer(realmData) {
             "clickables",
             "blank",
             ["bar", "refinement"]
+        ];
+    }
+
+    // Soul Aspect realm augmentation (expansion §5): the Nascent Soul realm carries a
+    // soulAspect set-piece config, mounted EXACTLY like the forge augmentation above —
+    // keyed on realmData.soulAspect, so no other realm is touched. Mounts the aspect-
+    // pick clickables (the soul takes a form on first breakthrough) and seeds the
+    // realm tab with the pick. The chosen aspect is stored on the Body layer, so this
+    // realm needs no extra startData (its base realm state above is unchanged).
+    if (realmData.soulAspect) {
+        layerData.clickables = makeSoulAspectClickables(realmData);
+        layerData.tabFormat = [
+            "main-display",
+            "prestige-button",
+            "resource-display",
+            "blank",
+            "milestones",
+            "blank",
+            ["display-text", function () {
+                if (!nascentSoulBrokenThrough(realmData)) {
+                    return "Break through to Nascent Soul. On your first breakthrough the "
+                        + "soul takes a form — choose an aspect to shape its run-long identity.";
+                }
+                if (!soulAspectChosen()) {
+                    return "Your nascent soul awaits a form. Choose its aspect — Formless is "
+                        + "always open; an elemental aspect needs a held Seed of that element.";
+                }
+                var chosen = soulAspectRow();
+                return "Your soul has taken form: <b>" + (chosen ? chosen.label : "—")
+                    + "</b>. This identity holds for the rest of this life.";
+            }],
+            "blank",
+            "clickables"
         ];
     }
 

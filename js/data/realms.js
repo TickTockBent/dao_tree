@@ -30,10 +30,42 @@
 //                        sub-stage label, e.g. { "10th Level":"extraordinary" }.
 //   graded      bool     optional — breakthrough is graded (Foundation §6).
 //   forge       object   optional — Core forge config (§7), see FORGE below.
+//   soulAspect  object   optional — Nascent Soul aspect set-piece (expansion §5),
+//                        see SOUL ASPECT below.
 //
 // graded realms additionally carry a gradeBands table (§6) and forge realms a
 // forge table (§7). Those drive later phases; they are present now as data so
 // the schema is fixed and the linter can see them.
+//
+// SOUL ASPECT (expansion §5 Nascent Soul "Soul Aspect"; progression-map §2 "the
+// soul gains independence"): the Nascent Soul realm carries a soulAspect set-piece
+// config on its realm row EXACTLY as Core Formation carries `forge` — one
+// parameterized augmentation in the factory keyed on realmData.soulAspect, no
+// per-realm hand assembly (the forge-doc precedent). On the first Nascent Soul
+// breakthrough the soul "takes a form": the player picks ONE aspect, ONCE per life
+// (no respec), stored LIFE-scoped on the Body layer as player.b.soulAspect (the
+// grade-storage precedent §6 — survives every realm reset). The chosen aspect is a
+// run-long passive identity multiplier folded into the Qi and Insight pipelines
+// (soulAspectQiMult / soulAspectInsightMult — no dead mult §9.2).
+//
+//   soulAspect.aspects[] rows (consumed by makeRealmLayer's aspect augmentation):
+//     key      string  semantic aspect key; the chosen one is stored as
+//                      player.b.soulAspect ("" = unchosen).
+//     label    string  display name.
+//     element  string|null  the spiritual-root element this aspect embodies, or
+//                      null for the always-available Formless aspect.
+//     requires object  meets()-style gate (the daoElementTier grammar): an element
+//                      aspect needs a HELD SEED of that element in the Dao lattice.
+//                      {} (Formless) is always met — the completability FLOOR so
+//                      Nascent Soul can NEVER be aspect-blocked (the always-available
+//                      Formless aspect, lint-enforced).
+//     effect   object  { qiMult?, insightMult? } the run-long identity multipliers,
+//                      every value >= 1 (a pure passive identity, never a penalty).
+//                      Folded into cultivationQiPerSecond / insightPerSecond via the
+//                      soulAspectQiMult / soulAspectInsightMult readers. Formless is
+//                      the small both-stats generalist; each element aspect is a
+//                      larger single-stat identity: water/metal-sword lean insightMult
+//                      (the §4.2 sword/flow Insight lines), wood/fire/earth lean qiMult.
 
 var REALM_DATA = [
     {
@@ -192,6 +224,82 @@ var REALM_DATA = [
                 { key: "middle",  label: "Middle",  ceilingIndex: 2, globalMult: 4 },
                 { key: "upper",   label: "Upper",   ceilingIndex: 3, globalMult: 6 },
                 { key: "perfect", label: "Perfect", ceilingIndex: 4, globalMult: 8 }
+            ]
+        }
+    },
+    {
+        id: "n",
+        row: 3,
+        name: "Nascent Soul",
+        symbol: "Soul",
+        color: "#b486e0",   // amethyst — the soul's hue, distinct from Core gold
+        resource: "nascent soul",
+        // Pacing (expansion §5 / §11 slice 4): NS should OPEN ~30-60 min after the
+        // first core for an active player. Post-core Qi/sec runs well into the
+        // hundreds/thousands (baseRate 2 x meridianMult ~32 at full meridians x
+        // temperMult ~1.28 x realmMult [q full + f Great Circle + c Core Forged] x
+        // coreGradeMult [>=2x Cracked, up to 8x] x gateMult 1.25). reqBase 5,000,000
+        // with gainExp 0.5 puts the first NS breakthrough roughly that window past a
+        // forged core that has also climbed c to Core Refined (the unlock gate). The
+        // 7 sub-stages then span a multi-hour climb (their `at` ladder geometrically
+        // outruns a single realm's gain, like the q/f/c spines). All ⟨tune⟩.
+        reqBase: 5000000,
+        gainExp: 0.5,
+        // §1.6/§5a: reveal the mountain EARLY — the Nascent Soul node appears the
+        // moment the core is forged (Core Forged sub-stage), so the next peak is
+        // visible while still locked. The breakthrough itself gates higher: the
+        // player must first REFINE the core (Core Refined sub-stage, c.best >= 2)
+        // before Nascent Soul unlocks — the carried-artifact core must mature first
+        // (progression-map §5 "core as carried artifact").
+        reveal: { realm: ["c", "Core Forged"] },
+        unlock: { realm: ["c", "Core Refined"] },
+        substages: [
+            // 7 sub-stages (progression-map §2: Early/Mid/Late/Peak, then Great
+            // Circle / Apex / Perfected). qiMults climb steeply (the soul's
+            // independence compounds gathering) — each feeds realmMult (no dead
+            // mult §9.2). ats are a geometric ladder so the climb is multi-hour.
+            { label: "Early Nascent Soul", at: 1,    qiMult: 1.60 },
+            { label: "Mid Nascent Soul",   at: 4,    qiMult: 1.70 },
+            { label: "Late Nascent Soul",  at: 12,   qiMult: 1.80 },
+            { label: "Peak Nascent Soul",  at: 30,   qiMult: 1.90 },
+            { label: "Great Circle",       at: 75,   qiMult: 2.10 },
+            { label: "Apex",               at: 175,  qiMult: 2.30 },
+            { label: "Perfected",          at: 400,  qiMult: 2.60 }
+        ],
+        // Soul Aspect set-piece (expansion §5; SOUL ASPECT in the header). The soul
+        // "takes a form" on first breakthrough: pick ONE aspect, ONCE per life. The
+        // Formless aspect is ALWAYS available (requires {}) — the completability
+        // floor so NS is never aspect-blocked even on a save with no Dao Seeds. Each
+        // element aspect needs a HELD SEED (tier 2) of its element in the Dao lattice
+        // (daoElementTier grammar). All effects >= 1 (a passive identity, never a
+        // penalty); values ⟨tune⟩ per the pinned sizes.
+        soulAspect: {
+            aspects: [
+                // Formless — the generalist floor. Small bonus to BOTH stats; always
+                // pickable (requires {}), so a player with no element Seed can still
+                // give the soul a form and progress (lint-enforced floor).
+                { key: "formless", label: "Formless Soul", element: null, requires: {},
+                  effect: { qiMult: 1.20, insightMult: 1.20 } },
+                // Metal (Sword) — the §4.2 sword line is an Insight engine; lean insightMult.
+                { key: "metalSoul", label: "Sword Soul", element: "metal",
+                  requires: { daoElementTier: ["metal", 2] },
+                  effect: { insightMult: 1.50 } },
+                // Wood — vitality of the living world; lean qiMult.
+                { key: "woodSoul", label: "Verdant Soul", element: "wood",
+                  requires: { daoElementTier: ["wood", 2] },
+                  effect: { qiMult: 1.45 } },
+                // Water (Flow) — the §4.2 flow line leans Insight; lean insightMult.
+                { key: "waterSoul", label: "Flowing Soul", element: "water",
+                  requires: { daoElementTier: ["water", 2] },
+                  effect: { insightMult: 1.50 } },
+                // Fire (Life) — feeds the body's gathering; lean qiMult.
+                { key: "fireSoul", label: "Blazing Soul", element: "fire",
+                  requires: { daoElementTier: ["fire", 2] },
+                  effect: { qiMult: 1.50 } },
+                // Earth (Mountain) — immovable foundation; lean qiMult.
+                { key: "earthSoul", label: "Mountain Soul", element: "earth",
+                  requires: { daoElementTier: ["earth", 2] },
+                  effect: { qiMult: 1.45 } }
             ]
         }
     }

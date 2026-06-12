@@ -21,7 +21,7 @@ const buildDir = path.join(projectRoot, "js", "build");
 // trees.js / keep-rules.js / hints.js reference nothing at load; they sit with
 // their data siblings before linter.js so the new §8.1/§8.2/§8.5 checks can read them.
 const dataFiles = ["constants.js", "realms.js", "body.js", "gates.js",
-    "trees.js", "keep-rules.js", "lattice.js", "stances.js", "hints.js"];
+    "trees.js", "keep-rules.js", "lattice.js", "stances.js", "hints.js", "automation.js"];
 const linterFile = "linter.js";
 
 // js/build/*.js files subject to the no-numeric-literal scan (generated/factory

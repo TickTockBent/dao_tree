@@ -26,8 +26,9 @@ let changelog = `<h1>Changelog:</h1><br>
 		- Forge your first Golden Core at the climax: push hard for grade, or warm it slowly and safely.<br>
 		- Earn Outer Disciple standing in the sect for a permanent Qi boon.`
 
-let winText = `You have forged a Golden Core. The mortal road is behind you; the immortal road begins.<br>
-	The path beyond — Nascent Soul and further heavens — awaits a future update.`
+let winText = `Your nascent soul has reached its Perfected stage. The Golden Core is a carried artifact now,
+	the soul independent and whole — the frontier of the mortal road.<br>
+	The path beyond — Soul Formation and the severing of the mortal — awaits a future update.`
 
 // If you add new functions anywhere inside of a layer, and those functions have an effect when called, add them here.
 // (The ones here are examples, all official functions are already taken care of)
@@ -78,11 +79,13 @@ var displayThings = [
     }
 ]
 
-// Determines when the game "ends" — the demo-complete beat (spec §1/§7): forging
-// a Golden Core of ANY grade. coreIsForged() (the factory) reads the stored Core
-// Grade index off the reset-immune Body layer; index >= 0 means a core exists.
+// Determines when the game "ends" — the demo-complete beat. The frontier moved from
+// the v0.1 forged-core (coreIsForged) to the Nascent Soul frontier (expansion §5):
+// cultivationEndgameReached() (the factory) is true once the highest-row realm's last
+// sub-stage (Perfected Nascent Soul) is reached on best. Keep the defensive typeof
+// pattern so a pre-factory tick reports not-endgame rather than throwing.
 function isEndgame() {
-	if (typeof coreIsForged === "function") return coreIsForged()
+	if (typeof cultivationEndgameReached === "function") return cultivationEndgameReached()
 	return false
 }
 

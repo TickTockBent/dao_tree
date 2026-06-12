@@ -8,9 +8,17 @@
 // always === true (unconditional catch-all) OR every key in "when" holds:
 //   - qi / realm / meridians / temperTier / primaryMeridiansAll: delegated to
 //     meets() (factory global defined in layerFactory.js, loaded before this file).
+//   - anyDaoNode: N — delegated to meets(); matches when ANY lattice node is owned
+//     at tier >= N (design §4.2 "any-node" grammar; new in slice 4).
+//   - daoElementTier: [element, N] — delegated to meets(); matches when ANY node
+//     of the named element is owned at tier >= N (NS aspect gate grammar, slice 4).
 //   - layerUnlocked: player[id] exists AND player[id].unlocked is true.
 //   - coreForged: getCoreGradeIndex() (factory global) >= FACTORY_NUMERICS.zero.
 //   - coreBelowCeiling: getCoreGradeIndex() < coreCeilingGradeIndex() (factory global).
+//   - aspectUnchosen: true — matches when the n layer is unlocked AND the Soul Aspect
+//     has not yet been chosen (player.b.soulAspect === "" via soulAspectRow() accessor).
+//     Evaluated here because it reads through the factory's soul-aspect accessor with
+//     the same defensive typeof pattern used for getCoreGradeIndex (§8.5).
 //
 // Defensive contract: if HINT_DATA or the factory globals are not yet defined
 // (e.g. evaluated before layerFactory.js has run), return the catch-all row so
@@ -45,6 +53,18 @@ function hintLayerUnlocked(layerId) {
     return !!(player[layerId] && player[layerId].unlocked);
 }
 
+// True when the n (Nascent Soul) layer is unlocked AND the Soul Aspect has not
+// yet been chosen. The aspect key is stored life-scoped on player.b.soulAspect
+// (design §6 grade-storage precedent); "" = unchosen. The soulAspectRow() factory
+// accessor is called defensively (typeof guard) — if it is absent (e.g. before
+// the n realm's factory surface is registered), this returns false so the hint
+// simply does not fire early rather than crashing (§8.5 defensive contract).
+function hintAspectUnchosen() {
+    if (!hintLayerUnlocked("n")) return false;
+    if (typeof soulAspectRow !== "function") return false;
+    return soulAspectRow() === null;
+}
+
 // ---------------------------------------------------------------------------
 // hintRowMatches(row) — returns true iff the row's condition is satisfied.
 // ---------------------------------------------------------------------------
@@ -55,7 +75,7 @@ function hintRowMatches(row) {
     var condition = row.when;
     if (!condition) return false;
 
-    // Evaluate the three hint-only keys first, before delegating to meets().
+    // Evaluate the hint-only keys first, before delegating to meets().
     if (condition.layerUnlocked !== undefined) {
         if (!hintLayerUnlocked(condition.layerUnlocked)) return false;
     }
@@ -65,9 +85,18 @@ function hintRowMatches(row) {
     if (condition.coreBelowCeiling === true) {
         if (!hintCoreBelowCeiling()) return false;
     }
+    // aspectUnchosen: hint-only key (n layer unlocked AND soul aspect not yet picked).
+    // Evaluated here; does NOT pass through to meets() (§8.5 strip list).
+    if (condition.aspectUnchosen === true) {
+        if (!hintAspectUnchosen()) return false;
+    }
 
     // Build a stripped condition containing only the meets()-compatible keys so
-    // we can delegate without passing hint-only keys through.
+    // we can delegate without passing hint-only keys through. anyDaoNode and
+    // daoElementTier ARE meets() keys (factory grammar, slice 4) — they pass
+    // through to meets() exactly like realm/meridians/qi. The hint-only keys
+    // (layerUnlocked, coreForged, coreBelowCeiling, aspectUnchosen) are consumed
+    // above and excluded from the meetable set so meets() never sees them.
     var meetableCondition = {};
     var hasMeetableKeys = false;
 
@@ -89,6 +118,18 @@ function hintRowMatches(row) {
     }
     if (condition.primaryMeridiansAll !== undefined) {
         meetableCondition.primaryMeridiansAll = condition.primaryMeridiansAll;
+        hasMeetableKeys = true;
+    }
+    // anyDaoNode: N — passes through to meets() (factory grammar, §4.2 slice 4).
+    // matches when ANY lattice node is owned at tier >= N.
+    if (condition.anyDaoNode !== undefined) {
+        meetableCondition.anyDaoNode = condition.anyDaoNode;
+        hasMeetableKeys = true;
+    }
+    // daoElementTier: [element, N] — passes through to meets() (factory grammar, slice 4).
+    // matches when ANY node of the named element is owned at tier >= N.
+    if (condition.daoElementTier !== undefined) {
+        meetableCondition.daoElementTier = condition.daoElementTier;
         hasMeetableKeys = true;
     }
 

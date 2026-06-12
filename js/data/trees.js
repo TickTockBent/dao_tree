@@ -35,6 +35,12 @@ var TREE_DATA = {
         q:    { scope: "tree", tree: "act1" },
         f:    { scope: "tree", tree: "act1" },
         c:    { scope: "tree", tree: "act1" },
+        // Nascent Soul (expansion §5): row 3, still Act I. A higher-row tree layer,
+        // so its breakthrough cascade resets c/f/q below it — the carried-artifact
+        // core GRADE survives on the life-scoped Body layer (progression-map §5), the
+        // refinement PROGRESS on c wipes with the realm (one-time forge stays forged
+        // via coreIsForged()'s stored grade).
+        n:    { scope: "tree", tree: "act1" },
         b:    { scope: "life" },
         gate: { scope: "life" },
         // The Dao lattice (design §4.2): comprehension never resets within a life, so it is

@@ -120,5 +120,13 @@ var BODY_DATA = {
     grades: {
         foundationGrade: { startIndex: -1 },  // -1 = no Foundation breakthrough yet
         coreGrade: { startIndex: -1 }         // -1 = no core forged yet
-    }
+    },
+
+    // Chosen Soul Aspect (expansion §5 Nascent Soul "Soul Aspect"): stored LIFE-scoped
+    // on this never-reset Body layer as player.b.soulAspect, exactly like the grade
+    // slots above (the grade-storage precedent, §6). "" = unchosen; on the first
+    // Nascent Soul breakthrough the player picks one aspect ONCE per life (no respec).
+    // The key resolves to a REALM_DATA(n).soulAspect.aspects[] row; its effect is a
+    // run-long passive identity multiplier folded into the Qi/Insight pipelines.
+    soulAspect: { startKey: "" }
 };

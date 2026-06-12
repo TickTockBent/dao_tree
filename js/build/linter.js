@@ -40,7 +40,13 @@
             latticeNodeInsightMult: "daoNodeInsightMult",
             stanceQiModifier: "stanceQiMult",
             stanceInsightModifier: "stanceInsightMult",
-            insightTrickle: "insightPerSecond"
+            insightTrickle: "insightPerSecond",
+            // Soul Aspect consumers (expansion §5). The chosen aspect's identity multipliers
+            // fold into the Qi/Insight pipelines exactly like the stance variant: each declared
+            // aspect effect.qiMult (resp. insightMult) must have its matching reader consume the
+            // field token, so an aspect bonus can't be computed into nothing (§9.2).
+            soulAspectQiEffect: "soulAspectQiMult",
+            soulAspectInsightEffect: "soulAspectInsightMult"
         };
 
         // A consumer is "live" if the named factory function references the data
@@ -172,6 +178,29 @@
                 errors.push("Dead multiplier: stance insightMult has no consumer (stanceInsightMult).");
             }
         }
+
+        // Soul Aspect effects -> soulAspectQiMult / soulAspectInsightMult (expansion §5). For any
+        // realm carrying a soulAspect set, any aspect declaring a qiMult (resp. insightMult) effect
+        // must have its matching reader consume that field token — the same mechanism as the stance
+        // variant — so a chosen-aspect identity bonus can't be computed into nothing (§9.2).
+        var soulAspectDeclaresQiMult = false;
+        var soulAspectDeclaresInsightMult = false;
+        REALM_DATA.forEach(function (realm) {
+            if (!realm.soulAspect || !realm.soulAspect.aspects) return;
+            realm.soulAspect.aspects.forEach(function (aspect) {
+                var effect = aspect.effect || {};
+                if (effect.qiMult !== undefined) soulAspectDeclaresQiMult = true;
+                if (effect.insightMult !== undefined) soulAspectDeclaresInsightMult = true;
+            });
+        });
+        if (soulAspectDeclaresQiMult
+            && !consumerReferences(consumers.soulAspectQiEffect, "qiMult")) {
+            errors.push("Dead multiplier: soul aspect qiMult has no consumer (soulAspectQiMult).");
+        }
+        if (soulAspectDeclaresInsightMult
+            && !consumerReferences(consumers.soulAspectInsightEffect, "insightMult")) {
+            errors.push("Dead multiplier: soul aspect insightMult has no consumer (soulAspectInsightMult).");
+        }
     }
 
     // Resolve a realm sub-stage label (or numeric token) to its `at` threshold.
@@ -275,6 +304,47 @@
                         errors.push(label + ": daoNode '" + requiredNodeKey + "' tier "
                             + requiredNodeTier + " is out of range (1.." + tierCount + ").");
                     }
+                }
+            }
+        }
+
+        // anyDaoNode: N — any lattice node at tier >= N (slice-4 meets() grammar, pinned §FACTORY).
+        // N must be within [1, tiers.length]. Guarded on LATTICE_DATA like daoNode.
+        if (condition.anyDaoNode !== undefined) {
+            if (typeof LATTICE_DATA === "undefined" || !LATTICE_DATA || !LATTICE_DATA.tiers) {
+                errors.push(label + ": anyDaoNode condition requires LATTICE_DATA to be loaded.");
+            } else {
+                var anyDaoTierCount = LATTICE_DATA.tiers ? LATTICE_DATA.tiers.length : ZERO;
+                var anyDaoTier = condition.anyDaoNode;
+                if (!(anyDaoTier >= ONE && anyDaoTier <= anyDaoTierCount)) {
+                    errors.push(label + ": anyDaoNode tier " + anyDaoTier
+                        + " is out of range (1.." + anyDaoTierCount + ").");
+                }
+            }
+        }
+
+        // daoElementTier: [element, N] — any node of the named element at tier >= N
+        // (slice-4 meets() grammar, NS aspect gate). The element must be one of the
+        // five canonical element keys from the lattice roots; N must be within [1, tiers.length].
+        // Guarded on LATTICE_DATA like daoNode.
+        if (condition.daoElementTier !== undefined) {
+            if (typeof LATTICE_DATA === "undefined" || !LATTICE_DATA || !LATTICE_DATA.nodes) {
+                errors.push(label + ": daoElementTier condition requires LATTICE_DATA to be loaded.");
+            } else {
+                var elementKey = condition.daoElementTier[ZERO];
+                var elementTier = condition.daoElementTier[ONE];
+                var elementTierCount = LATTICE_DATA.tiers ? LATTICE_DATA.tiers.length : ZERO;
+                // The element must match at least one node's element field (reachability from roots).
+                var elementNodeExists = LATTICE_DATA.nodes.some(function (n) {
+                    return n.element === elementKey && (!n.requires || n.requires.length === ZERO);
+                });
+                if (!elementNodeExists) {
+                    errors.push(label + ": daoElementTier references element '"
+                        + elementKey + "' which has no root node in LATTICE_DATA (unreachable).");
+                }
+                if (!(elementTier >= ONE && elementTier <= elementTierCount)) {
+                    errors.push(label + ": daoElementTier element '" + elementKey + "' tier "
+                        + elementTier + " is out of range (1.." + elementTierCount + ").");
                 }
             }
         }
@@ -723,7 +793,11 @@
         }
 
         var grammarKeys = ["qi", "realm", "meridians", "temperTier", "primaryMeridiansAll",
-            "layerUnlocked", "coreForged", "coreBelowCeiling"];
+            "layerUnlocked", "coreForged", "coreBelowCeiling",
+            // Slice-4 additions (§11): anyDaoNode / daoElementTier are meets() grammar keys
+            // that pass through the hint engine's strip list to meets(); aspectUnchosen is a
+            // hint-only key evaluated by hintEngine.js's hintAspectUnchosen() function.
+            "anyDaoNode", "daoElementTier", "aspectUnchosen"];
         var registered = registeredLayerIds();
         var lastIndex = hints.length - ONE;
         var alwaysCount = ZERO;
@@ -1047,6 +1121,217 @@
         });
     }
 
+    // ----- §1.7/§7.5 automation ladder integrity --------------------------
+    // AUTOMATION_DATA is the automation-as-reward grammar (design §1.7/§7.5): each row is a
+    // grant ACTIVATED by a milestone that runs a layer action forever after (never a settings
+    // toggle). This check proves each grant is wired to something REAL and that the ladder keeps
+    // pace with the frontier so a player never hand-grinds two-rows-stale content:
+    //   - keys unique;
+    //   - grantedBy.layer registered AND grantedBy.milestone in range (the keep-rule milestone
+    //     precedent: a realm milestone id is a sub-stage index; the body layer's a temper-tier index);
+    //   - automates.layer registered;
+    //   - action in {prestige, buyable};
+    //   - buyableKey present IFF action is "buyable", and resolving to a real BODY_DATA buyable
+    //     on the target layer (a phantom key auto-buys nothing — a dead grant);
+    //   - THE FRONTIER RULE (§1.7): for every TREE-scoped realm R, if (max tree row - R.row) > 2
+    //     then SOME AUTOMATION_DATA row must automate R's prestige. Two-rows-below content is the
+    //     decisionless grind the soul should erase; an uncovered layer this far behind the
+    //     frontier is the hand-grind the ladder exists to prevent. Reports uncovered layers by id.
+    function checkAutomationData(errors) {
+        if (typeof AUTOMATION_DATA === "undefined" || !AUTOMATION_DATA) {
+            errors.push("Automation: AUTOMATION_DATA table is required (§1.7).");
+            return;
+        }
+        var registered = registeredLayerIds();
+        var validActions = ["prestige", "buyable"];
+        var seenKeys = {};
+
+        AUTOMATION_DATA.forEach(function (automationRow) {
+            var rowId = automationRow.key || "(unkeyed)";
+            if (seenKeys[automationRow.key]) {
+                errors.push("Automation: duplicate row key '" + automationRow.key + "' (§1.7).");
+            }
+            seenKeys[automationRow.key] = true;
+
+            // grantedBy.layer registered + milestone in range (keep-rule precedent §8.2).
+            var grant = automationRow.grantedBy || {};
+            var grantLayer = grant.layer;
+            var grantMilestone = grant.milestone;
+            if (registered.indexOf(grantLayer) === ZERO - ONE) {
+                errors.push("Automation '" + rowId + "': grantedBy.layer '" + grantLayer
+                    + "' is not a registered layer (§1.7).");
+            } else {
+                var grantRealm = REALM_DATA.find(function (r) { return r.id === grantLayer; });
+                var milestoneCount = null;
+                if (grantRealm) {
+                    milestoneCount = grantRealm.substages.length;
+                } else if (grantLayer === BODY_DATA.id) {
+                    milestoneCount = BODY_DATA.temperTiers.length;
+                }
+                if (milestoneCount === null) {
+                    errors.push("Automation '" + rowId + "': grantedBy.layer '" + grantLayer
+                        + "' has no milestone source (not a realm or the body layer, §1.7).");
+                } else if (!(grantMilestone >= ZERO && grantMilestone < milestoneCount)) {
+                    errors.push("Automation '" + rowId + "': grantedBy.milestone " + grantMilestone
+                        + " is out of range for layer '" + grantLayer + "' (0.."
+                        + (milestoneCount - ONE) + ", §1.7).");
+                }
+            }
+
+            // automates.layer registered + action in grammar + buyableKey iff buyable.
+            var automates = automationRow.automates || {};
+            if (registered.indexOf(automates.layer) === ZERO - ONE) {
+                errors.push("Automation '" + rowId + "': automates.layer '" + automates.layer
+                    + "' is not a registered layer (§1.7).");
+            }
+            if (validActions.indexOf(automates.action) === ZERO - ONE) {
+                errors.push("Automation '" + rowId + "': action '" + automates.action
+                    + "' is not in {prestige, buyable} (§1.7).");
+            }
+            if (automates.action === "buyable") {
+                if (automates.buyableKey === undefined) {
+                    errors.push("Automation '" + rowId
+                        + "': a buyable action must declare a buyableKey (§1.7).");
+                } else if (automates.layer === BODY_DATA.id) {
+                    var buyableRow = BODY_DATA.buyables.find(function (b) {
+                        return b.key === automates.buyableKey;
+                    });
+                    if (!buyableRow) {
+                        errors.push("Automation '" + rowId + "': buyableKey '"
+                            + automates.buyableKey + "' is not a buyable on layer '"
+                            + automates.layer + "' (a phantom auto-buy, §1.7).");
+                    }
+                }
+                // A non-body buyable target has no BODY_DATA buyable table to resolve against;
+                // the registered-layer check above already guards the layer itself.
+            } else if (automates.buyableKey !== undefined) {
+                errors.push("Automation '" + rowId + "': a '" + automates.action
+                    + "' action must NOT declare a buyableKey (§1.7).");
+            }
+            // "Auto-prestige AT THRESHOLD" (design §5): a prestige automation without a
+            // positive gainFraction fires at bare canReset every tick, zeroing the base
+            // currency and starving every sink below it (the gameLoop tree loop runs
+            // before the side loop). The threshold is mandatory, not optional tuning.
+            if (automates.action === "prestige") {
+                if (!(automates.gainFraction > ZERO)) {
+                    errors.push("Automation '" + rowId + "': a prestige action must declare "
+                        + "gainFraction > 0 — thresholdless auto-prestige starves every "
+                        + "sink of the base currency (§5 'at threshold', §1.7).");
+                }
+            } else if (automates.gainFraction !== undefined) {
+                errors.push("Automation '" + rowId + "': gainFraction only applies to "
+                    + "prestige actions (§1.7).");
+            }
+        });
+
+        // THE FRONTIER RULE (§1.7). The frontier is the highest TREE-scoped realm row; any
+        // tree-scoped realm more than two rows below it must have its prestige automated, or the
+        // player would hand-re-prestige stale content. Compute the max tree row, then for each
+        // tree-scoped realm that far behind, demand a granted "prestige" automation targeting it.
+        var maxTreeRow = ZERO - ONE;
+        REALM_DATA.forEach(function (realm) {
+            var entry = treeEntryFor(realm.id);
+            if (!entry || entry.scope !== SCOPE_TREE) return;
+            if (realm.row > maxTreeRow) maxTreeRow = realm.row;
+        });
+        var frontierDepth = ONE + ONE;   // "more than two rows below" => row distance > 2
+        REALM_DATA.forEach(function (realm) {
+            var entry = treeEntryFor(realm.id);
+            if (!entry || entry.scope !== SCOPE_TREE) return;
+            if (!((maxTreeRow - realm.row) > frontierDepth)) return;
+            var covered = AUTOMATION_DATA.some(function (automationRow) {
+                var automates = automationRow.automates || {};
+                return automates.action === "prestige" && automates.layer === realm.id;
+            });
+            if (!covered) {
+                errors.push("Automation frontier: tree-scoped realm '" + realm.id + "' (row "
+                    + realm.row + ") is more than two rows below the frontier (row " + maxTreeRow
+                    + ") but no AUTOMATION_DATA row automates its prestige — the player would "
+                    + "hand-grind two-rows-stale content (§1.7).");
+            }
+        });
+    }
+
+    // ----- §5/§6.3 soul aspect integrity ----------------------------------
+    // For every realm carrying a soulAspect set-piece (expansion §5), prove the aspect pick is a
+    // real, completable identity choice — never a wall and never a penalty:
+    //   - aspects non-empty with unique keys;
+    //   - AT LEAST ONE aspect has an empty/absent requires (the completability FLOOR §6.3: the
+    //     always-available Formless aspect, so Nascent Soul can NEVER be aspect-blocked even on a
+    //     save with no Dao Seeds — lint-enforced);
+    //   - every effect key in {qiMult, insightMult}, every value >= 1 (a passive identity, never a
+    //     penalty — same bonus discipline as lattice nodes §4.2);
+    //   - every requires validated through the shared checkCondition oracle (now including the
+    //     daoElementTier grammar — a phantom element or out-of-range tier is caught there);
+    //   - element field null (Formless) or matching a real lattice element (a root node's element).
+    function checkSoulAspectData(errors) {
+        var effectKeys = ["qiMult", "insightMult"];
+        REALM_DATA.forEach(function (realm) {
+            if (!realm.soulAspect) return;
+            var aspects = realm.soulAspect.aspects;
+            if (!aspects || !(aspects.length > ZERO)) {
+                errors.push("Soul aspect: realm '" + realm.id
+                    + "' soulAspect.aspects must be non-empty (§5).");
+                return;
+            }
+
+            var seenAspectKeys = {};
+            var sawUnconditional = false;
+            aspects.forEach(function (aspect) {
+                if (seenAspectKeys[aspect.key]) {
+                    errors.push("Soul aspect: realm '" + realm.id + "' duplicate aspect key '"
+                        + aspect.key + "' (§5).");
+                }
+                seenAspectKeys[aspect.key] = true;
+
+                // The completability floor (§6.3): an aspect with no requires (empty or absent) is
+                // always pickable. At least one such aspect must exist so NS is never aspect-blocked.
+                var requires = aspect.requires;
+                if (!requires || Object.keys(requires).length === ZERO) {
+                    sawUnconditional = true;
+                }
+
+                // Effect keys in {qiMult, insightMult}, every value >= 1 (identity, not penalty).
+                var effect = aspect.effect || {};
+                Object.keys(effect).forEach(function (effectKey) {
+                    if (effectKeys.indexOf(effectKey) === ZERO - ONE) {
+                        errors.push("Soul aspect: realm '" + realm.id + "' aspect '" + aspect.key
+                            + "' effect key '" + effectKey + "' not in {qiMult, insightMult} (§5).");
+                    } else if (!(effect[effectKey] >= ONE)) {
+                        errors.push("Soul aspect: realm '" + realm.id + "' aspect '" + aspect.key
+                            + "' " + effectKey + " is " + effect[effectKey]
+                            + " — an aspect is a passive identity, every value must be >= 1 (§6.3).");
+                    }
+                });
+
+                // requires flows through the shared oracle (daoElementTier validated there).
+                checkCondition(errors, "Soul aspect '" + realm.id + "/" + aspect.key + "' requires",
+                    requires);
+
+                // element null (Formless) or matching a real lattice root element. Guarded on
+                // LATTICE_DATA like daoElementTier — a harness with no lattice can't resolve it.
+                if (aspect.element !== null && aspect.element !== undefined) {
+                    if (typeof LATTICE_DATA !== "undefined" && LATTICE_DATA && LATTICE_DATA.nodes) {
+                        var elementExists = LATTICE_DATA.nodes.some(function (n) {
+                            return n.element === aspect.element;
+                        });
+                        if (!elementExists) {
+                            errors.push("Soul aspect: realm '" + realm.id + "' aspect '" + aspect.key
+                                + "' element '" + aspect.element
+                                + "' matches no lattice node element (§5).");
+                        }
+                    }
+                }
+            });
+
+            if (!sawUnconditional) {
+                errors.push("Soul aspect: realm '" + realm.id
+                    + "' has no unconditional fallback aspect — NS would be aspect-blocked on a "
+                    + "save with no held Seed (the completability floor, §6.3).");
+            }
+        });
+    }
+
     // ----- §11 no numeric literals in js/build/*.js -----------------------
     // sourceTexts: { filename -> source string }. The node harness supplies these
     // by reading files; in-browser we cannot read source, so the check is skipped
@@ -1133,6 +1418,11 @@
         checks.latticeData = "ran";
         checkStanceData(errors);
         checks.stanceData = "ran";
+        // Automation ladder + soul aspect integrity (expansion §1.7/§7.5/§5/§6.3).
+        checkAutomationData(errors);
+        checks.automationData = "ran";
+        checkSoulAspectData(errors);
+        checks.soulAspectData = "ran";
         checks.noNumericLiterals = checkNoNumericLiterals(errors, sourceTexts);
         return { ok: errors.length === ZERO, errors: errors, checks: checks };
     }
@@ -1151,6 +1441,8 @@
         checkHintData: checkHintData,
         checkAchievementScopeDiscipline: checkAchievementScopeDiscipline,
         checkLatticeData: checkLatticeData,
-        checkStanceData: checkStanceData
+        checkStanceData: checkStanceData,
+        checkAutomationData: checkAutomationData,
+        checkSoulAspectData: checkSoulAspectData
     };
 })(typeof globalThis !== "undefined" ? globalThis : this);
