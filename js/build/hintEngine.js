@@ -19,6 +19,15 @@
 //     has not yet been chosen (player.b.soulAspect === "" via soulAspectRow() accessor).
 //     Evaluated here because it reads through the factory's soul-aspect accessor with
 //     the same defensive typeof pattern used for getCoreGradeIndex (§8.5).
+//   - tribulationReady: true — matches when tribulationIsReady() (factory global) is
+//     true: the trigger condition met, not yet passed, not yet active, cooldown elapsed.
+//     Backed by the pinned factory surface (tribulationIsReady). New in slice 6.
+//   - scarActive: true — matches when scarIsActive() (factory global) is true:
+//     the failure-scar slot has active depth (depth > healedDepth). Backed by the
+//     pinned factory surface (scarIsActive). New in slice 6.
+//   - tribulationPassed: true — matches when tribulationPassed() (factory global) is
+//     true: tribGrade resolves to a passing grade row (passes:true). Backed by the
+//     pinned factory surface (tribulationPassed). New in slice 6.
 //
 // Defensive contract: if HINT_DATA or the factory globals are not yet defined
 // (e.g. evaluated before layerFactory.js has run), return the catch-all row so
@@ -26,6 +35,11 @@
 //
 // HARD RULE (§11): ZERO numeric literals — every number resolves from
 // FACTORY_NUMERICS. This file lives in js/build/ and is included in the lint scan.
+//
+// Slice-6 hint-only keys (tribulationReady / scarActive / tribulationPassed /
+// scarHealed) are FULLY wired: evaluators here, linter knownConditionKeys +
+// checkHintData grammarKeys, and the journal evaluator's strip list in
+// layerFactory.js. Data rows in hints.js / journal.js use the real keys.
 
 // ---------------------------------------------------------------------------
 // Hint-only condition keys evaluated here (not delegated to meets()).
@@ -86,6 +100,44 @@ function hintAspectUnchosen() {
     return soulAspectRow() === null;
 }
 
+// True when the First Tribulation is ready to trigger: the trigger substage
+// has been reached on the s (Soul Formation) layer, the tribulation has not
+// yet been passed, and it is not currently active, and the retry cooldown has
+// elapsed. Backed by the tribulationIsReady() factory surface (pinned, slice 6).
+// Evaluated here as a hint-only key because tribulationIsReady() reads through
+// several Body/s-layer state fields that have no meets()-grammar equivalent —
+// the same defensive typeof pattern as other hint-only factory readers (§8.5).
+function hintTribulationReady() {
+    if (typeof tribulationIsReady !== "function") return false;
+    return tribulationIsReady();
+}
+
+// True when the failure-scar slot is active: player.b.scarDepth > player.b.scarHealedDepth.
+// Backed by the scarIsActive() factory surface (pinned, slice 6). Defensive when the
+// Body layer is absent or the scar reader is not yet defined — returns false rather than
+// crashing, so a pre-slice-6 save never fires the healScar hint early (§8.5).
+function hintScarActive() {
+    if (typeof scarIsActive !== "function") return false;
+    return scarIsActive();
+}
+
+// True when the First Tribulation has been resolved with a passing grade: tribGrade
+// resolves to a grade row with passes:true. Backed by the tribulationPassed() factory
+// surface (pinned, slice 6). Defensive when the factory surface is absent — returns
+// false so the actComplete hint never fires before the tribulation system is wired (§8.5).
+function hintTribulationPassed() {
+    if (typeof tribulationPassed !== "function") return false;
+    return tribulationPassed();
+}
+
+// True when at least one scar depth has been HEALED (the §1.3 heal arc completed at
+// least once — the "Tempered by Ruin" state). Backed by the scarHealedDepth() factory
+// reader; defensive like the other slice-6 readers (§8.5).
+function hintScarHealed() {
+    if (typeof scarHealedDepth !== "function") return false;
+    return scarHealedDepth() > FACTORY_NUMERICS.zero;
+}
+
 // ---------------------------------------------------------------------------
 // hintRowMatches(row) — returns true iff the row's condition is satisfied.
 // ---------------------------------------------------------------------------
@@ -117,14 +169,42 @@ function hintRowMatches(row) {
     if (condition.sectUnjoined === true) {
         if (!hintSectUnjoined()) return false;
     }
+    // tribulationReady: hint-only key (tribulationIsReady() — trigger substage met,
+    // not yet passed, not active, cooldown elapsed). Evaluated here via
+    // hintTribulationReady(); does NOT pass through to meets() — the trigger state
+    // depends on several Body/s-layer fields that have no meets()-grammar equivalent.
+    // New in slice 6; backed by the tribulationIsReady() factory surface.
+    if (condition.tribulationReady === true) {
+        if (!hintTribulationReady()) return false;
+    }
+    // scarActive: hint-only key (scarIsActive() — player.b.scarDepth > scarHealedDepth).
+    // Evaluated here via hintScarActive(); does NOT pass through to meets() — the scar
+    // state is stored on the Body layer with no meets()-grammar equivalent (§8.5).
+    // New in slice 6; backed by the scarIsActive() factory surface.
+    if (condition.scarActive === true) {
+        if (!hintScarActive()) return false;
+    }
+    // tribulationPassed: hint-only key (tribulationPassed() — tribGrade resolves to a
+    // passing grade row with passes:true). Evaluated here via hintTribulationPassed();
+    // does NOT pass through to meets() — tribGrade is s-layer state, no grammar equivalent.
+    // New in slice 6; backed by the tribulationPassed() factory surface.
+    if (condition.tribulationPassed === true) {
+        if (!hintTribulationPassed()) return false;
+    }
+    // scarHealed: hint-only key (scarHealedDepth() > 0 — at least one heal arc completed).
+    // Evaluated here via hintScarHealed(); Body state, no grammar equivalent. Slice 6.
+    if (condition.scarHealed === true) {
+        if (!hintScarHealed()) return false;
+    }
 
     // Build a stripped condition containing only the meets()-compatible keys so
     // we can delegate without passing hint-only keys through. anyDaoNode,
     // daoElementTier, achievement, and sectJoined ARE meets() keys (factory
     // grammar, slice 4/5) — they pass through to meets() exactly like
     // realm/meridians/qi. The hint-only keys (layerUnlocked, coreForged,
-    // coreBelowCeiling, aspectUnchosen, sectUnjoined) are consumed above and
-    // excluded from the meetable set so meets() never sees them.
+    // coreBelowCeiling, aspectUnchosen, sectUnjoined, tribulationReady,
+    // scarActive, tribulationPassed) are consumed above and excluded from the
+    // meetable set so meets() never sees them (slice 5/6 hint-only grammar).
     var meetableCondition = {};
     var hasMeetableKeys = false;
 

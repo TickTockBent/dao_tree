@@ -32,6 +32,25 @@ function findRealmData(realmId) {
     return REALM_DATA.find(function (row) { return row.id === realmId; });
 }
 
+// Resolve a realm's set-piece config (design §6.2 / slice 6): realmData.setpiece is a
+// key into SETPIECE_DATA (the forge config generalized — "forge" instance 1, tribulation
+// instance 2). Returns the config object or null when the realm carries no set-piece, so the
+// factory's set-piece augmentation keys on realmData.setpiece exactly as it once keyed on the
+// inline realmData.forge — same skeleton, the config now lives in one shared table. Defensive
+// when SETPIECE_DATA is absent (a data-only harness may not load it) so the lookup never throws.
+function setpieceFor(realmData) {
+    if (!realmData || !realmData.setpiece) return null;
+    if (typeof SETPIECE_DATA === "undefined" || !SETPIECE_DATA) return null;
+    return SETPIECE_DATA[realmData.setpiece] || null;
+}
+
+// The realm row carrying a given set-piece key (the inverse of setpieceFor). Used to find the
+// forge realm / the tribulation realm without hardcoding an id — a realm declares which set-piece
+// it mounts, so the factory asks "which realm mounts 'forge'?" rather than assuming "c".
+function realmWithSetpiece(setpieceKey) {
+    return REALM_DATA.find(function (realmData) { return realmData.setpiece === setpieceKey; }) || null;
+}
+
 // Realm node REVEAL condition (§5a): a realm becomes VISIBLE on this (weaker) gate,
 // distinct from `unlock` (§5b) which gates the actual breakthrough. Falls back to
 // the full unlock when a realm declares no separate reveal, so "6th Level reveals
@@ -490,7 +509,7 @@ function coreGradeMult() {
     if (!bodyExists()) return factoryDecimalOne();
     var storedIndex = player[bodyLayerId()].coreGrade;
     if (storedIndex < FACTORY_ZERO) return factoryDecimalOne();
-    var coreGrades = findRealmData("c").forge.grades;
+    var coreGrades = coreForgeData().grades;
     var matched = coreGrades.find(function (grade) { return grade.ceilingIndex === storedIndex; });
     if (!matched) return factoryDecimalOne();
     return new Decimal(matched.globalMult);
@@ -556,7 +575,16 @@ function cultivationQiPerSecond() {
         // technique is owned, so a pre-slice-5 save is byte-for-byte the prior product
         // (no dead mult §9.2).
         .times(sectStipendQiMult())
-        .times(techniqueQiMult());
+        .times(techniqueQiMult())
+        // Slice-6 folds (design §1.3/§6.2/§5/§8.1). The active failure-Scar DEBUFF (scarQiMult,
+        // < 1 while a scar depth is un-healed), the permanent "Tempered by Ruin" BUFF from healed
+        // depths (temperedQiMult, >= 1), and the eternal Act I Legacy Grade's qiMult (legacyQiMult,
+        // >= 1 once earned). Each is identity until its state exists (no active scar / no healed
+        // depth / no legacy grade), so a pre-tribulation save is byte-for-byte the prior product
+        // (no dead mult §9.2) — and each is folded EXACTLY ONCE here, the single Qi pipeline.
+        .times(scarQiMult())
+        .times(temperedQiMult())
+        .times(legacyQiMult());
 }
 
 // ---------------------------------------------------------------------------
@@ -679,7 +707,18 @@ function computeAndStoreFoundationGrade() {
 // FACTORY_NUMERICS via factoryDecimal*.
 // ---------------------------------------------------------------------------
 function coreRealmData() { return findRealmData("c"); }
-function coreForgeData() { return coreRealmData().forge; }
+// coreForgeData() NOW reads SETPIECE_DATA.forge (the forge migration, slice 6) — a
+// compatibility accessor: the forge config moved from the c row to SETPIECE_DATA.forge
+// VERBATIM, so this returns the identical object it always returned and every other forge
+// function (performForge, refinementTick, coreGradeLadder, forgeFuelCost ...) keeps its name
+// and math untouched. Resolved via SETPIECE_DATA.forge directly (the forge is the canonical
+// instance-1 set-piece); defensive when SETPIECE_DATA is absent (a data-only harness).
+function coreForgeData() {
+    if (typeof SETPIECE_DATA !== "undefined" && SETPIECE_DATA && SETPIECE_DATA.forge) {
+        return SETPIECE_DATA.forge;
+    }
+    return null;
+}
 function coreGradeLadder() { return coreForgeData().grades; }
 
 // Resolve a core-grade key ("cracked".."perfect") to its ordered ladder index
@@ -832,6 +871,537 @@ function refinementTick(diff) {
 }
 
 // ---------------------------------------------------------------------------
+// The First Tribulation set-piece (design §6.2; SETPIECE_DATA.firstTribulation). INSTANCE 2
+// of the set-piece config type — the forge's skeleton generalized to a timed, multi-wave bar
+// drained against a PREPARED POOL. Mounted on the Soul Formation (s) realm via realmData.
+// setpiece, exactly as the forge mounts on c. The run-state lives on player.s (seeded in s
+// startData): tribActive / tribElapsed / tribPool / tribPoolMax / tribWaveIndex / tribGrade
+// (-1 = none / not yet resolved) / tribCooldownUntil. No mid-run actions in v1 (pills /
+// talismans arrive in slice 7+, design §7.6 ⟨design⟩); banked Qi is consumed as fuel at trigger.
+// ALL numbers resolve from SETPIECE_DATA.firstTribulation / FACTORY_NUMERICS — zero literals (§11).
+// ---------------------------------------------------------------------------
+function tribulationRealmData() { return realmWithSetpiece("firstTribulation"); }
+function tribulationConfig() { return setpieceFor(tribulationRealmData()); }
+
+// True once the tribulation realm exists in player (defensive — s may be unseeded on an old save).
+function tribulationRealmExists() {
+    var realmData = tribulationRealmData();
+    if (!realmData) return false;
+    return !!(player[realmData.id] && player[realmData.id].unlocked);
+}
+
+// The stored tribulation grade index on player.s (-1 = unresolved / no run finished). Defensive.
+function tribulationGradeIndex() {
+    var realmData = tribulationRealmData();
+    if (!realmData || player[realmData.id] === undefined
+        || player[realmData.id].tribGrade === undefined) return FACTORY_ZERO - FACTORY_ONE;
+    return player[realmData.id].tribGrade;
+}
+
+// The tribulation grade data row for the stored index, or null (unresolved / failed-unstored).
+function tribulationGradeRow() {
+    var index = tribulationGradeIndex();
+    if (index < FACTORY_ZERO) return null;
+    var config = tribulationConfig();
+    if (!config) return null;
+    return config.grades[index] || null;
+}
+
+// tribulationPassed() — the stored grade resolves to a PASSING grade (§6.2). A passing grade has
+// passes:true; Failed (index 0) has passes:false. Defensive: an unresolved/absent grade is not a pass.
+function tribulationPassed() {
+    var row = tribulationGradeRow();
+    return !!(row && row.passes);
+}
+
+// Fraction [0,1] of the tribulation pool remaining (current pool / starting max). Zero when no
+// run is active or the starting pool was empty. Drives the bar's progress() and display().
+function tribulationPoolFraction() {
+    var realmData = tribulationRealmData();
+    if (!realmData || player[realmData.id] === undefined) return factoryDecimalZero();
+    if (!player[realmData.id].tribActive) return factoryDecimalZero();
+    var poolMax = new Decimal(player[realmData.id].tribPoolMax);
+    if (poolMax.lte(factoryDecimalZero())) return factoryDecimalZero();
+    var fraction = new Decimal(player[realmData.id].tribPool).div(poolMax);
+    if (fraction.lt(factoryDecimalZero())) return factoryDecimalZero();
+    if (fraction.gt(factoryDecimalOne())) return factoryDecimalOne();
+    return fraction;
+}
+
+// A run is in progress (the timed bar is draining). Read off player.s.tribActive.
+function tribulationIsActive() {
+    var realmData = tribulationRealmData();
+    if (!realmData || player[realmData.id] === undefined) return false;
+    return !!player[realmData.id].tribActive;
+}
+
+// The REMAINING retry-cooldown seconds stored after a Failed (counted DOWN in tribulationTick
+// using game-time diff, so it respects offline/tick semantics); 0 = no cooldown. A remaining-
+// seconds counter rather than a wall-clock timestamp keeps the model literal-free (no ms
+// conversion) and tied to the engine's own diff clock.
+function tribulationCooldownUntil() {
+    var realmData = tribulationRealmData();
+    if (!realmData || player[realmData.id] === undefined
+        || player[realmData.id].tribCooldownUntil === undefined) return FACTORY_ZERO;
+    return player[realmData.id].tribCooldownUntil;
+}
+
+// True once the post-Failed retry cooldown has elapsed (the remaining counter has reached zero).
+// A zero/absent counter (no prior failure) is trivially elapsed.
+function tribulationCooldownElapsed() {
+    var remaining = new Decimal(tribulationCooldownUntil());
+    return remaining.lte(factoryDecimalZero());
+}
+
+// tribulationIsReady() — the trigger condition is met, the tribulation has not yet PASSED, no run
+// is active, and any retry cooldown has elapsed (§6.2 "player chooses when to trigger"). Re-trigger
+// after a pass is impossible (tribulationPassed gate). Defensive when the realm is unseeded.
+function tribulationIsReady() {
+    var realmData = tribulationRealmData();
+    if (!realmData) return false;
+    if (!tribulationRealmExists()) return false;
+    if (tribulationPassed()) return false;          // once passed, never re-trigger
+    if (tribulationIsActive()) return false;        // a run is already in progress
+    if (!tribulationCooldownElapsed()) return false; // re-prep beat after a Failed
+    var config = tribulationConfig();
+    if (!config) return false;
+    return meets(config.trigger);
+}
+
+// Count of OWNED techniques (design §4.3) — a tribulation-pool input. Defensive when the sect
+// layer is absent (techniqueIsOwned guards it): a pre-sect save contributes zero techniques.
+function ownedTechniqueCount() {
+    var count = factoryDecimalZero();
+    if (typeof TECHNIQUE_DATA === "undefined" || !TECHNIQUE_DATA) return count;
+    TECHNIQUE_DATA.forEach(function (technique, index) {
+        if (techniqueIsOwned(index)) count = count.add(FACTORY_ONE);
+    });
+    return count;
+}
+
+// Held Dao-Seed count (any node owned at the Seed tier, the deepest lattice tier in Act I) — a
+// pool/legacy input. Reads the lattice's owned tiers defensively (zero pre-reveal). The Seed tier
+// is the lattice tier count (Glimpse=1, Seed=2), so "owns >= tierCount" is "holds a Seed".
+function heldDaoSeedCount() {
+    var count = factoryDecimalZero();
+    if (!daoExists()) return count;
+    if (typeof LATTICE_DATA === "undefined" || !LATTICE_DATA || !LATTICE_DATA.nodes) return count;
+    var seedTier = LATTICE_DATA.tiers.length;   // the deepest tier (Seed) — owning it = a held Seed
+    LATTICE_DATA.nodes.forEach(function (node) {
+        if (daoNodeTierOwned(node.key).gte(seedTier)) count = count.add(FACTORY_ONE);
+    });
+    return count;
+}
+
+// A single normalized [0,1] term: min(value, denominator) / denominator, as a Decimal. The
+// saturation pattern the gradeScore terms use (§6) — caps each contribution at its weight.
+function normalizedTerm(value, denominator) {
+    var denom = new Decimal(denominator);
+    var capped = new Decimal(value);
+    if (capped.gt(denom)) capped = denom;
+    if (denom.lte(factoryDecimalZero())) return factoryDecimalZero();
+    return capped.div(denom);
+}
+
+// tribulationPreparednessPool() — the prepared pool (§6.2): a WEIGHTED SUM of what Act I built,
+// PLUS banked Qi as fuel, returned as a Decimal. Each term is normalized to [0,1] by its
+// denominator then scaled by its weight; the banked-Qi term is log-normalized (log10(qi)/denom)
+// so banked Qi HELPS but cannot SOLO the pool (a rushed entry with a huge bank still risks Failed,
+// §6.2 tension). Reads live temper / meridians / core ceiling / techniques / qi — all defensive.
+function tribulationPreparednessPool() {
+    var config = tribulationConfig();
+    if (!config) return factoryDecimalZero();
+    var pool = config.pool;
+
+    var temperTerm = normalizedTerm(temperLevel(), pool.temperDenominator)
+        .times(pool.weightTemper);
+    var meridianTerm = normalizedTerm(meridiansOpened(), pool.meridianDenominator)
+        .times(pool.weightMeridians);
+    // Core grade term: the forged core's ceiling index over the ladder top index (the carried
+    // artifact dominates the pool). Below-zero (unforged) contributes nothing.
+    var coreIndex = getCoreGradeIndex();
+    var coreTop = coreGradeLadder()[coreGradeLadder().length - FACTORY_ONE].ceilingIndex;
+    var coreFraction = coreIndex < FACTORY_ZERO
+        ? factoryDecimalZero()
+        : normalizedTerm(new Decimal(coreIndex), coreTop);
+    var coreTerm = coreFraction.times(pool.weightCoreGrade);
+    var techniqueTerm = normalizedTerm(ownedTechniqueCount(), pool.techniqueDenominator)
+        .times(pool.weightTechniques);
+
+    // Banked-Qi fuel: log10(max(qi,1)) / qiFuelDenominator, clamped to [0,1], x weight. The max(1)
+    // floors log10 at 0 so an empty bank contributes nothing (never a negative log).
+    var bankedQi = player.points;
+    var qiForLog = bankedQi.lt(factoryDecimalOne()) ? factoryDecimalOne() : bankedQi;
+    var qiLog = qiForLog.log10();
+    var qiFraction = normalizedTerm(qiLog, pool.qiFuelDenominator);
+    var qiFuelTerm = qiFraction.times(pool.qiFuelWeight);
+
+    return temperTerm.add(meridianTerm).add(coreTerm).add(techniqueTerm).add(qiFuelTerm);
+}
+
+// The total intensity multiplier on wave damage (§6.2 "Intensity = f(power) in v1"). base +
+// perBest x s.best: a deeper Soul Formation draws a heavier tribulation (heaven weighs the climb).
+// The karma term (§6.2) arrives with Samsara ⟨design §7.2⟩ — not built in v1.
+function tribulationIntensity() {
+    var config = tribulationConfig();
+    if (!config) return factoryDecimalOne();
+    var realmData = tribulationRealmData();
+    var best = realmData ? realmBest(realmData.id) : factoryDecimalZero();
+    return new Decimal(config.intensity.base).add(best.times(config.intensity.perBest));
+}
+
+// How many waves have CROSSED their scheduled moment at the given elapsed seconds. Waves are
+// spaced evenly across durationSeconds: wave i (0-indexed) fires at (i+1)/waveCount x duration.
+function tribulationWavesCrossed(elapsedSeconds, config) {
+    var waveCount = config.waves.length;
+    var duration = new Decimal(config.durationSeconds);
+    var crossed = FACTORY_ZERO;
+    config.waves.forEach(function (wave, index) {
+        var scheduledAt = duration.times(index + FACTORY_ONE).div(waveCount);
+        if (new Decimal(elapsedSeconds).gte(scheduledAt)) crossed = crossed + FACTORY_ONE;
+    });
+    return crossed;
+}
+
+// Resolve the grade index for a remaining-pool fraction (§6.2 rank order Flawless > Scarred >
+// Shaken > Failed). Walks the passing bands (those carrying a floor) ascending and keeps the
+// highest whose floor the fraction meets; a fraction at/below zero (pool emptied) is Failed (0).
+function tribulationGradeForFraction(fraction, config) {
+    if (fraction.lte(factoryDecimalZero())) return FACTORY_ZERO;   // pool emptied = Failed (index 0)
+    var chosenIndex = FACTORY_ZERO;   // default Failed until a passing band's floor is met
+    config.grades.forEach(function (grade, index) {
+        if (grade.floor !== undefined && fraction.gte(grade.floor)) chosenIndex = index;
+    });
+    return chosenIndex;
+}
+
+// Begin a tribulation run (the Begin clickable's action). Consumes the banked Qi as fuel (the
+// gamble, §6.2), seeds the run-state on player.s, and starts the timed bar. The starting pool is
+// the preparedness pool computed AT trigger time (so the consumed Qi's fuel term is baked in
+// before the Qi is spent). Idempotent-guarded: does nothing if a run is already active or the
+// tribulation is not ready.
+function beginTribulation() {
+    if (!tribulationIsReady()) return;
+    var realmData = tribulationRealmData();
+    var startingPool = tribulationPreparednessPool();
+    // Consume banked Qi as fuel (the only cost — §6.2: failure destroys nothing else). The fuel
+    // term is already folded into startingPool above; spending it now is the gamble made concrete.
+    player.points = factoryDecimalZero();
+    player[realmData.id].tribActive = true;
+    player[realmData.id].tribElapsed = FACTORY_ZERO;
+    player[realmData.id].tribPool = startingPool;
+    player[realmData.id].tribPoolMax = startingPool;
+    player[realmData.id].tribWaveIndex = FACTORY_ZERO;
+    player[realmData.id].tribGrade = FACTORY_ZERO - FACTORY_ONE;   // unresolved until the run ends
+}
+
+// Resolve a finished run: latch the grade, fire the Act I Legacy Grade on a pass, deepen the scar
+// on a scarring grade, set the retry cooldown on a Failed (§6.2). Called by tribulationTick when
+// the last wave resolves or the pool empties. gradeIndex is the resolved band index.
+function resolveTribulation(gradeIndex) {
+    var realmData = tribulationRealmData();
+    var config = tribulationConfig();
+    var gradeRow = config.grades[gradeIndex];
+
+    player[realmData.id].tribActive = false;
+
+    if (gradeRow.passes) {
+        // Latch the passing grade; NEVER downgrade a higher grade earned on a prior pass (the
+        // tribulation is once-per-life, but guard the latch the way the grade stores do).
+        if (gradeIndex > tribulationGradeIndex()) player[realmData.id].tribGrade = gradeIndex;
+        // The Act I Legacy Grade is computed ONCE on the first pass (eternal store, §8.1).
+        computeAndStoreActOneLegacy();
+        // A Scarred pass still marks the soul (§6.2): deepen the scar slot.
+        if (gradeRow.scars) deepenScar();
+    } else {
+        // Failed (§6.2): deepen the scar, set the retry cooldown (remaining seconds, counted down
+        // in tribulationTick), destroy nothing else. tribGrade stays at the unresolved sentinel so
+        // tribulationPassed() is false and the run can re-trigger once the cooldown drains.
+        deepenScar();
+        player[realmData.id].tribCooldownUntil = new Decimal(config.retryCooldownSeconds);
+    }
+}
+
+// tribulationTick(diff) — the per-tick wave-drain accrual (the refinementTick precedent), called
+// from the s layer's update(). Advances elapsed time, drains the pool for each newly-crossed wave
+// (damage x intensity), and resolves the grade when the LAST wave crosses or the pool empties.
+function tribulationTick(diff) {
+    var realmData = tribulationRealmData();
+    if (!realmData || player[realmData.id] === undefined) return;
+
+    // While NOT active, drain any pending retry cooldown (the post-Failed re-prep beat). Counting
+    // it down here ties the cooldown to the engine's diff clock and keeps the model literal-free.
+    if (!tribulationIsActive()) {
+        var remaining = new Decimal(tribulationCooldownUntil());
+        if (remaining.gt(factoryDecimalZero())) {
+            remaining = remaining.sub(diff);
+            if (remaining.lt(factoryDecimalZero())) remaining = factoryDecimalZero();
+            player[realmData.id].tribCooldownUntil = remaining;
+        }
+        return;
+    }
+
+    var config = tribulationConfig();
+    var intensity = tribulationIntensity();
+
+    var elapsed = new Decimal(player[realmData.id].tribElapsed).add(diff);
+    player[realmData.id].tribElapsed = elapsed;
+
+    // Drain the pool for every wave whose scheduled moment has now been crossed but not yet
+    // applied (tribWaveIndex tracks how many have been applied).
+    var crossed = tribulationWavesCrossed(elapsed, config);
+    var applied = player[realmData.id].tribWaveIndex;
+    var pool = new Decimal(player[realmData.id].tribPool);
+    while (applied < crossed) {
+        var wave = config.waves[applied];
+        pool = pool.sub(new Decimal(wave.damage).times(intensity));
+        applied = applied + FACTORY_ONE;
+    }
+    if (pool.lt(factoryDecimalZero())) pool = factoryDecimalZero();
+    player[realmData.id].tribPool = pool;
+    player[realmData.id].tribWaveIndex = applied;
+
+    // Resolve when the pool empties mid-run (Failed) or every wave has been applied (graded by the
+    // remaining pool fraction). tribPoolMax is the starting pool; fraction = remaining / max.
+    var poolMax = new Decimal(player[realmData.id].tribPoolMax);
+    var emptied = pool.lte(factoryDecimalZero());
+    var allWavesDone = applied >= config.waves.length;
+    if (emptied || allWavesDone) {
+        var fraction = poolMax.lte(factoryDecimalZero())
+            ? factoryDecimalZero()
+            : pool.div(poolMax);
+        var gradeIndex = emptied ? FACTORY_ZERO : tribulationGradeForFraction(fraction, config);
+        resolveTribulation(gradeIndex);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The failure-Scar slot (design §1.3 / §6.2 / §10.9; SETPIECE_DATA.scar; stored on the Body
+// layer's player.b.scar*). ONE slot that DEEPENS (never stacks): a debuff while active, a heal
+// arc that converts each depth into a permanent "Tempered by Ruin" buff. All three consumers fold
+// into cultivationQiPerSecond() exactly once; identity when inactive/unhealed (no dead mult §9.2).
+// ALL numbers resolve from SETPIECE_DATA.scar / FACTORY_NUMERICS — zero literals (§11).
+// ---------------------------------------------------------------------------
+function scarConfig() {
+    if (typeof SETPIECE_DATA === "undefined" || !SETPIECE_DATA) return null;
+    return SETPIECE_DATA.scar || null;
+}
+
+// Current scar depth (player.b.scarDepth; 0 = unscarred). Defensive when the body is unseeded.
+function scarDepth() {
+    if (!bodyExists()) return FACTORY_ZERO;
+    return player[bodyLayerId()].scarDepth;
+}
+
+// How many scar depths have been HEALED (player.b.scarHealedDepth). Defensive.
+function scarHealedDepth() {
+    if (!bodyExists()) return FACTORY_ZERO;
+    return player[bodyLayerId()].scarHealedDepth;
+}
+
+// Accrued heal progress toward converting the next depth (player.b.scarHealProgress). Defensive.
+function scarHealProgress() {
+    if (!bodyExists()) return factoryDecimalZero();
+    var stored = player[bodyLayerId()].scarHealProgress;
+    return stored === undefined ? factoryDecimalZero() : new Decimal(stored);
+}
+
+// The scar is ACTIVE while its depth exceeds the healed depth — there is an un-healed depth still
+// applying its debuff. When depth === healedDepth the scar is fully healed (only the buff remains).
+function scarIsActive() {
+    return scarDepth() > scarHealedDepth();
+}
+
+// Deepen the scar one step, capped at maxDepth (§6.2 "deepens instead of multiplying"; §10.9
+// ceiling). Called on a Failed or Scarred tribulation result. Resets the in-flight heal progress
+// toward the NEW (deeper) depth so a partially-healed arc restarts against the deeper wound.
+function deepenScar() {
+    if (!bodyExists()) return;
+    var config = scarConfig();
+    if (!config) return;
+    var current = player[bodyLayerId()].scarDepth;
+    if (current < config.maxDepth) {
+        player[bodyLayerId()].scarDepth = current + FACTORY_ONE;
+        player[bodyLayerId()].scarHealProgress = FACTORY_ZERO;
+    }
+}
+
+// The ACTIVE-DEPTH count: how many depths are still un-healed (debuff applies to these). The
+// debuff is debuffQiMultPerDepth ^ activeDepth (a value < 1 per depth, never reaching zero).
+function scarActiveDepth() {
+    var active = scarDepth() - scarHealedDepth();
+    return active > FACTORY_ZERO ? active : FACTORY_ZERO;
+}
+
+// scarQiMult() — the active scar debuff folded into cultivationQiPerSecond(): debuffQiMultPerDepth
+// ^ activeDepth. Identity (1) when no active depth (unscarred or fully healed). Never zero — a
+// scarred ascent stays completable (§6.3 / §1.3 "the scarred state is the tuned baseline").
+function scarQiMult() {
+    var config = scarConfig();
+    if (!config) return factoryDecimalOne();
+    var active = scarActiveDepth();
+    if (active <= FACTORY_ZERO) return factoryDecimalOne();
+    return Decimal.pow(config.debuffQiMultPerDepth, active);
+}
+
+// temperedQiMult() — the permanent "Tempered by Ruin" buff folded into cultivationQiPerSecond():
+// temperedQiMultPerDepth ^ healedDepth (§1.3 "healing converts it into a permanent buff"). Identity
+// (1) until a depth is healed; compounds as more depths heal.
+function temperedQiMult() {
+    var config = scarConfig();
+    if (!config) return factoryDecimalOne();
+    var healed = scarHealedDepth();
+    if (healed <= FACTORY_ZERO) return factoryDecimalOne();
+    return Decimal.pow(config.temperedQiMultPerDepth, healed);
+}
+
+// The heal goal for the current (next-to-heal) depth: healGoalPerDepth x the active depth being
+// healed (deeper wounds take longer to heal, §1.3 heal-arc-scales-with-depth). The depth being
+// healed is healedDepth + 1 (the next un-healed depth).
+function scarHealGoal() {
+    var config = scarConfig();
+    if (!config) return factoryDecimalZero();
+    var depthBeingHealed = scarHealedDepth() + FACTORY_ONE;
+    return new Decimal(config.healGoalPerDepth).times(depthBeingHealed);
+}
+
+// Fraction [0,1] of the current heal bar, for the heal bar's progress().
+function scarHealBarFraction() {
+    var goal = scarHealGoal();
+    if (goal.lte(factoryDecimalZero())) return factoryDecimalZero();
+    var fraction = scarHealProgress().div(goal);
+    if (fraction.lt(factoryDecimalZero())) return factoryDecimalZero();
+    if (fraction.gt(factoryDecimalOne())) return factoryDecimalOne();
+    return fraction;
+}
+
+// scarHealTick(diff) — passive heal accrual (the warm-the-core pattern), called from the Body
+// layer's automate/update path. Accrues only while the scar is active; a full heal bar converts
+// ONE depth to healedDepth (the §1.3 heal arc) and carries the remainder toward the next depth.
+function scarHealTick(diff) {
+    if (!bodyExists() || !scarIsActive()) return;
+    var config = scarConfig();
+    if (!config) return;
+    var gained = new Decimal(config.healRatePerSecond).times(diff);
+    var progress = scarHealProgress().add(gained);
+
+    while (scarIsActive() && progress.gte(scarHealGoal())) {
+        progress = progress.sub(scarHealGoal());
+        player[bodyLayerId()].scarHealedDepth = scarHealedDepth() + FACTORY_ONE;
+    }
+    // Fully healed: drain any leftover so the bar reads done, not stuck.
+    if (!scarIsActive()) progress = factoryDecimalZero();
+    player[bodyLayerId()].scarHealProgress = progress;
+}
+
+// ---------------------------------------------------------------------------
+// The eternal Act I Legacy Grade (design §8.1 "Legacy Grades are eternal"; §5 "Act I Legacy
+// Grade = f(core grade, aspect, Dao Seeds, sect standing, tribulation grade)"; LEGACY_DATA).
+// Computed ONCE on the first tribulation pass, stored on player.legacy.actOneGrade (eternal),
+// NEVER downgraded. legacyQiMult() folds the stored band's qiMult into cultivationQiPerSecond()
+// (the live consumer — a grade that grants nothing is a dead stat, §9.2). ALL numbers resolve
+// from LEGACY_DATA / FACTORY_NUMERICS — zero literals (§11).
+// ---------------------------------------------------------------------------
+function legacyLayerId() {
+    return (typeof LEGACY_DATA !== "undefined" && LEGACY_DATA) ? LEGACY_DATA.id : "legacy";
+}
+
+function legacyExists() {
+    return !!(player[legacyLayerId()] && player[legacyLayerId()].unlocked);
+}
+
+// The stored Act I Legacy band index (player.legacy.actOneGrade; -1 = no grade earned). Defensive.
+function actOneLegacyIndex() {
+    if (typeof LEGACY_DATA === "undefined" || !LEGACY_DATA) return FACTORY_ZERO - FACTORY_ONE;
+    if (!legacyExists() || player[legacyLayerId()].actOneGrade === undefined) {
+        return FACTORY_ZERO - FACTORY_ONE;
+    }
+    return player[legacyLayerId()].actOneGrade;
+}
+
+// The chosen Soul Aspect's legacy "depth": none = 0, formless = 1, element aspect = 2. Reads the
+// chosen aspect row (soulAspectRow) — an element aspect (non-null element) is the deepest.
+function aspectLegacyDepth() {
+    var aspect = soulAspectRow();
+    if (!aspect) return factoryDecimalZero();
+    if (aspect.element !== null && aspect.element !== undefined) return new Decimal(FACTORY_ONE + FACTORY_ONE);
+    return factoryDecimalOne();   // formless: chosen, but no element
+}
+
+// The deeds checkpoint standing: how many gate checkpoints are earned (Outer / Inner Disciple).
+// Reads hasAchievement over the GATE_DATA checkpoint achievements — the horizontal-standing axis.
+function deedsCheckpointsEarned() {
+    var count = factoryDecimalZero();
+    if (!(player[GATE_DATA.id] && player[GATE_DATA.id].unlocked)) return count;
+    GATE_DATA.achievements.forEach(function (ach) {
+        if (typeof hasAchievement === "function" && hasAchievement(GATE_DATA.id, ach.id)) {
+            count = count.add(FACTORY_ONE);
+        }
+    });
+    return count;
+}
+
+// actOneLegacyScore() — the weighted [0,1] blend (§5). coreGrade / aspect / daoSeeds / sectStanding
+// / tribulation, each normalized by its denominator and scaled by its weight, summed and clamped.
+function actOneLegacyScore() {
+    var config = LEGACY_DATA.actOne;
+    var weights = config.weights;
+    var denominators = config.denominators;
+
+    var coreIndex = getCoreGradeIndex();
+    var coreValue = coreIndex < FACTORY_ZERO ? factoryDecimalZero() : new Decimal(coreIndex);
+    var coreTerm = normalizedTerm(coreValue, denominators.coreGrade).times(weights.coreGrade);
+    var aspectTerm = normalizedTerm(aspectLegacyDepth(), denominators.aspect).times(weights.aspect);
+    var daoTerm = normalizedTerm(heldDaoSeedCount(), denominators.daoSeeds).times(weights.daoSeeds);
+    var sectTerm = normalizedTerm(deedsCheckpointsEarned(), denominators.sectStanding)
+        .times(weights.sectStanding);
+    // Tribulation term: the resolved grade index over its top (Flawless = top). At Legacy-compute
+    // time the grade is already latched (the pass fired this), so tribGrade is a valid passing index.
+    var tribIndex = tribulationGradeIndex();
+    var tribValue = tribIndex < FACTORY_ZERO ? factoryDecimalZero() : new Decimal(tribIndex);
+    var tribTerm = normalizedTerm(tribValue, denominators.tribulation).times(weights.tribulation);
+
+    return clampUnitInterval(coreTerm.add(aspectTerm).add(daoTerm).add(sectTerm).add(tribTerm));
+}
+
+// The highest legacy band index whose floor the score meets (bands ascending by floor in data).
+function actOneLegacyBandForScore(score) {
+    var bands = LEGACY_DATA.actOne.bands;
+    var chosenIndex = FACTORY_ZERO;   // the lowest band (Faint) is the floor — always reachable
+    bands.forEach(function (band, index) {
+        if (score.gte(band.floor)) chosenIndex = index;
+    });
+    return chosenIndex;
+}
+
+// computeAndStoreActOneLegacy() — compute the weighted score, map to a band, and store the BEST
+// band on the eternal Legacy layer (never downgrade). Called ONCE on the first tribulation pass;
+// idempotent and monotone, so a re-fire (defensive) can only raise the stored grade.
+function computeAndStoreActOneLegacy() {
+    if (typeof LEGACY_DATA === "undefined" || !LEGACY_DATA) return;
+    if (!legacyExists()) return;
+    var score = actOneLegacyScore();
+    var bandIndex = actOneLegacyBandForScore(score);
+    if (bandIndex > actOneLegacyIndex()) player[legacyLayerId()].actOneGrade = bandIndex;
+}
+
+// The stored Act I Legacy band row, or null (no grade earned yet).
+function actOneLegacyBand() {
+    var index = actOneLegacyIndex();
+    if (index < FACTORY_ZERO) return null;
+    return LEGACY_DATA.actOne.bands[index] || null;
+}
+
+// legacyQiMult() — the stored Act I Legacy band's qiMult folded into cultivationQiPerSecond().
+// Identity (1) until a grade is earned, so a pre-tribulation save is byte-for-byte the prior
+// product (no dead mult §9.2). The eternal payoff of the life's legacy.
+function legacyQiMult() {
+    var band = actOneLegacyBand();
+    if (!band || band.qiMult === undefined) return factoryDecimalOne();
+    return new Decimal(band.qiMult);
+}
+
+// ---------------------------------------------------------------------------
 // Automation ladder (design §1.7/§7.5; AUTOMATION_DATA). Automation is a REWARD,
 // never a settings toggle: a row is ACTIVE the instant its grantedBy milestone is
 // earned (hasMilestone) and stays on forever — there is no user-facing on/off. The
@@ -919,7 +1489,15 @@ function cultivationEndgameReached() {
         if (realmData.row > topRealm.row) topRealm = realmData;
     });
     var lastSubstage = topRealm.substages[topRealm.substages.length - FACTORY_ONE];
-    return realmBest(topRealm.id).gte(lastSubstage.at);
+    if (realmBest(topRealm.id).lt(lastSubstage.at)) return false;
+    // Generic capstone extension (slice 6, design §5/§6.2): when the highest-row realm carries a
+    // TRIBULATION set-piece, reaching its last sub-stage is not enough — the tribulation must also
+    // be PASSED (the Act I capstone is the tribulation, not the climb to it). A realm whose
+    // set-piece is the forge (or none) needs only the climb, so future acts inherit this generically:
+    // the endgame is "top realm maxed AND its capstone tribulation, if any, passed".
+    var config = setpieceFor(topRealm);
+    if (config && config.kind === "tribulation") return tribulationPassed();
+    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -1006,7 +1584,14 @@ function makeBodyLayer() {
                 coreGrade: BODY_DATA.grades.coreGrade.startIndex,
                 // Chosen Soul Aspect key (expansion §5), life-scoped here so it
                 // survives every realm reset. "" = unchosen (BODY_DATA.soulAspect.startKey).
-                soulAspect: BODY_DATA.soulAspect.startKey
+                soulAspect: BODY_DATA.soulAspect.startKey,
+                // The failure-Scar slot (design §1.3/§6.2/§10.9), life-scoped here so the scar and
+                // its heal arc span resets within a life. scarDepth deepens on a Failed/Scarred
+                // tribulation; scarHealProgress is the heal arc; scarHealedDepth tracks converted
+                // (permanently-buffed) depths. All seeded from BODY_DATA.scar.start*.
+                scarDepth: BODY_DATA.scar.startDepth,
+                scarHealProgress: BODY_DATA.scar.startHealProgress,
+                scarHealedDepth: BODY_DATA.scar.startHealedDepth
             };
         },
         tooltip: function () { return BODY_DATA.name + " — permanent cultivation (never resets)"; },
@@ -1017,6 +1602,11 @@ function makeBodyLayer() {
         // their AUTOMATION_DATA grants are live — Temper is DELIBERATELY excluded (a grade
         // decision, not hands, §4b), so it is never auto-bought. No-op until granted.
         automate: function () { runBuyableAutomationFor(BODY_DATA.id); },
+        // Per-tick passive scar healing (design §1.3 heal arc; the warm-the-core pattern). The
+        // scar is life-scoped on this never-reset Body layer, so the heal accrual lives here.
+        // No-op (identity) until a scar is active (no dead path) — a full bar converts one depth
+        // to a permanent "Tempered by Ruin" buff (scarHealTick).
+        update: function (diff) { scarHealTick(diff); },
         // No doReset: a row:"side" layer with no doReset is reset-immune (rowReset's
         // auto-reset branch requires !isNaN(row), which is false for "side").
         layerShown: function () { return true; },
@@ -1258,6 +1848,110 @@ function makeSoulAspectClickables(realmData) {
 }
 
 // ---------------------------------------------------------------------------
+// Tribulation UI builders (design §6.2; SETPIECE_DATA.firstTribulation). The Begin clickable +
+// the timed multi-wave bar mount on the Soul Formation (s) realm EXACTLY as the forge mounts on
+// c — the forge-clickable pattern (confirm()s, shows the prep pool and what feeds it). Pinned
+// semantics: the Begin clickable is VISIBLE while the tribulation is ready (trigger met, not
+// passed, cooldown elapsed) and CLICKABLE then; banked Qi is consumed as fuel at trigger; the run
+// is a TMT bar + update(diff); NO mid-run actions in v1 (pills/talismans arrive in slice 7+,
+// design §7.6 ⟨design⟩). On resolve the tick latches the grade and fires the Legacy/scar effects.
+// ALL numbers resolve from SETPIECE_DATA.firstTribulation / FACTORY_NUMERICS — zero literals (§11).
+// ---------------------------------------------------------------------------
+
+// A human one-line summary of the prepared pool and what feeds it (the Begin display + prompt).
+function tribulationPoolSummary() {
+    var pool = tribulationPreparednessPool();
+    return "Prepared pool: " + format(pool)
+        + " (from temper, meridians, your core grade, techniques, and banked Qi as fuel)";
+}
+
+// The Begin-tribulation clickable (the forge-push-clickable pattern). One clickable, id 0.
+function makeTribulationBeginClickable(realmData) {
+    return {
+        title: "Face the Tribulation",
+        display: function () {
+            var config = tribulationConfig();
+            if (tribulationPassed()) {
+                var passedRow = tribulationGradeRow();
+                return "The tribulation is behind you (" + (passedRow ? passedRow.label : "passed") + ").";
+            }
+            if (tribulationIsActive()) {
+                return "The heavens descend — endure.";
+            }
+            if (!tribulationCooldownElapsed()) {
+                return "The heavens recede. Re-prepare before you call them again ("
+                    + format(new Decimal(tribulationCooldownUntil())) + "s).";
+            }
+            var line = tribulationPoolSummary() + "<br>";
+            line += "Banked Qi is consumed as fuel when you begin. Failure marks you with a Scar "
+                + "but destroys nothing else — re-prepare and try again.<br>";
+            line += "<i>No actions mid-run in this life; endure what you prepared for.</i>";
+            return line;
+        },
+        // Visible whenever the tribulation is ready OR a run is active (so the player sees the
+        // climax unfold), and during the post-Failed cooldown (so the re-prep timer shows).
+        unlocked: function () {
+            return tribulationIsReady() || tribulationIsActive()
+                || (!tribulationPassed() && !tribulationCooldownElapsed()
+                    && meets(tribulationConfig().trigger));
+        },
+        canClick: function () { return tribulationIsReady(); },
+        onClick: function () {
+            if (!tribulationIsReady()) return;
+            var pool = tribulationPreparednessPool();
+            var prompt = "Call down the First Tribulation? Your banked Qi (" + format(player.points)
+                + ") is consumed as fuel. " + tribulationPoolSummary()
+                + ". A higher remaining pool earns a finer grade; an emptied pool means failure "
+                + "(a Scar, but nothing else is lost). Begin?";
+            if (!confirm(prompt)) return;
+            beginTribulation();
+            if (typeof doPopup === "function") {
+                doPopup("none", "The heavens darken. The First Tribulation begins.",
+                    "Tribulation", FACTORY_NUMERICS.one, realmData.color);
+            }
+        }
+    };
+}
+
+function makeTribulationClickables(realmData) {
+    var clickablesObject = {};
+    clickablesObject[FACTORY_ZERO] = makeTribulationBeginClickable(realmData);
+    return clickablesObject;
+}
+
+// The tribulation bar (the forge refinement-bar pattern). Shows the draining pool as a fraction
+// of its starting max while active; empty/idle otherwise. Bar dimensions reuse the forge's
+// refinement bar dimensions (a UI dimension as data, §11) — the set-pieces share a visual size.
+function makeTribulationBars() {
+    var barConfig = coreForgeData().refinement;   // reuse the forge bar's width/height (data, §11)
+    return {
+        tribulation: {
+            direction: RIGHT,
+            width: barConfig.barWidth,
+            height: barConfig.barHeight,
+            unlocked: function () { return tribulationIsActive() || tribulationPassed(); },
+            progress: function () {
+                if (!tribulationIsActive()) return tribulationPassed() ? factoryDecimalOne() : factoryDecimalZero();
+                return tribulationPoolFraction();
+            },
+            display: function () {
+                if (tribulationPassed()) {
+                    var row = tribulationGradeRow();
+                    return "Endured: " + (row ? row.label : "passed");
+                }
+                if (!tribulationIsActive()) return "Awaiting the heavens.";
+                var realmData = tribulationRealmData();
+                var pct = tribulationPoolFraction().times(FACTORY_HUNDRED);
+                var wavesDone = player[realmData.id].tribWaveIndex;
+                var waveTotal = tribulationConfig().waves.length;
+                return "Pool: " + format(pct) + "% — wave " + formatWhole(new Decimal(wavesDone))
+                    + " / " + formatWhole(new Decimal(waveTotal));
+            }
+        }
+    };
+}
+
+// ---------------------------------------------------------------------------
 // makeRealmLayer(r) — one parameterized realm prestige layer (§5). Numbered rows
 // reset the chain below them via the default rowReset cascade. The forge realm
 // (carrying realmData.forge) additionally mounts the one-time forge clickables,
@@ -1363,10 +2057,12 @@ function makeRealmLayer(realmData) {
     }
 
     // Forge realm augmentation (§7): the one-time forge + refinement loop. Only the
-    // realm carrying a forge config (Core Formation) gets these; the math/UI all
-    // resolve from REALM_DATA(c).forge, so no other realm is touched.
-    if (realmData.forge) {
-        var warmToggleId = realmData.forge.pushOptions.length;
+    // realm carrying the "forge" set-piece (Core Formation) gets these; the math/UI all
+    // resolve from SETPIECE_DATA.forge (via coreForgeData), so no other realm is touched.
+    // Keyed on realmData.setpiece === "forge" (the migration, slice 6) — once it keyed on
+    // the inline realmData.forge; the skeleton is identical, the config moved to one table.
+    if (realmData.setpiece === "forge") {
+        var warmToggleId = coreForgeData().pushOptions.length;
         var forgeClickables = makeForgeClickables();
         forgeClickables[warmToggleId] = makeWarmToggleClickable();
 
@@ -1448,6 +2144,72 @@ function makeRealmLayer(realmData) {
             }],
             "blank",
             "clickables"
+        ];
+    }
+
+    // Tribulation realm augmentation (design §6.2; SETPIECE_DATA.firstTribulation). The Soul
+    // Formation realm carries the "firstTribulation" set-piece — mounted EXACTLY like the forge
+    // augmentation, keyed on realmData.setpiece, so no other realm is touched. Mounts the Begin
+    // clickable + the timed wave bar, seeds the run-state on player.s, and accrues the run each
+    // tick via tribulationTick (the refinementTick precedent). The s prestige itself stays an
+    // ordinary realm prestige (above); the tribulation is the capstone the realm builds toward.
+    if (realmData.setpiece === "firstTribulation") {
+        layerData.clickables = makeTribulationClickables(realmData);
+        layerData.bars = makeTribulationBars();
+
+        // Tribulation run-state on the s layer (design §FACTORY SURFACE pinned names): all seeded
+        // here so a fresh s save has a well-defined run-state, and the smoke harness reads them by
+        // these exact names. tribGrade -1 = unresolved; tribCooldownUntil = remaining cooldown secs.
+        layerData.startData = function () {
+            return {
+                unlocked: false,
+                points: factoryDecimalZero(),
+                best: factoryDecimalZero(),
+                total: factoryDecimalZero(),
+                tribActive: false,
+                tribElapsed: FACTORY_ZERO,
+                tribPool: factoryDecimalZero(),
+                tribPoolMax: factoryDecimalZero(),
+                tribWaveIndex: FACTORY_ZERO,
+                tribGrade: FACTORY_ZERO - FACTORY_ONE,
+                tribCooldownUntil: FACTORY_ZERO
+            };
+        };
+
+        // Accrue the tribulation run (and drain any retry cooldown) each tick (§6.2).
+        layerData.update = function (diff) { tribulationTick(diff); };
+
+        layerData.tabFormat = [
+            "main-display",
+            "prestige-button",
+            "resource-display",
+            "blank",
+            "milestones",
+            "blank",
+            ["display-text", function () {
+                if (tribulationPassed()) {
+                    var passedRow = tribulationGradeRow();
+                    var band = actOneLegacyBand();
+                    var legacyText = band ? (" Your life's record stands as a <b>" + band.label + "</b>.") : "";
+                    return "You endured the First Tribulation (<b>" + (passedRow ? passedRow.label : "passed")
+                        + "</b>)." + legacyText + " The mortal road is complete.";
+                }
+                if (tribulationIsActive()) {
+                    return "The heavens have descended. Endure the waves — what remains of your "
+                        + "prepared pool when the last wave breaks decides your grade.";
+                }
+                if (!tribulationIsReady() && !meets(tribulationConfig().trigger)) {
+                    return "Climb Soul Formation to its Great Circle, then call down the First "
+                        + "Tribulation when you are prepared — the capstone of the mortal road.";
+                }
+                return "You stand at the edge of the mortal road. Prepare your pool — temper, "
+                    + "meridians, your core grade, techniques, and banked Qi as fuel — then face "
+                    + "the First Tribulation when ready. Failure marks you, but never walls you.";
+            }],
+            "blank",
+            "clickables",
+            "blank",
+            ["bar", "tribulation"]
         ];
     }
 
@@ -2121,19 +2883,38 @@ function journalReadKeys() {
 }
 
 // Evaluate one journal entry's `when`. The prose entries use the standard meets() grammar
-// PLUS the hint-only key layerUnlocked (e.g. firstBreath: { layerUnlocked: "q" }), which
-// meets() does not know — so handle layerUnlocked here, then delegate the rest to meets().
-// Defensive: an absent meets() (lint sandbox) fails the entry safely rather than crashing.
+// PLUS the hint-only keys meets() does not know — layerUnlocked, and the slice-6 set-piece keys
+// (tribulationReady / scarActive / tribulationPassed) — so handle those here, then delegate the
+// remainder to meets(). Stripping the hint-only keys before delegation is the SAFETY the §FACTORY
+// unknown-key discipline demands: meets() silently IGNORES keys it does not know (an always-true
+// clause), so any key meets() cannot evaluate MUST be consumed and stripped here, never passed
+// through. Defensive: an absent meets() (lint sandbox) fails the entry safely rather than crashing.
 function journalEntryConditionMet(when) {
     if (!when) return true;
     if (when.layerUnlocked !== undefined) {
         if (!(player[when.layerUnlocked] && player[when.layerUnlocked].unlocked)) return false;
     }
-    // Build the meets()-only subset (strip the hint-only layerUnlocked key) and delegate.
+    // Slice-6 hint-only keys (design §6.2/§1.3): evaluate via the pinned factory readers, the same
+    // defensive typeof pattern hintEngine.js uses. A pre-slice-6 environment (reader absent) fails
+    // the clause safely. These keys are NOT meets() grammar, so they are stripped below.
+    if (when.tribulationReady === true) {
+        if (typeof tribulationIsReady !== "function" || !tribulationIsReady()) return false;
+    }
+    if (when.scarActive === true) {
+        if (typeof scarIsActive !== "function" || !scarIsActive()) return false;
+    }
+    if (when.tribulationPassed === true) {
+        if (typeof tribulationPassed !== "function" || !tribulationPassed()) return false;
+    }
+    if (when.scarHealed === true) {
+        if (typeof scarHealedDepth !== "function" || !(scarHealedDepth() > FACTORY_ZERO)) return false;
+    }
+    // Build the meets()-only subset (strip every hint-only key handled above) and delegate.
+    var hintOnlyKeys = ["layerUnlocked", "tribulationReady", "scarActive", "tribulationPassed", "scarHealed"];
     var meetableCondition = {};
     var hasMeetable = false;
     Object.keys(when).forEach(function (conditionKey) {
-        if (conditionKey === "layerUnlocked") return;
+        if (hintOnlyKeys.indexOf(conditionKey) !== (FACTORY_ZERO - FACTORY_ONE)) return;
         meetableCondition[conditionKey] = when[conditionKey];
         hasMeetable = true;
     });
@@ -2259,6 +3040,54 @@ function makeJournalLayer() {
 }
 
 // ---------------------------------------------------------------------------
+// makeLegacyLayer() — the ETERNAL Legacy Grade layer (design §8.1; LEGACY_DATA). A row:"side"
+// type:"none" container like the journal: no prestige resource, no buyables — it simply DISPLAYS
+// the stored Act I Legacy Grade and its band flavor. The grade is computed/stored by
+// computeAndStoreActOneLegacy on the first tribulation pass; the layer is shown once any act
+// grade exists (layerShown: once actOneLegacyIndex >= 0). NO doReset — eternal scope is
+// topological (a row:"side" layer with no doReset is reset-immune). Its qiMult is the LIVE
+// consumer via legacyQiMult (no dead mult §9.2). Zero literals (§11).
+// ---------------------------------------------------------------------------
+function makeLegacyLayer() {
+    return {
+        name: LEGACY_DATA.name,
+        symbol: LEGACY_DATA.symbol,
+        color: LEGACY_DATA.color,
+        row: "side",
+        type: "none", // pure display side layer: the eternal grade record, no resource/prestige
+        startData: function () {
+            return {
+                // Truthy unlocked flag (the engine only tests truthiness); actOneGrade -1 = no
+                // Act I Legacy Grade earned yet (the sentinel below the first band index).
+                unlocked: true,
+                actOneGrade: FACTORY_ZERO - FACTORY_ONE
+            };
+        },
+        tooltip: function () { return LEGACY_DATA.name + " — the eternal record of your lives"; },
+        // Shown once any act grade exists (Act I for now; future acts add their own grades).
+        layerShown: function () { return actOneLegacyIndex() >= FACTORY_ZERO; },
+        tabFormat: [
+            ["display-text", function () {
+                var band = actOneLegacyBand();
+                if (!band) {
+                    return "Your legacy is unwritten. Endure the First Tribulation to inscribe the "
+                        + "Act I Legacy Grade — the eternal measure of the life you led.";
+                }
+                var percentBase = new Decimal(FACTORY_HUNDRED);
+                var qiPercent = new Decimal(band.qiMult).times(percentBase).sub(percentBase);
+                var line = "<h3>Act I — Mortal Road</h3>";
+                line += "Legacy Grade: <b>" + band.label + "</b><br>";
+                line += "This life echoes: +" + format(qiPercent) + "% Qi/sec, forever.<br><br>";
+                line += "<i>Your core grade, the soul's chosen aspect, the Daos you comprehended, "
+                    + "your sect standing, and the tribulation you endured — all weighed into this "
+                    + "one measure. It survives even death.</i>";
+                return line;
+            }]
+        ]
+    };
+}
+
+// ---------------------------------------------------------------------------
 // Registration. Run the linter first; on failure it hard-stops load (§11).
 // ---------------------------------------------------------------------------
 function registerCultivationLayers() {
@@ -2295,6 +3124,13 @@ function registerCultivationLayers() {
     addLayer(SECT_DATA.id, makeSectLayer());
     requireTreeEntry(JOURNAL_DATA.id);
     addLayer(JOURNAL_DATA.id, makeJournalLayer());
+    // The Legacy store (design §8.1, slice 6): the second eternal-scoped layer. Guarded on
+    // LEGACY_DATA presence (a pre-slice-6 save / harness may not load it), exactly like the
+    // sect/journal registration guard — requireTreeEntry proves its TREE_DATA scope entry exists.
+    if (typeof LEGACY_DATA !== "undefined" && LEGACY_DATA && LEGACY_DATA.id) {
+        requireTreeEntry(LEGACY_DATA.id);
+        addLayer(LEGACY_DATA.id, makeLegacyLayer());
+    }
     REALM_DATA.forEach(function (realmData) {
         requireTreeEntry(realmData.id);
         addLayer(realmData.id, makeRealmLayer(realmData));

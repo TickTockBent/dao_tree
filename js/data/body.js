@@ -128,5 +128,18 @@ var BODY_DATA = {
     // Nascent Soul breakthrough the player picks one aspect ONCE per life (no respec).
     // The key resolves to a REALM_DATA(n).soulAspect.aspects[] row; its effect is a
     // run-long passive identity multiplier folded into the Qi/Insight pipelines.
-    soulAspect: { startKey: "" }
+    soulAspect: { startKey: "" },
+
+    // The failure-Scar slot (design §1.3 "a visible debuff with a heal arc → permanent buff";
+    // §6.2 "a single slot that DEEPENS"). Stored LIFE-scoped on this never-reset Body layer (the
+    // grade-storage precedent §6) — scars and their healing span resets WITHIN a life: a scar
+    // taken at the Soul Formation tribulation persists across n/c/f/q breakthroughs but is a
+    // single-life arc (Samsara resets it, slice 10). Three slots, all integers/Decimals:
+    //   scarDepth         how deep the failure scar is (0 = unscarred; deepens on Failed/Scarred,
+    //                     capped at SETPIECE_DATA.scar.maxDepth — never stacks, §6.2).
+    //   scarHealProgress  accrued heal progress toward converting the next depth (the heal arc).
+    //   scarHealedDepth   how many depths have been HEALED (converted to the permanent "Tempered
+    //                     by Ruin" buff). The scar is ACTIVE while scarDepth > scarHealedDepth (its
+    //                     debuff applies); the healed depths grant the permanent buff instead.
+    scar: { startDepth: 0, startHealProgress: 0, startHealedDepth: 0 }
 };

@@ -21,7 +21,7 @@ const buildDir = path.join(projectRoot, "js", "build");
 // trees.js / keep-rules.js / hints.js reference nothing at load; they sit with
 // their data siblings before linter.js so the new §8.1/§8.2/§8.5 checks can read them.
 // Required data files: these MUST exist for the linter to run.
-const dataFiles = ["constants.js", "realms.js", "body.js", "gates.js",
+const dataFiles = ["constants.js", "realms.js", "setpieces.js", "legacy.js", "body.js", "gates.js",
     "trees.js", "keep-rules.js", "lattice.js", "stances.js", "hints.js", "automation.js"];
 // Slice-5 data files: loaded when present (the other agent delivers these in the same slice).
 // When absent, the linter runs against the pre-sect data set — it still validates all prior

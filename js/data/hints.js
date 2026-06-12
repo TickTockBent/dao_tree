@@ -26,6 +26,14 @@
 //                                        (evaluated via soulAspectRow() factory accessor)
 //     sectUnjoined: true                 sect layer revealed AND archetype not chosen
 //                                        (evaluated via !sectJoined() factory accessor; slice 5)
+//   Slice-6 hint-only keys (backed by factory readers; fully grammar-registered):
+//     tribulationReady: true             trigger substage reached, not passed, not active,
+//                                        cooldown elapsed (tribulationIsReady() factory reader)
+//     scarActive: true                   failure-scar slot active: depth > healedDepth
+//                                        (scarIsActive() factory reader)
+//     tribulationPassed: true            tribGrade resolves to passes:true
+//                                        (tribulationPassed() factory reader)
+//     scarHealed: true                   at least one scar depth healed (scarHealedDepth() > 0)
 //
 // Stage labels must exactly match js/data/realms.js substage labels — a mismatch
 // produces a nonsensical condition (the engine falls back to the catch-all) and
@@ -34,23 +42,84 @@
 var HINT_DATA = {
     hints: [
         {
-            // Row 2 (slice 4): NS layer is unlocked but the Soul Aspect has not yet been
+            // Row 1 (slice 6): Act I is complete — the tribulation has been passed and the
+            // Legacy Grade is recorded. This is the final state of Act I; the hint looks
+            // ahead to Act II. Sits at the very top because it is the latest-game state: once
+            // the tribulation passes and the legacy is written, no Act I hint is more relevant.
+            // The hint-only key `tribulationPassed` is evaluated by hintTribulationPassed() in
+            // hintEngine.js and backed by the tribulationPassed() factory reader.
+            // Window: tribulation has already resolved as a pass — tribGrade >= 0 AND the
+            // grade key resolves to passes:true.
+            //
+            // HARDEN NOTE: `tribulationPassed` is a NEW hint-only key added in this slice.
+            // Add it to linter.js's knownConditionKeys list AND checkHintData's grammarKeys
+            // list (both must be updated together per the checkCondition contract).
+            key: "actComplete",
+            when: { tribulationPassed: true },
+            text: "Soul Formation is complete — the Legacy of your mortal road is written. Spirit Severing lies ahead, and with it, a heavier question."
+        },
+        {
+            // Row 2 (slice 6): The First Tribulation is ready to trigger (trigger substage
+            // reached, not yet passed, not active, cooldown elapsed). Player should begin
+            // the tribulation while they still have banked qi to fuel the prep pool.
+            // Sits above climbSoulFormation so it fires as soon as the trigger is ready.
+            //
+            // The real key: trigger substage reached, not passed, not active, cooldown
+            // elapsed (tribulationIsReady() reader) — the exact window, no proxy.
+            key: "faceTribulation",
+            when: { tribulationReady: true },
+            text: "The First Tribulation is ready — your preparations are as complete as this life allows. Trigger it before you climb further; banked Qi fuels the pool."
+        },
+        {
+            // Row 3 (slice 6): a scar is ACTIVE (scarIsActive(): the failure-scar slot carries
+            // unhealed depth). Placement is the point: ABOVE climbSoulFormation (which fires
+            // for s.best >= 1 forever after entering SF — below it this row could never
+            // surface) and BELOW faceTribulation/actComplete. Net window: the post-failure
+            // COOLDOWN beat (tribulationReady false while the cooldown runs, passed false) —
+            // the player is guided to the heal arc, and the moment the cooldown elapses,
+            // faceTribulation shadows this row and progression guidance resumes. After a
+            // Scarred PASS, actComplete shadows it from the top.
+            key: "healScar",
+            when: { scarActive: true },
+            text: "A scar has been left by the tribulation — it will heal with time. Keep cultivating; the warmth of qi slowly mends what the storm tore."
+        },
+        {
+            // Row 4 (slice 6): Soul Formation has been entered (s.best >= 1). Guide the player
+            // deeper into the SF arc toward the tribulation gate at the Great Circle peak.
+            //
+            // PROXY: realm:["s","Early Soul Formation"] fires when s.best >= 1 — the exact
+            // "entered Soul Formation" condition. Unlike the earlier proxy (realm:["n","Apex"]),
+            // this will NOT fire in the block-19/20 smoke test states (which never set s.best >= 1).
+            // Window handoff: faceTribulation (Row 2, realm:["s","Apex of Soul Formation"]) fires
+            // first once s.best >= 120, shadowing this row in the final climb window; this row
+            // is live from first SF breakthrough until Apex is reached (s.best 1..119).
+            key: "climbSoulFormation",
+            when: { realm: ["s", "Early Soul Formation"] },
+            text: "Climb toward Soul Formation — the final test of your mortal road is ahead. The tribulation awaits at the peak."
+        },
+        {
+            // Row 5 (slice 4): NS layer is unlocked but the Soul Aspect has not yet been
             // chosen. Fires immediately after the first NS prestige and persists until the
             // player picks an aspect (the choice is once-per-life, §5 table NS row). Sits
             // ABOVE all core rows because NS states are later-game than core states; once
             // the aspect is chosen this row no longer matches and the normal cascade resumes.
+            // Window handoff: climbSoulFormation (layerUnlocked:"s") fires first once s is
+            // unlocked, shadowing chooseAspect in the late NS arc; chooseAspect is live in
+            // the window from first NS breakthrough until s is unlocked.
             key: "chooseAspect",
             when: { layerUnlocked: "n", aspectUnchosen: true },
             text: "Your nascent soul stirs within the Golden Core, formless and eager — choose its aspect and give it a face."
         },
         {
-            // Row 3 (slice 4): player has reached the first NS substage (Early Nascent Soul,
+            // Row 6 (slice 4): player has reached the first NS substage (Early Nascent Soul,
             // n.best >= 1) but aspect is already chosen (or this fires after chooseAspect
             // is cleared). Guides the player deeper into the NS arc toward Soul Formation.
             // Sits directly below chooseAspect; shadows coreComplete once NS progression
             // begins (the coreForged condition in coreComplete is no longer the frontier
             // at this stage). The label "Early Nascent Soul" must exactly match the first
             // substage of REALM_DATA n.substages (pinned schema, §11 slice 4 contract).
+            // Window handoff: once s is unlocked, climbSoulFormation (row 3) shadows this
+            // row; while s is not yet unlocked and the player is in NS, this row is live.
             key: "climbNascent",
             when: { realm: ["n", "Early Nascent Soul"] },
             text: "Deepen the soul — each sub-stage of the Nascent Soul refines it toward the Soul Formation gate at the mountain's edge."

@@ -5,7 +5,9 @@ Plain-JS data tables (no `.ts`, no ES `export`) that the layer factory in
 the early game lives here, not in layer/factory code (the "zero numeric
 literals in generated code" rule). See `docs/internal/early-game-spec-v0.1.2.md`.
 
-- `realms.js` — `REALM_DATA` (Qi Condensation `q`, Foundation `f`, Core Formation `c`, Nascent Soul `n`)
+- `realms.js` — `REALM_DATA` (Qi Condensation `q`, Foundation `f`, Core Formation `c`, Nascent Soul `n`, Soul Formation `s`); note: the Core Formation forge config was moved to `setpieces.js` (SETPIECE_DATA.forge) in slice 6 — the factory's `coreForgeData()` now reads from there as a compatibility accessor
+- `setpieces.js` — `SETPIECE_DATA` (set-piece configs: instance 1 = the Forge, verbatim from former `realms.js` c row; instance 2 = firstTribulation, the Act I capstone set-piece; plus the shared scar table — design §8.3/§6.2)
+- `legacy.js` — `LEGACY_DATA` (the eternal Act I Legacy Grade store: weighted score from core grade, soul aspect, Dao Seeds, sect standing, and tribulation grade → one of four evocative bands with a live qiMult consumer — design §5/§8.1 eternal scope)
 - `body.js`  — `BODY_DATA` (meridian + tempering buyables, the `row:"side"` Body layer, stored grades including `soulAspect`)
 - `gates.js` — `GATE_DATA` (story-gate achievements, e.g. Outer Disciple)
 - `trees.js` — `TREE_DATA` (persistence scopes tree/life/eternal + tree membership; the factory compiles each layer's `doReset` from it — design doc §8.1)

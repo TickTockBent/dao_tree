@@ -26,9 +26,13 @@ let changelog = `<h1>Changelog:</h1><br>
 		- Forge your first Golden Core at the climax: push hard for grade, or warm it slowly and safely.<br>
 		- Earn Outer Disciple standing in the sect for a permanent Qi boon.`
 
-let winText = `Your nascent soul has reached its Perfected stage. The Golden Core is a carried artifact now,
-	the soul independent and whole — the frontier of the mortal road.<br>
-	The path beyond — Soul Formation and the severing of the mortal — awaits a future update.`
+let winText = `You have endured the First Tribulation. The heavens descended in wave after wave, and what
+	you prepared across a lifetime — your tempered body, your opened meridians, your Golden Core, the Daos you
+	comprehended, the sect that named you — held against them. Soul Formation is complete, and the Act I Legacy
+	Grade of your mortal road is written into the eternal record: a measure of the life you led that will outlast
+	this one.<br>
+	The mortal road ends here. Beyond lies Act II — the Severing of the Mortal: Spirit Severing, the cutting away
+	of what tied you to the dust, and the long climb toward Mahayana. That frontier awaits a future update.`
 
 // If you add new functions anywhere inside of a layer, and those functions have an effect when called, add them here.
 // (The ones here are examples, all official functions are already taken care of)
@@ -79,11 +83,12 @@ var displayThings = [
     }
 ]
 
-// Determines when the game "ends" — the demo-complete beat. The frontier moved from
-// the v0.1 forged-core (coreIsForged) to the Nascent Soul frontier (expansion §5):
+// Determines when the game "ends" — the Act I complete beat (slice 6, expansion §5):
 // cultivationEndgameReached() (the factory) is true once the highest-row realm's last
-// sub-stage (Perfected Nascent Soul) is reached on best. Keep the defensive typeof
-// pattern so a pre-factory tick reports not-endgame rather than throwing.
+// sub-stage is reached on best AND, when that realm carries a tribulation set-piece
+// (Soul Formation's First Tribulation), tribulationPassed() — generic, so future act
+// frontiers inherit it. Keep the defensive typeof pattern so a pre-factory tick
+// reports not-endgame rather than throwing.
 function isEndgame() {
 	if (typeof cultivationEndgameReached === "function") return cultivationEndgameReached()
 	return false

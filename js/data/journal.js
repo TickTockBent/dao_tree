@@ -159,6 +159,62 @@ var JOURNAL_DATA = {
             text: "The last primary meridian opens with less drama than you expected — "
                 + "a quiet unlocking, like remembering a word you always knew. "
                 + "The body is as ready as it can make itself. The rest is up to the soul."
+        },
+        {
+            // Entry 12: Soul Formation realm approached (Apex of Nascent Soul). The beginning of
+            // the Act I capstone arc. Latches on the exact state: the s (Soul Formation)
+            // layer unlocked — the first SF breakthrough.
+            key: "soulFormationEntered",
+            when: { layerUnlocked: "s" },
+            title: "The Shape of the Final Step",
+            text: "The soul does not complete its formation by climbing — it completes it by enduring. "
+                + "You have reached the Apex of the Nascent Soul. What waits beyond is not a wall but a question: "
+                + "what are you made of, when heaven itself decides to find out?"
+        },
+        {
+            // Entry 13: the First Tribulation resolved with a passing grade — the exact
+            // latch via the tribulationPassed hint-only key (tribulationPassed() reader),
+            // so the prose fires at the moment it is written for, never before.
+            key: "tribulationPassed",
+            when: { tribulationPassed: true },
+            title: "Through the Storm",
+            text: "The final wave broke and the pool held. Not without cost — your qi ran thin, "
+                + "your soul bent in ways it had never bent. "
+                + "But it held. The tribulation is behind you, and something it left in you will not leave."
+        },
+        {
+            // Entry 14: a scar is ACTIVE — the tribulation failed or resolved Scarred and
+            // the failure-scar slot carries unhealed depth. Exact latch via scarActive
+            // (scarIsActive() reader): only a player who actually took the scar reads this.
+            key: "scarTaken",
+            when: { scarActive: true },
+            title: "The Mark It Left",
+            text: "The wound is not visible from the outside. "
+                + "You know it by the way your qi moves differently now — heavier in one place, "
+                + "thinner where it was not thin before. The scar is real. So is the path through it."
+        },
+        {
+            // Entry 15: at least one scar depth HEALED — the §1.3 heal arc completed and
+            // converted into the Tempered by Ruin buff. Exact latch via the scarHealed
+            // hint-only key (scarHealedDepth() > 0).
+            key: "scarHealed",
+            when: { scarHealed: true },
+            title: "Tempered by Ruin",
+            text: "The weight is gone. Not just the wound — something settled where the wound was. "
+                + "What the tribulation scarred, cultivation healed into something harder, "
+                + "and what is harder now will not crack the same way again."
+        },
+        {
+            // Entry 16: Act I complete — the Legacy Grade is computed and stored by
+            // computeAndStoreActOneLegacy at the moment of the first tribulation pass, so
+            // tribulationPassed IS the exact "legacy recorded" latch (no separate key needed).
+            key: "actOneLegacy",
+            when: { tribulationPassed: true },
+            title: "What the Road Records",
+            text: "The road does not forget what you did on it. "
+                + "The core you forged, the aspect your soul chose, the tribulation you survived — "
+                + "all of it written now in the eternal record. "
+                + "This is the first line of your legacy. There will be more."
         }
     ]
 };

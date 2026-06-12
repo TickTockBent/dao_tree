@@ -188,44 +188,13 @@ var REALM_DATA = [
             { label: "Core Tempered", at: 3, qiMult: 2.00 }
         ],
         // One-time forge (§7a) then a refinement loop (§7b) — never a repeatable
-        // prestige (§5c). All forge/refinement tuning + UI dimensions live here as
-        // data so the factory/layer code stays literal-free (§11).
-        forge: {
-            // Requirement to OPEN the forge: Core Formation unlocked + f.points >= forgeReq (§7a).
-            forgeReq: 25,
-            // Base fuel the 1x (Steady) push spends; each push spends fuelBase * fuelMult
-            // of f.points. Set equal to forgeReq so Steady is affordable the moment the
-            // forge opens, while Forceful/Reckless demand banking more Foundation fuel.
-            fuelBase: 25,
-            // Discrete push options (§7a). fuelMult multiplies the base fuel cost,
-            // offset shifts the produced grade, crackChance is the drop-one-tier risk.
-            pushOptions: [
-                { key: "steady",   label: "Steady",   fuelMult: 1, offset: 0, crackChance: 0.00 },
-                { key: "forceful", label: "Forceful", fuelMult: 2, offset: 1, crackChance: 0.15 },
-                { key: "reckless", label: "Reckless", fuelMult: 3, offset: 2, crackChance: 0.35 }
-            ],
-            // A crack drops exactly one tier; cracked is the floor (§7a/§9.3).
-            crackTierDrop: 1,
-            // Refinement loop (§7b): "Warm the Core" accrues progress; a full bar
-            // raises grade one tier, capped at the Foundation ceiling. Slow/safe route
-            // to the same ceiling the fast/risky push reaches.
-            refinement: {
-                goal: 100,            // progress units for one tier (§7b)
-                ratePerSecond: 1,     // base accrual per second while warming
-                tierStep: 1,          // tiers gained per full bar
-                barWidth: 360,        // refinement bar width  (px) — UI dimension as data (§11)
-                barHeight: 28         // refinement bar height (px)
-            },
-            // Core Grade ladder (§7): grade key -> global Qi/sec + cultivation mult.
-            // ceilingIndex orders the ladder so a Foundation coreCeiling caps it.
-            grades: [
-                { key: "cracked", label: "Cracked", ceilingIndex: 0, globalMult: 2 },
-                { key: "lower",   label: "Lower",   ceilingIndex: 1, globalMult: 3 },
-                { key: "middle",  label: "Middle",  ceilingIndex: 2, globalMult: 4 },
-                { key: "upper",   label: "Upper",   ceilingIndex: 3, globalMult: 6 },
-                { key: "perfect", label: "Perfect", ceilingIndex: 4, globalMult: 8 }
-            ]
-        }
+        // prestige (§5c). The forge is INSTANCE 1 of the set-piece config type (design
+        // §6.2 "Forge = instance 1, tribulations = instances 2..n"): its entire config
+        // (forgeReq, fuelBase, pushOptions, crackTierDrop, refinement, grades) MOVED
+        // VERBATIM to SETPIECE_DATA.forge (js/data/setpieces.js). The factory resolves it
+        // via realmData.setpiece -> setpieceFor() -> SETPIECE_DATA.forge, so the forge
+        // functions changed only WHERE they read, never WHAT they compute (§11).
+        setpiece: "forge"
     },
     {
         id: "n",
@@ -302,5 +271,54 @@ var REALM_DATA = [
                   effect: { qiMult: 1.45 } }
             ]
         }
+    },
+    {
+        // Soul Formation (progression-map §2 "Soul Formation = Act I capstone"; design §5 Act I
+        // table "First Tribulation + Act Legacy Grade"). The LAST mortal-tier realm and the
+        // highest Act I row — its capstone is the First Tribulation set-piece (SETPIECE_DATA.
+        // firstTribulation), and passing it computes the Act I Legacy Grade. Row 4, still Act I
+        // (trees.js s entry tree:"act1"), so its breakthrough cascade resets n/c/f/q below it —
+        // the carried core grade survives on the life-scoped Body layer (the §5 carried-artifact
+        // precedent), and the soulCarriesTheClimb keep rule spares the NS climb once earned.
+        id: "s",
+        row: 4,
+        name: "Soul Formation",
+        symbol: "Form",                      // the soul taking form — distinct from Nascent "Soul"
+        color: "#e08fb4",                    // rose-amethyst — the soul deepening past the Nascent hue
+        resource: "soul formation",
+        // Pacing (progression-map §2 "extended sub-stages"; the multi-hour climb past Nascent
+        // Soul). NS Perfected (n.best>=400) is the unlock gate; by then Qi/sec runs deep into the
+        // thousands+ (full meridians/temper x realm mults q..n x Upper+ core x aspect x sect x
+        // techniques). reqBase 5e8 with gainExp 0.45 puts the first s breakthrough a real climb
+        // past a Perfected Nascent Soul, and the 6 sub-stages then span a multi-hour ascent (their
+        // `at` ladder geometrically outruns a single realm's gain, like the q/f/c/n spines). The
+        // gainExp is slightly LOWER than n's 0.5 so s gain is harder-won (the capstone realm is the
+        // slowest single-realm climb of Act I). All ⟨tune⟩, well past n's scale.
+        reqBase: 500000000,
+        gainExp: 0.45,
+        // §1.6/§5a reveal the capstone EARLY: the Soul Formation node appears once the Nascent
+        // Soul reaches its Great Circle (n.best>=75) — the next peak visible while still locked.
+        // The breakthrough itself gates higher: Nascent Soul must reach Apex (n.best>=175) first
+        // (the soul must be near-complete before it can begin to take its formed shape). ⟨tune⟩
+        reveal: { realm: ["n", "Great Circle"] },
+        unlock: { realm: ["n", "Apex"] },
+        substages: [
+            // 6 extended sub-stages (progression-map §2 "Extended sub-stages"), ending at the peak
+            // that gates the First Tribulation trigger. qiMults climb steeply (the formed soul is a
+            // far stronger gathering engine) — each feeds realmMult (no dead mult §9.2). ats are a
+            // geometric ladder so the climb to the tribulation is multi-hour. The peak label is the
+            // tribulation trigger gate (SETPIECE_DATA.firstTribulation.trigger.realm).
+            { label: "Early Soul Formation",            at: 1,    qiMult: 2.80 },
+            { label: "Mid Soul Formation",              at: 5,    qiMult: 3.00 },
+            { label: "Late Soul Formation",             at: 16,   qiMult: 3.20 },
+            { label: "Peak Soul Formation",             at: 45,   qiMult: 3.50 },
+            { label: "Apex of Soul Formation",          at: 120,  qiMult: 3.80 },
+            { label: "Great Circle of Soul Formation",  at: 320,  qiMult: 4.20 }
+        ],
+        // The First Tribulation set-piece (design §6.2; SETPIECE_DATA.firstTribulation). INSTANCE 2
+        // of the set-piece config type — the factory mounts it EXACTLY as the forge mounts on c,
+        // keyed on realmData.setpiece, so no other realm is touched. The trigger opens at the peak
+        // sub-stage (Great Circle of Soul Formation); passing computes the Act I Legacy Grade.
+        setpiece: "firstTribulation"
     }
 ];

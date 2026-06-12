@@ -109,7 +109,11 @@ function cleanTreeData() {
             // so registeredLayerIds() lists "sect" (life) and "journal" (eternal). They need entries
             // here for the persistence-scope clean cases — matching trees.js's real sect/journal entries.
             sect: { scope: "life" },
-            journal: { scope: "eternal" }
+            journal: { scope: "eternal" },
+            // Slice-6 eternal Legacy store (design §8.1): the fixture now applies LEGACY_DATA, so
+            // registeredLayerIds() lists "legacy" (eternal) for every case — it needs an entry here
+            // for the persistence-scope clean cases, matching trees.js's real legacy eternal entry.
+            legacy: { scope: "eternal" }
         }
     };
 }
@@ -207,7 +211,10 @@ function automationTreeData() {
             // SECT_DATA / JOURNAL_DATA via applyGlobals) keep registeredLayerIds() and TREE_DATA
             // in sync — otherwise checkAutomationData's registered-layer guard would false-error.
             sect: { scope: "life" },
-            journal: { scope: "eternal" }
+            journal: { scope: "eternal" },
+            // Mirror the slice-6 eternal Legacy store so the automation/soul-aspect cases keep
+            // registeredLayerIds() and TREE_DATA in sync (LEGACY_DATA is applied for every case).
+            legacy: { scope: "eternal" }
         }
     };
 }
@@ -295,6 +302,94 @@ function cleanJournalData() {
     };
 }
 
+// Synthetic CLEAN set-piece table (design §8.3/§6.2/§1.3). A forge block carrying the full
+// migrated forge shape (forgeReq/fuelBase/pushOptions/grades/crackTierDrop/refinement); a
+// firstTribulation block (kind "tribulation") whose trigger gates on a real clean-realm stage,
+// non-empty positive-damage waves, positive durationSeconds, positive pool weights/denominators,
+// grades with exactly one passes:false at index 0 and strictly-ascending passing floors and a
+// scarring grade, a non-negative retryCooldownSeconds; and the scar table (maxDepth >= 1,
+// debuffQiMultPerDepth in (0,1), positive heal goal/rate, temperedQiMultPerDepth >= 1). The
+// pointers are mounted by setpieceRealmData()'s realms so the orphan pass stays clean.
+function cleanSetpieceData() {
+    return {
+        forge: {
+            forgeReq: 25,
+            fuelBase: 25,
+            pushOptions: [{ key: "steady", fuelMult: 1, offset: 0, crackChance: 0.0 }],
+            crackTierDrop: 1,
+            refinement: { goal: 100, ratePerSecond: 1, tierStep: 1, barWidth: 360, barHeight: 28 },
+            grades: [
+                { key: "cracked", label: "Cracked", ceilingIndex: 0, globalMult: 2 },
+                { key: "perfect", label: "Perfect", ceilingIndex: 1, globalMult: 8 }
+            ]
+        },
+        firstTribulation: {
+            kind: "tribulation",
+            name: "The First Tribulation",
+            trigger: { realm: ["fb", "Late"] },
+            intensity: { base: 1.0, perBest: 0.0005 },
+            durationSeconds: 35,
+            waves: [
+                { key: "gale", name: "Gale", damage: 14 },
+                { key: "thunder", name: "Thunder", damage: 28 }
+            ],
+            pool: {
+                weightTemper: 90, temperDenominator: 24,
+                weightMeridians: 90, meridianDenominator: 12,
+                weightCoreGrade: 130, weightTechniques: 60, techniqueDenominator: 4,
+                qiFuelWeight: 90, qiFuelDenominator: 12
+            },
+            grades: [
+                { key: "failed", label: "Failed", passes: false, scars: true },
+                { key: "shaken", label: "Shaken", passes: true, scars: false, floor: 0.0 },
+                { key: "scarred", label: "Scarred", passes: true, scars: true, floor: 0.35 },
+                { key: "flawless", label: "Flawless", passes: true, scars: false, floor: 0.70 }
+            ],
+            retryCooldownSeconds: 60
+        },
+        scar: {
+            maxDepth: 3,
+            debuffQiMultPerDepth: 0.88,
+            healGoalPerDepth: 240,
+            healRatePerSecond: 1,
+            temperedQiMultPerDepth: 1.06
+        }
+    };
+}
+
+// A clean realm set that MOUNTS the set-piece pointers (forge on fb, firstTribulation on a new s
+// row), so checkSetpieceData's resolve-and-orphan passes are clean. The firstTribulation trigger
+// (cleanSetpieceData) gates on ["fb","Late"], a real stage, so checkCondition stays quiet.
+function setpieceRealmData() {
+    return [
+        { id: "qa", row: 0, substages: [{ label: "1st Level", at: 1 }, { label: "2nd Level", at: 3 }] },
+        { id: "fa", row: 1, substages: [{ label: "Early", at: 1 }, { label: "Late", at: 4 }] },
+        { id: "qb", row: 2, substages: [{ label: "1st Level", at: 1 }, { label: "2nd Level", at: 3 }] },
+        { id: "fb", row: 3, setpiece: "forge", substages: [{ label: "Early", at: 1 }, { label: "Late", at: 4 }] },
+        { id: "s", row: 4, setpiece: "firstTribulation",
+          substages: [{ label: "Early", at: 1 }, { label: "Great Circle", at: 5 }] }
+    ];
+}
+
+// Synthetic CLEAN eternal Legacy store (design §8.1/§5). weights sum to 1; positive denominators;
+// ascending band floors in [0,1]; every band qiMult >= 1; unique band keys.
+function cleanLegacyData() {
+    return {
+        id: "legacy",
+        name: "Legacy",
+        actOne: {
+            weights: { coreGrade: 0.35, tribulation: 0.25, aspect: 0.15, sectStanding: 0.15, daoSeeds: 0.10 },
+            denominators: { coreGrade: 4, aspect: 2, daoSeeds: 8, sectStanding: 2, tribulation: 3 },
+            bands: [
+                { key: "faint", label: "Faint Legacy", floor: 0.00, qiMult: 1.00 },
+                { key: "steady", label: "Steady Legacy", floor: 0.30, qiMult: 1.15 },
+                { key: "radiant", label: "Radiant Legacy", floor: 0.55, qiMult: 1.35 },
+                { key: "eternal", label: "Eternal Legacy", floor: 0.80, qiMult: 1.60 }
+            ]
+        }
+    };
+}
+
 // A realm set carrying the soul aspect on its frontier row, for the soul-aspect cases.
 function soulAspectRealmData() {
     const realms = automationRealmData();
@@ -318,6 +413,12 @@ function applyGlobals(overrides) {
     sandbox.SECT_DATA = overrides.SECT_DATA || cleanSectData();
     sandbox.TECHNIQUE_DATA = overrides.TECHNIQUE_DATA || cleanTechniqueData();
     sandbox.JOURNAL_DATA = overrides.JOURNAL_DATA || cleanJournalData();
+    // Slice-6 globals (design §8.3/§6.2/§8.1/§5). The set-piece + Legacy tables read by
+    // checkSetpieceData / checkLegacyData; overridable per FAIL case. The set-piece/legacy cases
+    // pair these with setpieceRealmData (which mounts the forge/firstTribulation pointers) so the
+    // resolve-and-orphan passes are clean — non-set-piece cases never call those two checks.
+    sandbox.SETPIECE_DATA = overrides.SETPIECE_DATA || cleanSetpieceData();
+    sandbox.LEGACY_DATA = overrides.LEGACY_DATA || cleanLegacyData();
 }
 
 // Run a single exposed check by name against the currently-applied globals and
@@ -794,6 +895,93 @@ runCase("clean soul aspect / soul aspect data", "checkSoulAspectData",
     journal.entries[0].when = { qiTypo: 5 };
     runCase("FAIL(C1) condition with an unknown grammar key",
         "checkJournalData", { JOURNAL_DATA: journal }, false, "qiTypo");
+})();
+
+// ---------------------------------------------------------------------------
+// PASS: clean set-piece + clean Legacy over the set-piece-mounting realm set -> zero errors.
+// setpieceRealmData mounts forge (fb) + firstTribulation (s) so the resolve/orphan passes clear;
+// the firstTribulation trigger gates on a real clean stage so checkCondition stays quiet.
+// ---------------------------------------------------------------------------
+runCase("clean set-piece / setpiece data", "checkSetpieceData",
+    { REALM_DATA: setpieceRealmData() }, true);
+runCase("clean legacy / legacy data", "checkLegacyData", {}, true);
+
+// ---------------------------------------------------------------------------
+// FAIL (SP1): a realm setpiece pointer to a PHANTOM key (no SETPIECE_DATA entry) -> the
+// resolve pass fires, naming the phantom pointer.
+// ---------------------------------------------------------------------------
+(function () {
+    const realms = setpieceRealmData();
+    realms[realms.length - 1].setpiece = "secondTribulation"; // no such SETPIECE_DATA key
+    runCase("FAIL(SP1) realm setpiece pointer to a phantom key",
+        "checkSetpieceData", { REALM_DATA: realms }, false, "secondTribulation");
+})();
+
+// ---------------------------------------------------------------------------
+// FAIL (SP2): a tribulation with NO passes:false grade -> the single-failing-grade check fires.
+// ---------------------------------------------------------------------------
+(function () {
+    const setpieces = cleanSetpieceData();
+    setpieces.firstTribulation.grades[0].passes = true; // remove the only failing grade
+    runCase("FAIL(SP2) tribulation with no failing grade",
+        "checkSetpieceData",
+        { REALM_DATA: setpieceRealmData(), SETPIECE_DATA: setpieces }, false, "passes:false");
+})();
+
+// ---------------------------------------------------------------------------
+// FAIL (SP3): passing-grade floors NOT ascending (scarred floor below shaken) -> the
+// strictly-ascending passing-floors check fires.
+// ---------------------------------------------------------------------------
+(function () {
+    const setpieces = cleanSetpieceData();
+    setpieces.firstTribulation.grades[1].floor = 0.5;  // shaken
+    setpieces.firstTribulation.grades[2].floor = 0.35; // scarred — now BELOW shaken
+    runCase("FAIL(SP3) tribulation passing floors not ascending",
+        "checkSetpieceData",
+        { REALM_DATA: setpieceRealmData(), SETPIECE_DATA: setpieces }, false, "strictly ascend");
+})();
+
+// ---------------------------------------------------------------------------
+// FAIL (SP4): scar debuffQiMultPerDepth >= 1 (a "debuff" that BUFFS) -> the (0,1) range check fires.
+// ---------------------------------------------------------------------------
+(function () {
+    const setpieces = cleanSetpieceData();
+    setpieces.scar.debuffQiMultPerDepth = 1.1; // > 1 is a buff masquerading as a debuff
+    runCase("FAIL(SP4) scar debuffQiMultPerDepth >= 1 (a debuff that buffs)",
+        "checkSetpieceData",
+        { REALM_DATA: setpieceRealmData(), SETPIECE_DATA: setpieces }, false, "debuffQiMultPerDepth");
+})();
+
+// ---------------------------------------------------------------------------
+// FAIL (SP5): the FORGE block missing a required migrated field (the migration-rot case) ->
+// the full-forge-shape check fires, naming the dropped field.
+// ---------------------------------------------------------------------------
+(function () {
+    const setpieces = cleanSetpieceData();
+    delete setpieces.forge.refinement; // a migration that dropped the refinement loop
+    runCase("FAIL(SP5) forge block missing a migrated field",
+        "checkSetpieceData",
+        { REALM_DATA: setpieceRealmData(), SETPIECE_DATA: setpieces }, false, "refinement");
+})();
+
+// ---------------------------------------------------------------------------
+// FAIL (L1): legacy weights NOT summing to 1 -> the weight-sum check fires.
+// ---------------------------------------------------------------------------
+(function () {
+    const legacy = cleanLegacyData();
+    legacy.actOne.weights.coreGrade = 0.6; // sum now 1.25, off by 0.25 (past the 0.01 tolerance)
+    runCase("FAIL(L1) legacy weights not summing to 1",
+        "checkLegacyData", { LEGACY_DATA: legacy }, false, "expected 1");
+})();
+
+// ---------------------------------------------------------------------------
+// FAIL (L2): a legacy band qiMult < 1 (a dead grade) -> the live-consumer (>=1) check fires.
+// ---------------------------------------------------------------------------
+(function () {
+    const legacy = cleanLegacyData();
+    legacy.actOne.bands[1].qiMult = 0.9; // a band that PENALIZES — a dead/negative grade
+    runCase("FAIL(L2) legacy band qiMult below 1",
+        "checkLegacyData", { LEGACY_DATA: legacy }, false, "steady");
 })();
 
 // ---------------------------------------------------------------------------

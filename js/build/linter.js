@@ -19,6 +19,24 @@
     var ZERO = FACTORY_NUMERICS.zero;
     var ONE = FACTORY_NUMERICS.one;
 
+    // Resolve a realm's FORGE config (design §6.2 forge migration, slice 6). The forge config
+    // moved from the realms.js c row's inline `forge` object to SETPIECE_DATA.forge; a realm now
+    // declares `setpiece: "forge"`. This helper returns the resolved forge config (the object with
+    // grades/pushOptions) for a realm, checking the real data first (a `setpiece: "forge"` realm
+    // resolves SETPIECE_DATA.forge) and falling back to an inline `realm.forge` object IFF it is a
+    // real config (has grades) — the synthetic fixture marks its forge realm with `forge: true`
+    // (a boolean), which has no grades, so the forge-reachability blocks correctly skip it exactly
+    // as they did pre-migration. Returns null when the realm carries no forge set-piece.
+    function realmForgeConfig(realm) {
+        if (!realm) return null;
+        if (realm.setpiece === "forge"
+            && typeof SETPIECE_DATA !== "undefined" && SETPIECE_DATA && SETPIECE_DATA.forge) {
+            return SETPIECE_DATA.forge;
+        }
+        if (realm.forge && realm.forge.grades) return realm.forge;
+        return null;
+    }
+
     // ----- §9.2 no dead multipliers --------------------------------------
     // Every multiplier declared in data must be consumed by a factory function.
     // We verify the consumer function exists and that its source references the
@@ -55,7 +73,15 @@
             // DISCOUNT is NOT here: it changes a COST, verified by the cost-fold check below.)
             sectStipendQiMult: "sectStipendQiMult",
             techniqueQiEffect: "techniqueQiMult",
-            techniqueInsightEffect: "techniqueInsightMult"
+            techniqueInsightEffect: "techniqueInsightMult",
+            // Slice-6 consumers (design §1.3/§6.2/§5/§8.1). The Scar table's debuff/tempered
+            // multipliers fold into cultivationQiPerSecond via scarQiMult / temperedQiMult, and the
+            // Act I Legacy band's qiMult via legacyQiMult. Each declared multiplier must have its
+            // matching reader consume the carrying field token, so a scar/tempered/legacy bonus
+            // can't be computed into nothing (§9.2) — the same mechanism as every consumer above.
+            scarDebuff: "scarQiMult",
+            scarTempered: "temperedQiMult",
+            legacyBandQiMult: "legacyQiMult"
         };
 
         // A consumer is "live" if the named factory function references the data
@@ -127,10 +153,13 @@
             }
         });
 
-        // Core grade globalMult -> coreGradeMult.
+        // Core grade globalMult -> coreGradeMult. The forge config now lives in
+        // SETPIECE_DATA.forge (the migration); realmForgeConfig resolves it for the realm
+        // carrying the "forge" set-piece, so the dead-multiplier proof is unchanged.
         var coreRealm = REALM_DATA.find(function (r) { return r.id === "c"; });
-        if (coreRealm && coreRealm.forge && coreRealm.forge.grades) {
-            coreRealm.forge.grades.forEach(function (grade) {
+        var coreForge = realmForgeConfig(coreRealm);
+        if (coreForge && coreForge.grades) {
+            coreForge.grades.forEach(function (grade) {
                 if (grade.globalMult === undefined) {
                     errors.push("Core grade '" + grade.key + "' declares no globalMult.");
                 }
@@ -265,6 +294,33 @@
                     errors.push("Sect discount: SECT_DATA declares a latticeDiscount but the dao node "
                         + "cost() does not fold sectLatticeDiscount — the discount region is dead (§4.3).");
                 }
+            }
+        }
+
+        // Slice-6 set-piece multipliers (design §1.3/§6.2/§5/§8.1). The Scar table declares a
+        // per-depth debuff (debuffQiMultPerDepth) and a per-healed-depth tempered buff
+        // (temperedQiMultPerDepth); the Act I Legacy bands declare a per-band qiMult. Each must
+        // have its matching reader (scarQiMult / temperedQiMult / legacyQiMult) consume the
+        // carrying field token, the same proof every consumer above uses, so a slice-6 multiplier
+        // can't be computed into nothing (§9.2). Guarded on the data tables' presence (a data-only
+        // harness may not load setpieces.js / legacy.js — when absent the check is vacuous there).
+        if (typeof SETPIECE_DATA !== "undefined" && SETPIECE_DATA && SETPIECE_DATA.scar) {
+            if (SETPIECE_DATA.scar.debuffQiMultPerDepth !== undefined
+                && !consumerReferences(consumers.scarDebuff, "debuffQiMultPerDepth")) {
+                errors.push("Dead multiplier: scar debuffQiMultPerDepth has no consumer (scarQiMult).");
+            }
+            if (SETPIECE_DATA.scar.temperedQiMultPerDepth !== undefined
+                && !consumerReferences(consumers.scarTempered, "temperedQiMultPerDepth")) {
+                errors.push("Dead multiplier: scar temperedQiMultPerDepth has no consumer (temperedQiMult).");
+            }
+        }
+        if (typeof LEGACY_DATA !== "undefined" && LEGACY_DATA && LEGACY_DATA.actOne
+            && LEGACY_DATA.actOne.bands) {
+            var legacyDeclaresQiMult = LEGACY_DATA.actOne.bands.some(function (band) {
+                return band.qiMult !== undefined;
+            });
+            if (legacyDeclaresQiMult && !consumerReferences(consumers.legacyBandQiMult, "qiMult")) {
+                errors.push("Dead multiplier: legacy band qiMult has no consumer (legacyQiMult).");
             }
         }
     }
@@ -464,12 +520,18 @@
         // the worst possible failure for a gate. Every key must be in the known grammar:
         // the meets() keys plus the engine-extension keys the hint/journal evaluators
         // handle before delegating (layerUnlocked / coreForged / coreBelowCeiling /
-        // aspectUnchosen / sectUnjoined). Context-specific whitelists (checkHintData's
+        // aspectUnchosen / sectUnjoined, and the slice-6 hint-only keys tribulationReady /
+        // scarActive / tribulationPassed). Context-specific whitelists (checkHintData's
         // grammarKeys) stay stricter where they apply.
         var knownConditionKeys = ["qi", "realm", "meridians", "temperTier",
             "primaryMeridiansAll", "daoNode", "anyDaoNode", "daoElementTier",
             "achievement", "sectJoined", "contribution",
-            "layerUnlocked", "coreForged", "coreBelowCeiling", "aspectUnchosen", "sectUnjoined"];
+            "layerUnlocked", "coreForged", "coreBelowCeiling", "aspectUnchosen", "sectUnjoined",
+            // Slice-6 hint-only keys (design §6.2/§1.3): evaluated by hintEngine.js
+            // (hintTribulationReady / hintScarActive / hintTribulationPassed), backed by the pinned
+            // factory readers (tribulationIsReady / scarIsActive / tribulationPassed). Recognized
+            // here so a hint/journal row may use them without tripping the unknown-key rejection.
+            "tribulationReady", "scarActive", "tribulationPassed", "scarHealed"];
         Object.keys(condition).forEach(function (conditionKey) {
             if (knownConditionKeys.indexOf(conditionKey) === ZERO - ONE) {
                 errors.push(label + ": unknown condition key '" + conditionKey
@@ -507,15 +569,16 @@
         // the band's ceiling — otherwise the ceiling is unreachable by the fast
         // route (a dead push) or refinement alone, breaking completability (§9.3).
         var coreRealm = REALM_DATA.find(function (r) { return r.id === "c"; });
+        var coreForgeForReach = realmForgeConfig(coreRealm);
         var gradedRealm = REALM_DATA.find(function (r) { return r.graded && r.grade && r.grade.bands; });
-        if (coreRealm && coreRealm.forge && coreRealm.forge.grades && gradedRealm) {
-            var ladder = coreRealm.forge.grades;
+        if (coreForgeForReach && coreForgeForReach.grades && gradedRealm) {
+            var ladder = coreForgeForReach.grades;
             function ladderIndexForKey(key) {
                 var row = ladder.find(function (g) { return g.key === key; });
                 return row ? row.ceilingIndex : null;
             }
             var maxOffset = ZERO;
-            coreRealm.forge.pushOptions.forEach(function (opt) {
+            coreForgeForReach.pushOptions.forEach(function (opt) {
                 if (opt.offset > maxOffset) maxOffset = opt.offset;
             });
             gradedRealm.grade.bands.forEach(function (band) {
@@ -692,6 +755,15 @@
         if (typeof JOURNAL_DATA !== "undefined" && JOURNAL_DATA && JOURNAL_DATA.id) {
             ids.push(JOURNAL_DATA.id);
         }
+        // The Legacy store (design §8.1 "Legacy Grades are eternal"; slice 6): the eternal
+        // Legacy Grade layer. Guarded on LEGACY_DATA presence like journal/sect — not every
+        // harness loads legacy.js (the pre-slice-6 fixture may not), so when absent it simply
+        // isn't registered here — matching what the factory registers in that same context.
+        // PRE-AUTHORIZED ONE-LINER: registeredLayerIds() gaining the legacy layer (guarded,
+        // like sect/journal — the pinned contract in the task spec).
+        if (typeof LEGACY_DATA !== "undefined" && LEGACY_DATA && LEGACY_DATA.id) {
+            ids.push(LEGACY_DATA.id);
+        }
         return ids;
     }
 
@@ -713,14 +785,22 @@
 
     // The start-data key set the factory's startData() seeds for a layer — derived
     // the way the factory does, so a kept key can be checked for existence without
-    // hardcoding layer ids. Base realm keys are unlocked/points/best/total; a forge
-    // realm (detected via realmData.forge, NOT id "c") adds the refinement keys.
+    // hardcoding layer ids. Base realm keys are unlocked/points/best/total; the FORGE
+    // realm (the "forge" set-piece, or a fixture's inline forge marker) adds the refinement
+    // keys; the TRIBULATION realm (the "firstTribulation" set-piece, slice 6) adds its
+    // run-state keys — both detected via realmData.setpiece, never the layer id.
     function startDataKeysForLayer(layerId) {
         var realm = REALM_DATA.find(function (r) { return r.id === layerId; });
         if (realm) {
             var realmKeys = ["unlocked", "points", "best", "total"];
-            if (realm.forge) {
+            if (realm.setpiece === "forge" || realm.forge) {
                 ["refinementProgress", "warming", "lastForgeCracked"].forEach(function (k) {
+                    realmKeys.push(k);
+                });
+            }
+            if (realm.setpiece === "firstTribulation") {
+                ["tribActive", "tribElapsed", "tribPool", "tribPoolMax",
+                    "tribWaveIndex", "tribGrade", "tribCooldownUntil"].forEach(function (k) {
                     realmKeys.push(k);
                 });
             }
@@ -947,7 +1027,11 @@
             // pass through the hint engine's strip list to meets() (factory extension, §4.3);
             // sectUnjoined is a hint-only key evaluated by hintEngine.js's hintSectUnjoined()
             // function (!sectJoined() — fires while the sect layer is revealed but unjoined).
-            "achievement", "sectJoined", "sectUnjoined"];
+            "achievement", "sectJoined", "sectUnjoined",
+            // Slice-6 additions (§6.2/§1.3): tribulationReady / scarActive / tribulationPassed are
+            // hint-only keys evaluated by hintEngine.js (hintTribulationReady / hintScarActive /
+            // hintTribulationPassed), backed by the pinned factory readers.
+            "tribulationReady", "scarActive", "tribulationPassed", "scarHealed"];
         var registered = registeredLayerIds();
         var lastIndex = hints.length - ONE;
         var alwaysCount = ZERO;
@@ -1757,6 +1841,265 @@
         }
     }
 
+    // ----- §6.2/§8.3 set-piece integrity (forge migration + tribulation + scar) -----
+    // SETPIECE_DATA is the set-piece config type (design §8.3 "forge = instance 1, tribulations
+    // = 2..n"; §6.2 tribulation + scar typing). This check proves the table is well-formed so the
+    // factory's set-piece functions (coreForgeData / tribulationTick / scarHealTick ...) read a
+    // sound config and the forge migration dropped nothing:
+    //   - SETPIECE_DATA exists;
+    //   - EVERY REALM_DATA setpiece pointer resolves to a SETPIECE_DATA key (a phantom pointer is
+    //     a realm mounting a set-piece that does not exist — a load-time crash, §8.3);
+    //   - EVERY SETPIECE_DATA set-piece key (forge / firstTribulation) is mounted by SOME realm
+    //     (an orphaned set-piece no realm carries is dead config — warn-as-error, §8.3);
+    //   - the FORGE block carries the full migrated forge shape (forgeReq / fuelBase / pushOptions
+    //     / grades / crackTierDrop / refinement) — the migration must not drop a field, or the
+    //     forge functions reading SETPIECE_DATA.forge would read undefined;
+    //   - each TRIBULATION block: trigger valid via the shared checkCondition oracle; waves
+    //     non-empty with positive damage; durationSeconds > 0; pool weights positive with positive
+    //     denominators; grades have exactly one passes:false at index 0, passing-grade floors
+    //     strictly ascending, at least one scars:true grade; retryCooldownSeconds >= 0;
+    //   - the SCAR table: maxDepth >= 1; 0 < debuffQiMultPerDepth < 1 (a debuff that never zeroes
+    //     — §6.3 completability: debuffQiMultPerDepth^maxDepth stays > 0 for any positive value, so
+    //     proving it positive proves the scarred ascent stays completable); healGoalPerDepth and
+    //     healRatePerSecond > 0 (§8.8 heal-arc reachability: a positive rate against a finite goal
+    //     is reachable by construction); temperedQiMultPerDepth >= 1 (a buff, never a penalty).
+    function checkSetpieceData(errors) {
+        if (typeof SETPIECE_DATA === "undefined" || !SETPIECE_DATA) {
+            errors.push("Set-piece: SETPIECE_DATA table is required (§8.3).");
+            return;
+        }
+
+        // Every REALM_DATA setpiece pointer resolves to a real SETPIECE_DATA key; collect the set
+        // of keys the realms mount so the orphan pass below can spot an unmounted set-piece.
+        var mountedSetpieceKeys = {};
+        REALM_DATA.forEach(function (realm) {
+            if (realm.setpiece === undefined) return;
+            mountedSetpieceKeys[realm.setpiece] = true;
+            if (SETPIECE_DATA[realm.setpiece] === undefined) {
+                errors.push("Set-piece: realm '" + realm.id + "' setpiece pointer '"
+                    + realm.setpiece + "' resolves to no SETPIECE_DATA key (a phantom set-piece, §8.3).");
+            }
+        });
+
+        // Orphan pass (warn-as-error, §8.3): every declared set-piece must be mounted by SOME realm.
+        // The scar table is shared config, not a per-realm set-piece, so it is exempt from this rule.
+        Object.keys(SETPIECE_DATA).forEach(function (setpieceKey) {
+            if (setpieceKey === "scar") return;
+            if (!mountedSetpieceKeys[setpieceKey]) {
+                errors.push("Set-piece: SETPIECE_DATA key '" + setpieceKey
+                    + "' is mounted by no realm (orphaned set-piece, §8.3).");
+            }
+        });
+
+        // The FORGE block: the migration moved the whole c-row forge config here VERBATIM, so every
+        // field the forge functions read must still be present (a dropped field reads undefined).
+        var forge = SETPIECE_DATA.forge;
+        if (!forge) {
+            errors.push("Set-piece: SETPIECE_DATA.forge is required (the migrated Core forge, §8.3).");
+        } else {
+            var requiredForgeFields = ["forgeReq", "fuelBase", "pushOptions", "grades",
+                "crackTierDrop", "refinement"];
+            requiredForgeFields.forEach(function (fieldName) {
+                if (forge[fieldName] === undefined) {
+                    errors.push("Set-piece: SETPIECE_DATA.forge is missing the migrated field '"
+                        + fieldName + "' — the forge migration dropped a field (§8.3).");
+                }
+            });
+        }
+
+        // Each TRIBULATION block (a set-piece whose kind is "tribulation"). The forge is kind-less
+        // (it has grades-with-globalMult, not waves); tribulations carry kind:"tribulation".
+        var tribulationKind = "tribulation";
+        Object.keys(SETPIECE_DATA).forEach(function (setpieceKey) {
+            var setpiece = SETPIECE_DATA[setpieceKey];
+            if (!setpiece || setpiece.kind !== tribulationKind) return;
+            var label = "Set-piece '" + setpieceKey + "'";
+
+            // The trigger flows through the one shared reachability oracle (§5a realm grammar).
+            checkCondition(errors, label + " trigger", setpiece.trigger);
+
+            // Waves: non-empty, each with positive damage (a zero-damage wave drains nothing, §6.2).
+            var waves = setpiece.waves || [];
+            if (!(waves.length > ZERO)) {
+                errors.push(label + ": waves must be non-empty (§6.2).");
+            }
+            waves.forEach(function (wave) {
+                if (!(wave.damage > ZERO)) {
+                    errors.push(label + ": wave '" + (wave.key || wave.name)
+                        + "' damage must be > 0 (a zero-damage wave drains nothing, §6.2).");
+                }
+            });
+
+            // durationSeconds > 0 (the waves are spaced across it; a non-positive span is degenerate).
+            if (!(setpiece.durationSeconds > ZERO)) {
+                errors.push(label + ": durationSeconds must be > 0 (§6.2).");
+            }
+
+            // Pool: every weight positive, every denominator positive (a zero denominator divides by
+            // nothing; a non-positive weight contributes no prep — §6.2 "prepared pool").
+            var pool = setpiece.pool || {};
+            Object.keys(pool).forEach(function (poolKey) {
+                if (!(pool[poolKey] > ZERO)) {
+                    errors.push(label + ": pool." + poolKey
+                        + " must be > 0 (a non-positive weight/denominator breaks the prep pool, §6.2).");
+                }
+            });
+
+            // Grades: exactly one passes:false and it sits at index 0; passing-grade floors strictly
+            // ascending; at least one scars:true grade (§6.2 Flawless > Scarred > Shaken > Failed).
+            var grades = setpiece.grades || [];
+            if (!(grades.length > ZERO)) {
+                errors.push(label + ": grades must be non-empty (§6.2).");
+            }
+            var failingCount = ZERO;
+            var sawScarringGrade = false;
+            var previousPassingFloor = null;
+            grades.forEach(function (grade, gradeIndex) {
+                if (grade.passes === false) {
+                    failingCount = failingCount + ONE;
+                    if (gradeIndex !== ZERO) {
+                        errors.push(label + ": the failing grade '" + grade.key
+                            + "' must sit at index 0 (a pool emptied mid-waves resolves to it, §6.2).");
+                    }
+                } else {
+                    // A passing grade carries an inclusive floor on the remaining pool fraction;
+                    // the passing floors must STRICTLY ascend so the highest met floor wins uniquely.
+                    if (previousPassingFloor !== null && !(grade.floor > previousPassingFloor)) {
+                        errors.push(label + ": passing grade '" + grade.key + "' floor " + grade.floor
+                            + " is not above the previous passing floor " + previousPassingFloor
+                            + " — passing floors must strictly ascend (§6.2).");
+                    }
+                    previousPassingFloor = grade.floor;
+                }
+                if (grade.scars === true) sawScarringGrade = true;
+            });
+            if (failingCount !== ONE) {
+                errors.push(label + ": exactly one grade must declare passes:false, found "
+                    + failingCount + " (§6.2 Failed is the single non-passing grade).");
+            }
+            if (!sawScarringGrade) {
+                errors.push(label + ": no grade declares scars:true — a tribulation must be able to "
+                    + "leave a scar (§6.2/§1.3).");
+            }
+
+            // retryCooldownSeconds >= 0 (a beat after a Failed; a negative cooldown is nonsense).
+            if (!(setpiece.retryCooldownSeconds >= ZERO)) {
+                errors.push(label + ": retryCooldownSeconds must be >= 0 (§6.2).");
+            }
+        });
+
+        // The SCAR table (§1.3/§6.2/§10.9): one deepening failure-scar slot with a heal arc.
+        var scar = SETPIECE_DATA.scar;
+        if (!scar) {
+            errors.push("Set-piece: SETPIECE_DATA.scar is required (the failure-scar table, §6.2).");
+        } else {
+            if (!(scar.maxDepth >= ONE)) {
+                errors.push("Set-piece: scar.maxDepth must be >= 1 (§10.9 depth ceiling).");
+            }
+            // 0 < debuffQiMultPerDepth < 1: a debuff (< 1) that never zeroes (> 0). §6.3
+            // completability: debuffQiMultPerDepth^maxDepth stays > 0 for ANY positive value, so the
+            // scarred ascent is ALWAYS completable — proving the per-depth value positive proves it.
+            if (!(scar.debuffQiMultPerDepth > ZERO && scar.debuffQiMultPerDepth < ONE)) {
+                errors.push("Set-piece: scar.debuffQiMultPerDepth " + scar.debuffQiMultPerDepth
+                    + " must be in (0,1) — a debuff (<1) that never zeroes Qi (>0), so a scarred "
+                    + "ascent stays completable (§6.3).");
+            }
+            // Heal-arc reachability (§8.8): a positive accrual rate against a finite positive goal is
+            // reachable by construction (the bar fills in goal/rate seconds), so proving both positive
+            // proves the heal arc terminates — the §1.3 ruin-into-strength conversion always lands.
+            if (!(scar.healGoalPerDepth > ZERO)) {
+                errors.push("Set-piece: scar.healGoalPerDepth must be > 0 (the heal arc length, §8.8).");
+            }
+            if (!(scar.healRatePerSecond > ZERO)) {
+                errors.push("Set-piece: scar.healRatePerSecond must be > 0 — a positive rate against "
+                    + "a finite goal makes the heal arc reachable by construction (§8.8).");
+            }
+            // The healed scar becomes a permanent "Tempered by Ruin" BUFF, never a penalty (§1.3).
+            if (!(scar.temperedQiMultPerDepth >= ONE)) {
+                errors.push("Set-piece: scar.temperedQiMultPerDepth " + scar.temperedQiMultPerDepth
+                    + " must be >= 1 — healed ruin becomes a permanent buff, never a penalty (§1.3).");
+            }
+        }
+    }
+
+    // ----- §8.1/§5 eternal Legacy store integrity -------------------------
+    // LEGACY_DATA is the eternal Act I Legacy Grade store (design §8.1 "Legacy Grades are eternal";
+    // §5 Soul Formation row "Act I Legacy Grade = weighted f(core grade, aspect, Dao Seeds, sect
+    // standing, tribulation grade)"). This check proves the weighted-blend config is well-formed so
+    // computeAndStoreActOneLegacy reads a sound score map and every band pays off:
+    //   - LEGACY_DATA + actOne exist;
+    //   - weights sum to 1 (the gradeScore tolerance precedent §6: each input normalizes to [0,1],
+    //     weighted, summed, clamped — weights off 1 mis-scale the whole score);
+    //   - every denominator positive (the saturation point each input divides by; a zero denominator
+    //     divides by nothing);
+    //   - bands ascending floors in [0,1]; every band qiMult >= 1 (the LIVE-CONSUMER rule §9.2: a
+    //     grade that grants nothing is a dead stat, and legacyQiMult folds this into Qi/sec); band
+    //     keys unique.
+    function checkLegacyData(errors) {
+        if (typeof LEGACY_DATA === "undefined" || !LEGACY_DATA) {
+            errors.push("Legacy: LEGACY_DATA table is required (§8.1).");
+            return;
+        }
+        var actOne = LEGACY_DATA.actOne;
+        if (!actOne) {
+            errors.push("Legacy: LEGACY_DATA.actOne is required (the Act I Legacy Grade config, §5).");
+            return;
+        }
+
+        // Weights sum to 1 (the gradeScore tolerance precedent §6: ONE / hundred = 0.01 tolerance).
+        var weightTolerance = ONE / FACTORY_NUMERICS.hundred;
+        var weights = actOne.weights || {};
+        var legacyWeightSum = ZERO;
+        Object.keys(weights).forEach(function (weightKey) {
+            legacyWeightSum = legacyWeightSum + weights[weightKey];
+        });
+        if (Math.abs(legacyWeightSum - ONE) > weightTolerance) {
+            errors.push("Legacy: actOne.weights sum to " + legacyWeightSum
+                + ", expected 1 (each input normalizes to [0,1] and is weighted, §5).");
+        }
+
+        // Every denominator positive (the per-input saturation point; a zero denominator divides
+        // by nothing, NaN-ing the term).
+        var denominators = actOne.denominators || {};
+        Object.keys(denominators).forEach(function (denominatorKey) {
+            if (!(denominators[denominatorKey] > ZERO)) {
+                errors.push("Legacy: actOne.denominators." + denominatorKey
+                    + " must be > 0 (the input saturation point, §5).");
+            }
+        });
+
+        // Bands: ascending floors in [0,1]; every qiMult >= 1 (the live-consumer rule §9.2); keys unique.
+        var bands = actOne.bands || [];
+        if (!(bands.length > ZERO)) {
+            errors.push("Legacy: actOne.bands must be non-empty (§5).");
+        }
+        var seenBandKeys = {};
+        var previousBandFloor = null;
+        bands.forEach(function (band) {
+            if (seenBandKeys[band.key]) {
+                errors.push("Legacy: duplicate band key '" + band.key + "' (§5).");
+            }
+            seenBandKeys[band.key] = true;
+
+            if (!(band.floor >= ZERO && band.floor <= ONE)) {
+                errors.push("Legacy: band '" + band.key + "' floor " + band.floor
+                    + " must be in [0,1] (the [0,1] weighted score, §5).");
+            }
+            if (previousBandFloor !== null && !(band.floor > previousBandFloor)) {
+                errors.push("Legacy: band '" + band.key + "' floor " + band.floor
+                    + " is not above the previous band floor " + previousBandFloor
+                    + " — band floors must strictly ascend (§5).");
+            }
+            previousBandFloor = band.floor;
+
+            if (!(band.qiMult >= ONE)) {
+                errors.push("Legacy: band '" + band.key + "' qiMult " + band.qiMult
+                    + " must be >= 1 — a Legacy band's qiMult is the live eternal payoff, a grade "
+                    + "that grants nothing is a dead stat (§9.2).");
+            }
+        });
+    }
+
     // ----- §11 no numeric literals in js/build/*.js -----------------------
     // sourceTexts: { filename -> source string }. The node harness supplies these
     // by reading files; in-browser we cannot read source, so the check is skipped
@@ -1855,6 +2198,11 @@
         checks.techniqueData = "ran";
         checkJournalData(errors);
         checks.journalData = "ran";
+        // Slice-6 set-piece + eternal Legacy integrity (design §8.3/§6.2/§1.3/§8.1/§5).
+        checkSetpieceData(errors);
+        checks.setpieceData = "ran";
+        checkLegacyData(errors);
+        checks.legacyData = "ran";
         checks.noNumericLiterals = checkNoNumericLiterals(errors, sourceTexts);
         return { ok: errors.length === ZERO, errors: errors, checks: checks };
     }
@@ -1879,6 +2227,8 @@
         checkSoulAspectData: checkSoulAspectData,
         checkSectData: checkSectData,
         checkTechniqueData: checkTechniqueData,
-        checkJournalData: checkJournalData
+        checkJournalData: checkJournalData,
+        checkSetpieceData: checkSetpieceData,
+        checkLegacyData: checkLegacyData
     };
 })(typeof globalThis !== "undefined" ? globalThis : this);

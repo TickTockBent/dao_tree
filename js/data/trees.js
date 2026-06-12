@@ -41,6 +41,13 @@ var TREE_DATA = {
         // refinement PROGRESS on c wipes with the realm (one-time forge stays forged
         // via coreIsForged()'s stored grade).
         n:    { scope: "tree", tree: "act1" },
+        // Soul Formation (design §5 Act I capstone): row 4, still Act I. The highest Act I tree
+        // row, so its breakthrough cascade resets n/c/f/q below it — the carried core grade and
+        // the chosen aspect survive on the life-scoped Body layer (the §5 carried-artifact
+        // precedent); the tribulation run-state on s SURVIVES s's own prestige (the compiled
+        // doReset is a self-no-op at equal row, the standard cascade) — the once-per-life
+        // capstone is enforced by the tribulationPassed latch on tribGrade, not by a wipe.
+        s:    { scope: "tree", tree: "act1" },
         b:    { scope: "life" },
         gate: { scope: "life" },
         // The Dao lattice (design §4.2): comprehension never resets within a life, so it is
@@ -56,6 +63,12 @@ var TREE_DATA = {
         // latch into player.journal.unlocked and survive even reincarnation — journals and
         // meta-achievements are the ETERNAL record (§8.1). It is a member of no tree, never
         // touched by any reset; the persistence-scope linter already validates eternal entries.
-        journal: { scope: "eternal" }
+        journal: { scope: "eternal" },
+        // The Legacy store (design §8.1 "Legacy Grades are eternal"; slice 6): the Act I Legacy
+        // Grade is computed once on the first tribulation pass and stored eternal-scope — it
+        // survives even reincarnation (Samsara reads it to seed the next life, slice 10). A member
+        // of no tree, never touched by any reset; the persistence-scope linter validates it like
+        // the journal (the other eternal layer).
+        legacy: { scope: "eternal" }
     }
 };

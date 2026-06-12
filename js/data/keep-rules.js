@@ -49,5 +49,18 @@ var KEEP_RULES = [
         onResetOf: "n",     // when Nascent Soul prestiges...
         target: "f",        // ...the Foundation layer keeps:
         keep: ["best"]      // f.best survives, so f sub-stage milestones recompute as kept
+    },
+    {
+        // Soul Formation carries the Nascent Soul climb forward (design §5 capstone / slice 6):
+        // once the formed soul matures partway up Soul Formation, an s breakthrough no longer
+        // wipes the NS climb below it — the soul spares the mountain it just ascended. s milestone
+        // ids are s sub-stage indices; 2 = "Late Soul Formation" (s.best >= 16), a mid sub-stage —
+        // felt permanence earned partway up the capstone realm, the keep-rule reward class
+        // (long-tail, zero new content). ⟨tune⟩
+        key: "soulCarriesTheClimb",
+        grantedBy: { layer: "s", milestone: 2 },
+        onResetOf: "s",     // when Soul Formation prestiges...
+        target: "n",        // ...the Nascent Soul layer keeps:
+        keep: ["best"]      // n.best survives, so n sub-stage milestones recompute as kept
     }
 ];
