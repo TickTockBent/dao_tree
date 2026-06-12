@@ -14,3 +14,6 @@ literals in generated code" rule). See `docs/internal/early-game-spec-v0.1.2.md`
 - `lattice.js` — `LATTICE_DATA` (the Dao lattice: 15 elemental nodes with Glimpse/Seed tiers, Insight currency, declared conflicts — design doc §4.2/§8.7)
 - `stances.js` — `STANCE_DATA` (voluntary toggleable challenge stances with opportunity cost — design doc §6.1/§8.4)
 - `automation.js` — `AUTOMATION_DATA` (milestone-gated automation grants; Tier 1 granted by the Nascent Soul first sub-stage — design doc §1.7/§7.5)
+- `sect.js` — `SECT_DATA` (Sect v1: LIFE-scoped side layer; two archetypes with lattice discounts; Contribution economy; milestones granting stipend/library/arsenal — design doc §4.3)
+- `techniques.js` — `TECHNIQUE_DATA` (permanent arts library; school/universal techniques purchased with Contribution; tier-2 rows gated on the library milestone — design doc §4.3/§8.1)
+- `journal.js` — `JOURNAL_DATA` (narrative journal; ETERNAL-scoped side layer; entries latch once their when condition is met and survive reincarnation — design doc §1.6/§8.1)

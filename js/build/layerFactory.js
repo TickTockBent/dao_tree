@@ -304,14 +304,19 @@ function insightPerSecond() {
     return new Decimal(LATTICE_DATA.insight.baseRate)
         .times(daoNodeInsightMult())
         .times(stanceInsightMult())
-        .times(soulAspectInsightMult());
+        .times(soulAspectInsightMult())
+        // Owned-technique Insight bonus (design §4.3, slice 5). Product of every OWNED
+        // technique's insightMult — identity until a technique with an insightMult effect is
+        // bought, so a pre-slice-5 / no-technique save reads byte-identical (no dead mult §9.2).
+        .times(techniqueInsightMult());
 }
 
 // ---------------------------------------------------------------------------
 // meets(condition) — uniform unlock / done evaluator over a condition object.
 // Keys combine with AND. Supports: qi, realm:[id, numberOrLabel], meridians,
 // temperTier, primaryMeridiansAll, daoNode:[nodeKey, tier], anyDaoNode:tier,
-// daoElementTier:[element, tier]. (§5 unlock / §8 done.)
+// daoElementTier:[element, tier], achievement:[layerId, achievementId],
+// sectJoined:true, contribution:N (sect standing high-water). (§5 unlock / §8 done.)
 // ---------------------------------------------------------------------------
 function meets(condition) {
     if (!condition) return true;
@@ -385,6 +390,43 @@ function meets(condition) {
             });
         }
         if (!elementMet) satisfied = false;
+    }
+
+    // achievement: [layerId, achievementId] — the achievement must be earned. Evaluates via
+    // hasAchievement(layerId, id) exactly as the gate layer's done() reads it, so the same
+    // live-state achievement check works in meets()-gated journal entries, hints, and any
+    // future unlock condition referencing an earned checkpoint (design §4.3 / slice 5).
+    // Guarded defensively: if hasAchievement is absent (pre-engine environments like lint
+    // sandbox) returns false rather than crashing — the condition simply fails safely.
+    if (condition.achievement !== undefined) {
+        var achievementLayerId = condition.achievement[FACTORY_ZERO];
+        var achievementRowId = condition.achievement[FACTORY_ONE];
+        if (typeof hasAchievement !== "function") {
+            satisfied = false;
+        } else if (!hasAchievement(achievementLayerId, achievementRowId)) {
+            satisfied = false;
+        }
+    }
+
+    // sectJoined: true — the player must have chosen a sect archetype this life. Evaluates
+    // via the sectJoined() factory accessor (defined in the slice-5 sect factory surface).
+    // Guarded defensively: if sectJoined() is absent (pre-slice-5) returns false so any
+    // sectJoined-gated condition simply fails safely without crashing. (design §4.3 / slice 5)
+    if (condition.sectJoined === true) {
+        if (typeof sectJoined !== "function") {
+            satisfied = false;
+        } else if (!sectJoined()) {
+            satisfied = false;
+        }
+    }
+
+    // contribution: N — the sect contribution HIGH-WATER (player.sect.best) must be >= N.
+    // Used by the Inner Disciple checkpoint (gates.js): a sect rank is earned by building
+    // standing, not by a momentary balance, so it reads the high-water (which never falls)
+    // exactly like a realm gate reads realmBest. Defensive when the sect layer is absent /
+    // unseeded (contributionBest returns zero), so a pre-slice-5 save fails it safely (§4.3).
+    if (condition.contribution !== undefined) {
+        if (contributionBest().lt(condition.contribution)) satisfied = false;
     }
 
     return satisfied;
@@ -507,7 +549,14 @@ function cultivationQiPerSecond() {
         .times(coreGradeMult())
         .times(daoNodeQiMult())
         .times(stanceQiMult())
-        .times(soulAspectQiMult());
+        .times(soulAspectQiMult())
+        // Sect folds (design §4.3, slice 5). The sect STIPEND milestone grants a permanent
+        // Qi/sec bonus (sectStipendQiMult), and OWNED techniques' qiMult effects compound
+        // (techniqueQiMult). Both are identity until the stipend is earned / a qiMult
+        // technique is owned, so a pre-slice-5 save is byte-for-byte the prior product
+        // (no dead mult §9.2).
+        .times(sectStipendQiMult())
+        .times(techniqueQiMult());
 }
 
 // ---------------------------------------------------------------------------
@@ -1437,8 +1486,8 @@ function makeGateLayer() {
         layerShown: function () { return true; },
         tabFormat: [
             ["display-text", function () {
-                return "Your standing in the sect. Milestones recognised here grant permanent "
-                    + "boons and never reset.";
+                return "The record of your deeds. Milestones recognised here grant permanent "
+                    + "boons and never reset — your sect, and its standing, live on the Sect tab.";
             }],
             "blank",
             "achievements"
@@ -1463,7 +1512,16 @@ function makeDaoNodeBuyable(node) {
         title: node.name,
         cost: function (x) {
             // x is the NEXT tier index (0 Glimpse, 1 Seed); cost is positional over costs[].
-            return new Decimal(node.costs[x]);
+            // Slice-5 fold (design §4.3 "Dao-lattice discount region"): the joined sect's
+            // archetype discounts ITS element's lattice nodes — costs[x] x sectLatticeDiscount
+            // (node.element). The discount is IDENTITY (1) when unjoined or when the node's
+            // element is not the archetype's, so a lattice-before-sect / pre-slice-5 save reads
+            // byte-identical to costs[x] (no behavioural change off the discount region). The
+            // floor() matches the meridian/buyable cost convention so the displayed price is integral.
+            // max(1): a future cheap node (cost 1-3) discounted then floored could read 0 —
+            // a free Dao node. A comprehension is never free (§4.2 scarcity).
+            return new Decimal(node.costs[x]).times(sectLatticeDiscount(node.element))
+                .floor().max(factoryDecimalOne());
         },
         effect: function (x) {
             // Effect of the tier just past (x), surfaced in tmp for the display (no dead mult).
@@ -1503,7 +1561,11 @@ function makeDaoNodeBuyable(node) {
                 var effectValue = nextEffect.qiMult !== undefined ? nextEffect.qiMult : nextEffect.insightMult;
                 line += "<br>Next: " + nextTier.label + " — x" + format(new Decimal(effectValue))
                     + " " + effectWord;
-                line += "<br>Cost: " + format(new Decimal(node.costs[nextTierIndex])) + " "
+                // Show the DISCOUNTED price (the sect fold), so the display matches what cost()
+                // actually charges (§4.3). Identity when unjoined / off the discount region.
+                var discountedNextCost = new Decimal(node.costs[nextTierIndex])
+                    .times(sectLatticeDiscount(node.element)).floor().max(factoryDecimalOne());
+                line += "<br>Cost: " + format(discountedNextCost) + " "
                     + LATTICE_DATA.insight.resource;
             } else {
                 line += "<br>Fully comprehended.";
@@ -1630,6 +1692,573 @@ function makeDaoLayer() {
 }
 
 // ---------------------------------------------------------------------------
+// Sect side-spine readers (design §4.3, slice 5). The sect is the THIRD grammar:
+// a LIFE-scoped row:"side" type:"none" container whose currency (player.sect.points)
+// is CONTRIBUTION. Every reader is defensive like the Body/Dao readers (the sect
+// layer may be unseeded on a pre-slice-5 save), so each returns an identity / zero
+// when the layer is absent — a pre-sect save is byte-for-byte the prior product.
+// ALL numbers resolve from SECT_DATA / TECHNIQUE_DATA / FACTORY_NUMERICS (§11).
+// ---------------------------------------------------------------------------
+function sectLayerId() { return SECT_DATA.id; }
+
+function sectExists() {
+    return !!(player[sectLayerId()] && player[sectLayerId()].unlocked);
+}
+
+// True once the reveal gate (SECT_DATA.reveal) has been met. Latched on the sect layer's
+// `revealed` flag so the tab stays shown once seen (§5a reveal-latch, the dao precedent) —
+// the archetype pick and contribution accrual open only while this is true.
+function sectIsRevealed() {
+    if (sectExists() && player[sectLayerId()].revealed) return true;
+    return meets(SECT_DATA.reveal);
+}
+
+// PINNED SURFACE: an archetype has been chosen (player.sect.archetype !== ""). Defensive
+// when the sect layer is unseeded (a pre-slice-5 save has no player.sect) — returns false.
+function sectJoined() {
+    if (!sectExists()) return false;
+    return player[sectLayerId()].archetype !== "";
+}
+
+// PINNED SURFACE: the chosen archetype's data row, or null when none / unseeded.
+function sectArchetypeRow() {
+    if (!sectJoined()) return null;
+    var chosenKey = player[sectLayerId()].archetype;
+    return SECT_DATA.archetypes.find(function (archetype) {
+        return archetype.key === chosenKey;
+    }) || null;
+}
+
+// The sect contribution high-water (player.sect.best), or zero (unseeded). Used by the
+// Inner Disciple contribution gate (never falls) and the milestone done() checks. The
+// engine's OTHER_LAYERS sweep keeps best = max(best, points) each tick (game.js), so this
+// is the never-falling standing the §4.3 horizontal spine wants.
+function contributionBest() {
+    if (!sectExists()) return factoryDecimalZero();
+    return player[sectLayerId()].best;
+}
+
+// PINNED SURFACE: contribution/sec = rate x (qi/sec)^exponent while joined, zero otherwise.
+// Sub-linear in Qi/sec (exponent < 1, §4.3) so late-game Qi does not trivialize the sect
+// economy. Reads the live cultivationQiPerSecond() as the (qi/sec) base. Zero until JOINED
+// (no pre-join banking), mirroring the dao layer's reveal-gated Insight trickle.
+function contributionPerSecond() {
+    if (!sectJoined()) return factoryDecimalZero();
+    var qiPerSecond = cultivationQiPerSecond();
+    var contributionRate = new Decimal(SECT_DATA.contribution.rate);
+    var contributionExponent = new Decimal(SECT_DATA.contribution.exponent);
+    return contributionRate.times(qiPerSecond.pow(contributionExponent));
+}
+
+// Resolve a sect milestone array index by its key (the milestone id IS the array index, the
+// TMT-milestone convention). Returns the index, or the no-tier sentinel when absent.
+function sectMilestoneIndexForKey(milestoneKey) {
+    var foundIndex = FACTORY_ZERO - FACTORY_ONE;
+    SECT_DATA.milestones.forEach(function (milestone, index) {
+        if (milestone.key === milestoneKey) foundIndex = index;
+    });
+    return foundIndex;
+}
+
+// True once a named sect milestone is held (hasMilestone on the sect layer). Defensive when
+// the sect layer is unseeded (a milestone of an unregistered layer is simply not held).
+function sectMilestoneEarned(milestoneKey) {
+    if (!sectExists()) return false;
+    var milestoneIndex = sectMilestoneIndexForKey(milestoneKey);
+    if (milestoneIndex < FACTORY_ZERO) return false;
+    return hasMilestone(sectLayerId(), milestoneIndex);
+}
+
+// The sect milestone row carrying the stipend reward (the qiMult-bearing milestone).
+function sectStipendMilestoneRow() {
+    return SECT_DATA.milestones.find(function (milestone) {
+        return milestone.reward && milestone.reward.qiMult !== undefined;
+    }) || null;
+}
+
+// PINNED SURFACE: the stipend milestone's Qi/sec reward (identity until earned) -> folded
+// into cultivationQiPerSecond(). Reads the milestone's reward.qiMult; identity (1) until the
+// stipend high-water is met, so a pre-stipend save is byte-identical (no dead mult §9.2).
+function sectStipendQiMult() {
+    var stipendRow = sectStipendMilestoneRow();
+    if (!stipendRow) return factoryDecimalOne();
+    if (!sectMilestoneEarned(stipendRow.key)) return factoryDecimalOne();
+    return new Decimal(stipendRow.reward.qiMult);
+}
+
+// The library milestone row (the milestone whose reward carries libraryTier).
+function sectLibraryMilestoneRow() {
+    return SECT_DATA.milestones.find(function (milestone) {
+        return milestone.reward && milestone.reward.libraryTier !== undefined;
+    }) || null;
+}
+
+// True once the LIBRARY milestone is held — the gate that opens tier-2 technique rows (§4.3).
+function sectLibraryUnlocked() {
+    var libraryRow = sectLibraryMilestoneRow();
+    if (!libraryRow) return false;
+    return sectMilestoneEarned(libraryRow.key);
+}
+
+// PINNED SURFACE: the joined archetype's latticeDiscount for ITS element; identity (1) for
+// every other element and when unjoined. A discount changes a COST (folded into the dao node
+// cost(), §4.3 "Dao-lattice discount region"), so it is NOT a dead-mult entry — but the
+// linter verifies the cost fold references this reader.
+function sectLatticeDiscount(element) {
+    var archetypeRow = sectArchetypeRow();
+    if (!archetypeRow) return factoryDecimalOne();
+    if (archetypeRow.element !== element) return factoryDecimalOne();
+    return new Decimal(archetypeRow.latticeDiscount);
+}
+
+// ---- Techniques (TMT upgrades on the sect layer, design §4.3). A technique's TMT upgrade id
+// is its index in TECHNIQUE_DATA (positional). A technique is OWNED iff hasUpgrade(sect, index).
+function techniqueIsOwned(techniqueIndex) {
+    if (!sectExists()) return false;
+    return hasUpgrade(sectLayerId(), techniqueIndex);
+}
+
+// A technique's school is available iff: school "universal" (always, once joined), or the
+// joined archetype teaches it (the technique's key is in the archetype's techniques list).
+function techniqueSchoolAvailable(technique) {
+    if (!sectJoined()) return false;
+    if (technique.school === "universal") return true;
+    var archetypeRow = sectArchetypeRow();
+    if (!archetypeRow) return false;
+    return archetypeRow.techniques.indexOf(technique.key) !== (FACTORY_ZERO - FACTORY_ONE);
+}
+
+// A technique's TIER is unlocked iff tier 1 (always, once its school is available) or tier 2
+// with the library milestone earned. The deepest gated tier is the library reward.libraryTier.
+function techniqueTierUnlocked(technique) {
+    var tierOne = FACTORY_ONE;
+    if (technique.libraryTier <= tierOne) return true;
+    var libraryRow = sectLibraryMilestoneRow();
+    if (!libraryRow) return false;
+    if (technique.libraryTier <= libraryRow.reward.libraryTier) return sectLibraryUnlocked();
+    return false;
+}
+
+// A technique upgrade is VISIBLE/BUYABLE iff its school AND its tier are unlocked (§4.3).
+function techniqueVisible(technique) {
+    return techniqueSchoolAvailable(technique) && techniqueTierUnlocked(technique);
+}
+
+// PINNED SURFACE: product of OWNED techniques' qiMult -> cultivationQiPerSecond(). Identity
+// until a qiMult technique is owned (no dead mult §9.2).
+function techniqueQiMult() {
+    var product = factoryDecimalOne();
+    if (!sectExists()) return product;
+    TECHNIQUE_DATA.forEach(function (technique, index) {
+        if (technique.effect.qiMult !== undefined && techniqueIsOwned(index)) {
+            product = product.times(technique.effect.qiMult);
+        }
+    });
+    return product;
+}
+
+// PINNED SURFACE: product of OWNED techniques' insightMult -> insightPerSecond(). Identity
+// until an insightMult technique is owned (no dead mult §9.2).
+function techniqueInsightMult() {
+    var product = factoryDecimalOne();
+    if (!sectExists()) return product;
+    TECHNIQUE_DATA.forEach(function (technique, index) {
+        if (technique.effect.insightMult !== undefined && techniqueIsOwned(index)) {
+            product = product.times(technique.effect.insightMult);
+        }
+    });
+    return product;
+}
+
+// ---------------------------------------------------------------------------
+// Sect archetype-pick clickables (design §4.3). The soul-aspect clickable pattern
+// VERBATIM: visible while the sect layer is revealed AND unjoined; once an archetype is
+// picked they all vanish (the pick is ONCE per life). Picking costs NOTHING, confirm()s,
+// then stores player.sect.archetype. Both archetypes are ALWAYS pickable (no gates), and
+// the gate is re-verified at click time (defensive against a double-fire).
+// ---------------------------------------------------------------------------
+function makeSectArchetypeClickable(archetype) {
+    function archetypeSummary() {
+        var percentBase = new Decimal(FACTORY_HUNDRED);
+        var discountPercent = percentBase.sub(new Decimal(archetype.latticeDiscount).times(percentBase));
+        return archetype.name + " — " + archetype.element + " school; "
+            + format(discountPercent) + "% off " + archetype.element + " Dao nodes.";
+    }
+    return {
+        title: archetype.name,
+        display: function () {
+            return archetypeSummary()
+                + "<br>Click to JOIN this sect (permanent this life).";
+        },
+        // Visible only while the sect is revealed AND no archetype is chosen yet.
+        unlocked: function () { return sectIsRevealed() && !sectJoined(); },
+        canClick: function () { return !sectJoined(); },
+        onClick: function () {
+            if (sectJoined()) return; // once per life (defensive against double-fire)
+            var prompt = "Join the " + archetype.name
+                + "? This is permanent for this life — you take one sect's path and keep it.";
+            if (!confirm(prompt)) return;
+            player[sectLayerId()].archetype = archetype.key;
+            if (typeof doPopup === "function") {
+                doPopup("none", "You have joined the " + archetype.name + ".",
+                    "Sect Joined", FACTORY_NUMERICS.one, SECT_DATA.color);
+            }
+        }
+    };
+}
+
+function makeSectArchetypeClickables() {
+    var clickablesObject = {};
+    SECT_DATA.archetypes.forEach(function (archetype, index) {
+        clickablesObject[index] = makeSectArchetypeClickable(archetype);
+    });
+    return clickablesObject;
+}
+
+// ---------------------------------------------------------------------------
+// Technique UPGRADES (design §4.3). One TMT upgrade per TECHNIQUE_DATA row (id = its index).
+// cost is in Contribution (player.sect.points), so the default buyUpg path deducts it from
+// player.sect.points and persists the purchase in player.sect.upgrades (LIFE-scoped, never
+// reset this slice). The upgrade is unlocked() only while its school + tier are available.
+// ---------------------------------------------------------------------------
+function makeSectTechniqueUpgrade(technique) {
+    var percentBase = new Decimal(FACTORY_HUNDRED);
+    function effectLine() {
+        var parts = [];
+        if (technique.effect.qiMult !== undefined) {
+            var qiPercent = new Decimal(technique.effect.qiMult).times(percentBase).sub(percentBase);
+            parts.push("+" + format(qiPercent) + "% Qi/sec");
+        }
+        if (technique.effect.insightMult !== undefined) {
+            var insightPercent = new Decimal(technique.effect.insightMult).times(percentBase).sub(percentBase);
+            parts.push("+" + format(insightPercent) + "% Insight/sec");
+        }
+        return parts.join(", ");
+    }
+    return {
+        title: technique.name,
+        cost: new Decimal(technique.cost),
+        // unlocked gates BOTH visibility and purchasability (buyUpg checks tmp.upgrades[id].
+        // unlocked). School + tier availability drive it; tier-2 needs the library milestone.
+        unlocked: function () { return techniqueVisible(technique); },
+        // description is a FUNCTION (lazy): effectLine() calls format(), which is an engine
+        // global not yet defined at layer-build time — evaluate it per-render, not at build.
+        description: function () { return technique.name + " — " + effectLine() + ". " + technique.flavor; },
+        effect: function () { return technique.effect; }
+    };
+}
+
+function makeSectTechniqueUpgrades() {
+    var upgradesObject = {};
+    TECHNIQUE_DATA.forEach(function (technique, index) {
+        upgradesObject[index] = makeSectTechniqueUpgrade(technique);
+    });
+    return upgradesObject;
+}
+
+// ---------------------------------------------------------------------------
+// Sect contribution milestones (design §4.3). One milestone per SECT_DATA.milestones row
+// (id = its index). done() reads the contribution high-water (player.sect.best) vs the row's
+// `at`, so each latches once earned and never un-earns (the realm-milestone precedent). The
+// rewards are consumed live elsewhere (stipend -> sectStipendQiMult; library -> the technique
+// tier gate; arsenal -> the AUTOMATION_DATA sectFoundationBell grant) — no dead mult (§9.2).
+// ---------------------------------------------------------------------------
+function sectMilestoneRewardDescription(milestone) {
+    if (milestone.reward.qiMult !== undefined) {
+        var percentBase = new Decimal(FACTORY_HUNDRED);
+        var qiPercent = new Decimal(milestone.reward.qiMult).times(percentBase).sub(percentBase);
+        return "Sect stipend: +" + format(qiPercent) + "% Qi/sec";
+    }
+    if (milestone.reward.libraryTier !== undefined) {
+        return "Library access: unlocks tier-2 techniques";
+    }
+    return "Arsenal: auto-prestige Foundation at threshold";
+}
+
+function makeSectMilestones() {
+    var milestones = {};
+    SECT_DATA.milestones.forEach(function (milestone, index) {
+        milestones[index] = {
+            // requirementDescription is rendered raw from tmp (NOT run() as a function, unlike
+            // effectDescription), so it must be a plain string — built at make-time from the
+            // data value (milestone.at), the temper-milestone precedent (no format() call).
+            requirementDescription: milestone.at + " " + SECT_DATA.contribution.resource,
+            // effectDescription IS run() per-render, so it may call format() lazily.
+            effectDescription: function () { return sectMilestoneRewardDescription(milestone); },
+            done: function () {
+                return contributionBest().gte(milestone.at);
+            }
+        };
+    });
+    return milestones;
+}
+
+// ---------------------------------------------------------------------------
+// makeSectLayer() — the LIFE-scoped row:"side" type:"none" Sect container (design §4.3).
+// Contribution is player.sect.points; the archetype pick is clickables, techniques are
+// upgrades, the contribution high-water drives the milestones, and update() accrues
+// contribution + latches the reveal flag. NO doReset -> the sect is reset-immune by
+// topology (life scope), so the joined sect / techniques survive every realm breakthrough.
+// ---------------------------------------------------------------------------
+function makeSectLayer() {
+    return {
+        name: SECT_DATA.name,
+        symbol: SECT_DATA.symbol,
+        color: SECT_DATA.color,
+        row: "side",
+        type: "none", // container: Contribution is the resource, but pick/techniques drive it
+        resource: SECT_DATA.contribution.resource,
+        startData: function () {
+            return {
+                unlocked: true,
+                revealed: false,                // latched true once the reveal gate is first met (§5a)
+                points: factoryDecimalZero(),   // Contribution
+                best: factoryDecimalZero(),     // contribution high-water (drives milestones + the gate)
+                archetype: ""                   // "" = unjoined; the chosen archetype key once joined (§4.3)
+            };
+        },
+        tooltip: function () {
+            var archetypeRow = sectArchetypeRow();
+            return (archetypeRow ? archetypeRow.name : SECT_DATA.name)
+                + " — sect standing (never resets this life)";
+        },
+        // The display name becomes the joined sect's name after the pick (pinned §4.3).
+        getName: function () {
+            var archetypeRow = sectArchetypeRow();
+            return archetypeRow ? archetypeRow.name : SECT_DATA.name;
+        },
+        clickables: makeSectArchetypeClickables(),
+        upgrades: makeSectTechniqueUpgrades(),
+        milestones: makeSectMilestones(),
+        // §5a reveal: hidden until q 2nd Level, then latched shown for the rest of the life.
+        layerShown: function () {
+            if (player[this.layer].revealed) return true;
+            return sectIsRevealed();
+        },
+        // Accrue Contribution only while JOINED (no pre-join banking, §4.3). Latch the reveal
+        // flag the first tick the reveal gate is met; the engine's OTHER_LAYERS sweep keeps
+        // best = max(best, points), so the never-falling standing is maintained for us.
+        update: function (diff) {
+            if (!player[this.layer].revealed && sectIsRevealed()) {
+                player[this.layer].revealed = true;
+            }
+            if (!sectJoined()) return;
+            player[this.layer].points = player[this.layer].points.add(contributionPerSecond().times(diff));
+            if (player[this.layer].points.gt(player[this.layer].best)) {
+                player[this.layer].best = player[this.layer].points;
+            }
+        },
+        // No doReset: a row:"side" life-scoped layer is reset-immune by topology (§4.3 / §8.1).
+        tabFormat: [
+            ["display-text", function () {
+                var archetypeRow = sectArchetypeRow();
+                if (!sectJoined()) {
+                    return "A sect has taken notice of your progress. Choose an archetype below to "
+                        + "JOIN — the choice shapes your technique library and discounts your "
+                        + "sect's Dao element. The pick is permanent for this life.";
+                }
+                var perSecond = contributionPerSecond();
+                var line = "You are a disciple of the <b>" + archetypeRow.name + "</b> ("
+                    + archetypeRow.element + " school).<br>";
+                line += SECT_DATA.contribution.resource + ": <b>"
+                    + format(player[this.layer].points) + "</b> (best "
+                    + format(player[this.layer].best) + ")<br>";
+                line += SECT_DATA.contribution.resource + "/sec: <b>" + format(perSecond)
+                    + "</b> (" + format(new Decimal(SECT_DATA.contribution.rate))
+                    + " x (Qi/sec)^" + format(new Decimal(SECT_DATA.contribution.exponent)) + ")";
+                return line;
+            }],
+            "blank",
+            ["display-text", function () {
+                return sectJoined() ? "" : "<b>Choose your sect</b>";
+            }],
+            "clickables",
+            "blank",
+            "milestones",
+            "blank",
+            ["display-text", function () {
+                return sectJoined()
+                    ? "<b>Techniques</b> (bought with " + SECT_DATA.contribution.resource + ")"
+                    : "";
+            }],
+            "upgrades"
+        ]
+    };
+}
+
+// ---------------------------------------------------------------------------
+// Journal layer (design §1.6, ETERNAL scope). Narrative entries LATCH into
+// player.journal.unlocked (the array of entry keys) via update() once their `when`
+// condition is met, and NEVER re-lock. player.journal.read tracks viewed keys; the layer
+// glows (shouldNotify) while there are unlocked entries not yet read; a "Reflect" clickable
+// marks all read. The tab renders unlocked entries chronologically (data order), unread
+// bolded. No doReset — the journal is the eternal record, untouched by any reset (§8.1).
+//
+// NOTE on `unlocked`: the pinned contract stores entry keys in player.journal.unlocked. An
+// empty array is truthy in JS, so it doubles as the engine's layer-unlocked flag (game.js
+// only tests truthiness of player[layer].unlocked), and getStartLayerData leaves a defined
+// `unlocked` untouched — so `unlocked: []` is both the entry-key store AND a valid "layer
+// is unlocked" flag, with no separate boolean needed.
+// ---------------------------------------------------------------------------
+function journalLayerId() { return JOURNAL_DATA.id; }
+
+function journalExists() {
+    return !!(player[journalLayerId()] && player[journalLayerId()].unlocked);
+}
+
+// The latched entry-key array (player.journal.unlocked), defensively defaulting to empty.
+function journalUnlockedKeys() {
+    if (!journalExists()) return [];
+    var unlockedKeys = player[journalLayerId()].unlocked;
+    return Array.isArray(unlockedKeys) ? unlockedKeys : [];
+}
+
+// The read-key array (player.journal.read), defensively defaulting to empty.
+function journalReadKeys() {
+    if (!journalExists()) return [];
+    var readKeys = player[journalLayerId()].read;
+    return Array.isArray(readKeys) ? readKeys : [];
+}
+
+// Evaluate one journal entry's `when`. The prose entries use the standard meets() grammar
+// PLUS the hint-only key layerUnlocked (e.g. firstBreath: { layerUnlocked: "q" }), which
+// meets() does not know — so handle layerUnlocked here, then delegate the rest to meets().
+// Defensive: an absent meets() (lint sandbox) fails the entry safely rather than crashing.
+function journalEntryConditionMet(when) {
+    if (!when) return true;
+    if (when.layerUnlocked !== undefined) {
+        if (!(player[when.layerUnlocked] && player[when.layerUnlocked].unlocked)) return false;
+    }
+    // Build the meets()-only subset (strip the hint-only layerUnlocked key) and delegate.
+    var meetableCondition = {};
+    var hasMeetable = false;
+    Object.keys(when).forEach(function (conditionKey) {
+        if (conditionKey === "layerUnlocked") return;
+        meetableCondition[conditionKey] = when[conditionKey];
+        hasMeetable = true;
+    });
+    if (!hasMeetable) return true;
+    if (typeof meets !== "function") return false;
+    return meets(meetableCondition);
+}
+
+// True iff the entry key is already latched into player.journal.unlocked.
+function journalEntryUnlocked(entryKey) {
+    return journalUnlockedKeys().indexOf(entryKey) !== (FACTORY_ZERO - FACTORY_ONE);
+}
+
+// True iff the entry key has been marked read.
+function journalEntryRead(entryKey) {
+    return journalReadKeys().indexOf(entryKey) !== (FACTORY_ZERO - FACTORY_ONE);
+}
+
+// Count of unlocked-but-unread entries (drives the new-entry glow, §1.6).
+function journalUnreadCount() {
+    var unreadCount = FACTORY_ZERO;
+    JOURNAL_DATA.entries.forEach(function (entry) {
+        if (journalEntryUnlocked(entry.key) && !journalEntryRead(entry.key)) {
+            unreadCount = unreadCount + FACTORY_ONE;
+        }
+    });
+    return unreadCount;
+}
+
+// The "Reflect" clickable: marks every unlocked entry read (clears the glow, §1.6).
+function makeJournalReflectClickable() {
+    return {
+        title: "Reflect",
+        display: function () {
+            var unread = journalUnreadCount();
+            if (unread > FACTORY_ZERO) {
+                return "Reflect on " + format(new Decimal(unread)) + " new entr"
+                    + (unread === FACTORY_ONE ? "y" : "ies") + " — mark all read.";
+            }
+            return "Nothing new to reflect on.";
+        },
+        unlocked: function () { return true; },
+        canClick: function () { return journalUnreadCount() > FACTORY_ZERO; },
+        onClick: function () {
+            JOURNAL_DATA.entries.forEach(function (entry) {
+                if (journalEntryUnlocked(entry.key) && !journalEntryRead(entry.key)) {
+                    player[journalLayerId()].read.push(entry.key);
+                }
+            });
+        }
+    };
+}
+
+// The journal's single clickable object: id FACTORY_ZERO -> the Reflect clickable
+// (no numeric-literal key, §11).
+function makeJournalClickables() {
+    var clickablesObject = {};
+    clickablesObject[FACTORY_ZERO] = makeJournalReflectClickable();
+    return clickablesObject;
+}
+
+function makeJournalLayer() {
+    return {
+        name: JOURNAL_DATA.name,
+        symbol: JOURNAL_DATA.symbol,
+        color: JOURNAL_DATA.color,
+        row: "side",
+        type: "none", // pure narrative side layer: no resource, no prestige
+        startData: function () {
+            return {
+                // player.journal.unlocked is the latched entry-key array (pinned §1.6). An
+                // empty array is truthy, so it also satisfies the engine's layer-unlocked
+                // truthiness test — no separate boolean flag needed.
+                unlocked: [],
+                read: []                        // viewed entry keys (the new-entry glow clears these)
+            };
+        },
+        tooltip: function () { return JOURNAL_DATA.name + " — your record of the road (never resets)"; },
+        // One clickable: Reflect (marks all read). The id is FACTORY_ZERO (no numeric literal §11).
+        clickables: makeJournalClickables(),
+        // Latch newly-met entries into player.journal.unlocked each tick; once in, an entry is
+        // never re-evaluated (it stays unlocked forever, even across reincarnation — §1.6/§8.1).
+        update: function () {
+            var journalState = player[this.layer];
+            if (!Array.isArray(journalState.unlocked)) journalState.unlocked = [];
+            if (!Array.isArray(journalState.read)) journalState.read = [];
+            JOURNAL_DATA.entries.forEach(function (entry) {
+                if (journalState.unlocked.indexOf(entry.key) !== (FACTORY_ZERO - FACTORY_ONE)) {
+                    return; // already latched — never re-evaluate
+                }
+                if (journalEntryConditionMet(entry.when)) {
+                    journalState.unlocked.push(entry.key);
+                }
+            });
+        },
+        // Glow while there are unlocked entries not yet read (the new-entry glow, §1.6).
+        shouldNotify: function () { return journalUnreadCount() > FACTORY_ZERO; },
+        layerShown: function () { return true; },
+        tabFormat: [
+            ["display-text", function () {
+                return "Your journal — the quiet record of the road so far. New entries unlock as "
+                    + "you progress; reflect on them to clear the mark.";
+            }],
+            "blank",
+            "clickables",
+            "blank",
+            ["display-text", function () {
+                if (journalUnlockedKeys().length === FACTORY_ZERO) {
+                    return "<i>No entries yet. Your story begins with your first breath of qi.</i>";
+                }
+                var lines = [];
+                JOURNAL_DATA.entries.forEach(function (entry) {
+                    if (!journalEntryUnlocked(entry.key)) return;
+                    var unread = !journalEntryRead(entry.key);
+                    var title = unread ? "<b>" + entry.title + "</b>" : entry.title;
+                    var body = unread ? "<b>" + entry.text + "</b>" : entry.text;
+                    lines.push(title + "<br>" + body);
+                });
+                return lines.join("<br><br>");
+            }]
+        ]
+    };
+}
+
+// ---------------------------------------------------------------------------
 // Registration. Run the linter first; on failure it hard-stops load (§11).
 // ---------------------------------------------------------------------------
 function registerCultivationLayers() {
@@ -1659,6 +2288,13 @@ function registerCultivationLayers() {
     addLayer(GATE_DATA.id, makeGateLayer());
     requireTreeEntry(LATTICE_DATA.id);
     addLayer(LATTICE_DATA.id, makeDaoLayer());
+    // The Sect side-spine (design §4.3) and the Journal (design §1.6), slice 5. Both are
+    // non-tree layers (sect life-scoped, journal eternal-scoped) — requireTreeEntry proves
+    // their TREE_DATA scope entry exists before registering (defense in depth ahead of the linter).
+    requireTreeEntry(SECT_DATA.id);
+    addLayer(SECT_DATA.id, makeSectLayer());
+    requireTreeEntry(JOURNAL_DATA.id);
+    addLayer(JOURNAL_DATA.id, makeJournalLayer());
     REALM_DATA.forEach(function (realmData) {
         requireTreeEntry(realmData.id);
         addLayer(realmData.id, makeRealmLayer(realmData));

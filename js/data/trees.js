@@ -46,6 +46,16 @@ var TREE_DATA = {
         // The Dao lattice (design §4.2): comprehension never resets within a life, so it is
         // LIFE-scoped — a member of no tree, untouched by any realm breakthrough cascade.
         // Reincarnation persistence (Glimpses free, Seeds via memory fragments) is a future slice.
-        dao:  { scope: "life" }
+        dao:  { scope: "life" },
+        // The Sect side-spine (design §4.3 "horizontal standing", slice 5): Contribution,
+        // the technique library (player.sect.upgrades), and the chosen archetype all survive
+        // every realm breakthrough — LIFE-scoped, a member of no tree. (World-rank re-pricing
+        // of the arsenal across a reincarnation, §4.3, is a future slice.)
+        sect: { scope: "life" },
+        // The Journal (design §1.6 / §8.1): the FIRST eternal-scoped layer. Narrative entries
+        // latch into player.journal.unlocked and survive even reincarnation — journals and
+        // meta-achievements are the ETERNAL record (§8.1). It is a member of no tree, never
+        // touched by any reset; the persistence-scope linter already validates eternal entries.
+        journal: { scope: "eternal" }
     }
 };

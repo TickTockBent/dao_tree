@@ -30,8 +30,14 @@
 
 var GATE_DATA = {
     id: "gate",
-    name: "Sect Standing",
-    symbol: "Sect",
+    // Display renamed to "Deeds" (slice 5): the gate layer is the CHECKPOINT RECORD — the
+    // deeds the world recognizes (Outer/Inner Disciple, tournaments, promotions). The sect
+    // IDENTITY (which sect, its techniques, its contribution) now lives on the dedicated
+    // `sect` layer (sect.js). The id "gate" and the achievement ids are UNCHANGED — hints,
+    // unlock conditions, and the smoke harness reference them by id (§8.5/§5a), so only the
+    // human-facing display name moves.
+    name: "Deeds",
+    symbol: "事",                          // the "deed/affair" glyph
     color: "#9a8fd8",
 
     achievements: [
@@ -46,6 +52,24 @@ var GATE_DATA = {
             done: { realm: ["f", "Early Foundation"], meridians: 6, temperTier: "Flesh" },
             // +25% Qi/sec sect stipend (§8). Reads nothing it suppresses.
             effect: { qiMult: 1.25 },
+            gates: null
+        },
+        {
+            // Inner Disciple (slice 5): the next sect rank as a checkpoint (progression-map §3
+            // "sect ranks as checkpoints"). Earned by JOINING a sect, building real standing
+            // (contribution high-water), and forging a core. done() combines the new sectJoined
+            // meets() key with a contribution-best floor and a realm gate.
+            id: 12,
+            key: "innerDisciple",
+            kind: "checkpoint",
+            name: "Inner Disciple",
+            // sectJoined: true -> sectJoined() ; contribution best >= 1000 (mid-game standing,
+            // past the stipend milestone at 250, below the library at 4000) ; realm c Core Forged.
+            // Named stage label, not numeric (§5a). All three combine with AND.
+            done: { sectJoined: true, contribution: 1000, realm: ["c", "Core Forged"] },
+            // +30% Qi/sec — a permanent boon for the rank, larger than Outer Disciple's +25%
+            // (a deeper checkpoint). Folds into gateMult() exactly like Outer Disciple. ⟨tune⟩
+            effect: { qiMult: 1.30 },
             gates: null
         }
     ]

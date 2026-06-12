@@ -104,6 +104,28 @@ const engineFiles = [
     "js/utils/save.js"
 ];
 
+// Slice-5 optional data files: loaded when present (see lint-node.js for the same pattern).
+// When absent the smoke test runs against the pre-sect engine state; no assertion currently
+// requires sect/techniques/journal, so the existing 104 assertions pass either way.
+const optionalEngineFiles = [
+    "js/data/sect.js",
+    "js/data/techniques.js",
+    "js/data/journal.js"
+];
+
+optionalEngineFiles.forEach(function (relative) {
+    const full = path.join(projectRoot, relative);
+    if (!fs.existsSync(full)) {
+        console.warn("SMOKE NOTE: optional file not yet present (expected slice 5): " + relative);
+        return;
+    }
+    try {
+        vm.runInContext(fs.readFileSync(full, "utf8"), context, { filename: relative });
+    } catch (loadError) {
+        fail("loading optional " + relative + " threw: " + loadError.stack);
+    }
+});
+
 engineFiles.forEach(function (relative) {
     const full = path.join(projectRoot, relative);
     if (!fs.existsSync(full)) fail("missing engine file: " + full);
@@ -159,6 +181,14 @@ boot("player.points = new Decimal(200); updateTemp(); updateTemp();");
 boot("doReset('q')");
 check("q prestige: q gains points and Qi resets",
     "player.q.points.gt(0) && player.points.eq(0) && player.q.unlocked === true");
+// Slice 5: the sect reveals at q 2nd Level and the joinSect hint (cascade row 1) fires while
+// the sect is revealed-but-unjoined — which would shadow every state-machine hint below it.
+// In real play the player joins early; mirror that here by joining a sect ONCE (it is
+// life-scoped and never resets, so this clears joinSect for every block that follows). The
+// join is direct state (player.sect.archetype), the same set a confirmed pick performs.
+boot("player.sect.archetype = SECT_DATA.archetypes[0].key; updateTemp(); updateTemp();");
+check("slice-5 sect: joining a sect clears the joinSect hint (sectJoined true)",
+    "sectJoined() === true");
 check("hint: q unlocked shows climbQi", "cultivationCurrentHint().key === 'climbQi'");
 
 // 4. f prestige WITHOUT the Peak Foundation milestone.
@@ -364,8 +394,10 @@ check("slice-4 boot: n is tree-scoped in act1",
     "TREE_DATA.layers.n.scope === 'tree' && TREE_DATA.layers.n.tree === 'act1'");
 check("slice-4 boot: n carries a compiled doReset (tree-scoped)",
     "typeof layers.n.doReset === 'function'");
-check("slice-4 boot: AUTOMATION_DATA loaded with exactly 3 rows",
-    "Array.isArray(AUTOMATION_DATA) && AUTOMATION_DATA.length === 3");
+// Slice 5 adds the sectFoundationBell arsenal row, so the count is now 4 (was 3 in slice 4):
+// the three Nascent Soul Tier-1 grants plus the sect arsenal auto-Foundation-prestige.
+check("slice-5 boot: AUTOMATION_DATA loaded with exactly 4 rows (3 NS Tier-1 + sect arsenal)",
+    "Array.isArray(AUTOMATION_DATA) && AUTOMATION_DATA.length === 4");
 
 // 15. n prestige cascade and carried-artifact core. Set up all prerequisites:
 //     forged core (b.coreGrade = 0, the first ladder index), c.best >= 2 (Core Refined,
@@ -602,6 +634,350 @@ check("slice-4 hints: metal root Glimpse still owned (dao 11 >= 1)",
     "getBuyableAmount('dao', 11).gte(1)");
 check("slice-4 hints: enterTrance fires in first-Glimpse window (q below 4th Level)",
     "cultivationCurrentHint().key === 'enterTrance'");
+
+// ---------------------------------------------------------------------------
+// Slice 5 — Sect, Journal, Techniques, Arsenal, Discount, Persistence, Hints.
+// Appended after the existing 104 assertions (blocks 1-20, untouched).
+//
+// State entering this block (from block 20 setup):
+//   player.sect.archetype = SECT_DATA.archetypes[0].key  ("azureSword", set in block 3)
+//   player.sect.points    = 0 (no contribution accrued)
+//   player.sect.best      = 0 (no contribution high-water)
+//   player.sect.revealed  = false (was not explicitly set; reveal gate may or may not be met)
+//   player.journal.unlocked = [], player.journal.read = []
+//   player.b.coreGrade    = BODY_DATA.grades.coreGrade.startIndex  (not forged)
+//   player.b.soulAspect   = ""  (reset in block 20)
+//   player.c.unlocked     = false
+//   player.f.best         = 0
+//   player.n.unlocked     = false, n.best = 0
+//   player.q.best         = substageThreshold('q','4th Level') - 1  (below 4th Level)
+//   player.dao.revealed   = true, dao.points > 0
+//   dao 11 (metal root)   = 2  (Seed, from block 17), dao 21 (sword) = 1 (Glimpse)
+// ---------------------------------------------------------------------------
+
+// 21. Boot: sect (life) + journal (eternal) registered, neither carries doReset;
+//     startData shapes (sect points/archetype, journal unlocked/read arrays).
+check("slice-5 boot: sect registered in layers", "!!layers.sect");
+check("slice-5 boot: journal registered in layers", "!!layers.journal");
+check("slice-5 boot: sect is life-scoped in TREE_DATA",
+    "TREE_DATA.layers.sect.scope === 'life'");
+check("slice-5 boot: journal is eternal-scoped in TREE_DATA",
+    "TREE_DATA.layers.journal.scope === 'eternal'");
+check("slice-5 boot: sect carries NO doReset (life-scope immunity)",
+    "layers.sect.doReset === undefined");
+check("slice-5 boot: journal carries NO doReset (eternal-scope immunity)",
+    "layers.journal.doReset === undefined");
+// startData shapes: sect must have points/archetype; journal must have unlocked/read arrays.
+check("slice-5 boot: player.sect has points (Contribution) and archetype in startData",
+    "player.sect.points !== undefined && player.sect.archetype !== undefined");
+check("slice-5 boot: player.journal.unlocked is an array (the entry-key store)",
+    "Array.isArray(player.journal.unlocked)");
+check("slice-5 boot: player.journal.read is an array (the viewed-key store)",
+    "Array.isArray(player.journal.read)");
+
+// 22. Reveal + pick: sect hidden when not yet revealed; both archetype clickables pickable
+//     while unjoined; picking stores the archetype; second pick impossible; contribution/sec
+//     zero before joining, accruing after.
+//
+//     Sub-block (a): reset the archetype to re-exercise the reveal/pick flow.
+//     The sect layer is always shown (layerShown returns true when revealed, or when
+//     meets(SECT_DATA.reveal) — the reveal gate is q 2nd Level at:3; q.best is currently
+//     substageThreshold('q','4th Level')-1 which is 19 >= 3, so the gate IS met already.
+//     Force-clear the revealed latch to isolate the layerShown logic pre-latch.
+boot("player.sect.archetype = ''; player.sect.revealed = false; updateTemp(); updateTemp();");
+check("slice-5 reveal: sect NOT revealed (latch clear) but shown because reveal gate is met",
+    "tmp.sect.layerShown === true && player.sect.revealed === false");
+// Drive a sect update() tick so the revealed latch fires.
+boot("layers.sect.update.call({layer:'sect'}, 1); updateTemp(); updateTemp();");
+check("slice-5 reveal: revealed flag latches after the first update() tick",
+    "player.sect.revealed === true");
+// Both archetype clickables must be pickable (unlocked = true, canClick = true) while unjoined.
+// Clickable 0 = azureSword, clickable 1 = stoneFormation.
+check("slice-5 reveal: archetype clickable 0 (azureSword) unlocked while unjoined",
+    "tmp.sect.clickables[0].unlocked === true");
+check("slice-5 reveal: archetype clickable 0 (azureSword) canClick while unjoined",
+    "tmp.sect.clickables[0].canClick === true");
+check("slice-5 reveal: archetype clickable 1 (stoneFormation) unlocked while unjoined",
+    "tmp.sect.clickables[1].unlocked === true");
+check("slice-5 reveal: archetype clickable 1 (stoneFormation) canClick while unjoined",
+    "tmp.sect.clickables[1].canClick === true");
+//     Sub-block (b): pick azureSword (clickable 0).
+boot("clickClickable('sect', 0); updateTemp(); updateTemp();");
+check("slice-5 pick: archetype stored as azureSword after clicking clickable 0",
+    "player.sect.archetype === SECT_DATA.archetypes[0].key");
+check("slice-5 pick: sectJoined() true after pick",
+    "sectJoined() === true");
+check("slice-5 pick: sectArchetypeRow() resolves to azureSword",
+    "sectArchetypeRow() !== null && sectArchetypeRow().key === 'azureSword'");
+//     Once joined, both clickables must vanish (unlocked = false — the once-per-life gate).
+check("slice-5 pick: clickable 0 unlocked = false once joined (once per life)",
+    "tmp.sect.clickables[0].unlocked === false");
+check("slice-5 pick: clickable 1 unlocked = false once joined (once per life)",
+    "tmp.sect.clickables[1].unlocked === false");
+//     Sub-block (c): second pick attempt must have no effect (canClick false = pick rejected).
+//     Direct state approach: try to set archetype to stoneFormation via clickClickable; engine
+//     checks canClick (which is false when joined), so the onClick guard returns early.
+boot("clickClickable('sect', 1); updateTemp(); updateTemp();");
+check("slice-5 pick: clicking stoneFormation after joining leaves azureSword unchanged",
+    "player.sect.archetype === SECT_DATA.archetypes[0].key");
+//     Sub-block (d): contribution/sec zero before joining (set archetype = '' momentarily).
+boot("player.sect.archetype = ''; updateTemp(); updateTemp();");
+check("slice-5 accrual: contributionPerSecond() is zero when archetype is unset (unjoined)",
+    "contributionPerSecond().eq(0)");
+//     Restore the join and drive an update() tick with sufficient Qi.
+boot("player.sect.archetype = SECT_DATA.archetypes[0].key;");
+boot("player.points = new Decimal(1000); player.q.unlocked = true; player.q.best = new Decimal(substageThreshold('q','4th Level')); updateTemp(); updateTemp();");
+boot("layers.sect.update.call({layer:'sect'}, 1); updateTemp();");
+check("slice-5 accrual: contributionPerSecond() > 0 once joined (rate x qi^exponent)",
+    "contributionPerSecond().gt(0)");
+check("slice-5 accrual: player.sect.points > 0 after one update() tick while joined",
+    "player.sect.points.gt(0)");
+
+// 23. Economy: buy a tier-1 school technique through the engine's upgrade path ->
+//     contribution deducted, techniqueQiMult() moves off identity; the OTHER school's
+//     technique not purchasable; a tier-2 technique locked until the library milestone,
+//     purchasable after.
+//
+//     Grant enough Contribution to cover the cheapest tier-1 technique (azureForm: cost 600).
+//     TECHNIQUE_DATA index 0 = azureForm (sword, tier 1, cost 600).
+//     TECHNIQUE_DATA index 3 = stoneSkin  (formation, tier 1, cost 600) — wrong school.
+//     TECHNIQUE_DATA index 2 = swordHeart (sword, tier 2, cost 9000) — wrong tier without library.
+boot("player.sect.points = new Decimal(TECHNIQUE_DATA[0].cost + 100); player.sect.best = player.sect.points; updateTemp(); updateTemp();");
+// Verify azureForm (index 0) is visible/unlocked for the azureSword archetype.
+check("slice-5 tech: azureForm upgrade (index 0) is unlocked for azureSword archetype",
+    "tmp.sect.upgrades[0].unlocked === true");
+// Verify stoneSkin (index 3, formation school) is NOT unlocked for azureSword.
+check("slice-5 tech: stoneSkin upgrade (index 3) NOT unlocked for azureSword (wrong school)",
+    "tmp.sect.upgrades[3].unlocked === false");
+// Verify swordHeart (index 2, tier 2) is NOT unlocked yet (no library milestone).
+check("slice-5 tech: swordHeart upgrade (index 2, tier-2) NOT unlocked before library milestone",
+    "tmp.sect.upgrades[2].unlocked === false");
+// Buy azureForm (index 0) via buyUpgrade.
+boot("var preBuyPoints = player.sect.points.toNumber(); buyUpgrade('sect', 0); updateTemp(); updateTemp();");
+check("slice-5 tech: azureForm (index 0) purchased (hasUpgrade returns true)",
+    "hasUpgrade('sect', 0) === true");
+check("slice-5 tech: Contribution deducted by azureForm cost after purchase",
+    "player.sect.points.lt(preBuyPoints)");
+check("slice-5 tech: techniqueQiMult() > 1 after buying azureForm (qiMult effect)",
+    "techniqueQiMult().gt(1)");
+// techniqueInsightMult() should still be identity (azureForm has qiMult, not insightMult).
+check("slice-5 tech: techniqueInsightMult() identity after buying azureForm (no insightMult technique owned)",
+    "techniqueInsightMult().eq(1)");
+// Buy a technique with insightMult: severingArc (index 1, sword, tier 1, cost 1800, insightMult 1.20).
+// Ensure enough contribution.
+boot("player.sect.points = new Decimal(TECHNIQUE_DATA[1].cost + 100); player.sect.best = player.sect.points; updateTemp(); updateTemp();");
+check("slice-5 tech: severingArc upgrade (index 1) is unlocked for azureSword",
+    "tmp.sect.upgrades[1].unlocked === true");
+boot("buyUpgrade('sect', 1); updateTemp(); updateTemp();");
+check("slice-5 tech: techniqueInsightMult() > 1 after buying severingArc (insightMult 1.20)",
+    "techniqueInsightMult().gt(1)");
+// Tier-2 gating: earn the library milestone (drive contribution best to SECT_DATA.milestones[1].at).
+// Before: swordHeart (index 2) must remain locked.
+boot("player.sect.best = new Decimal(SECT_DATA.milestones[1].at - 1); updateMilestones('sect'); updateTemp(); updateTemp();");
+check("slice-5 tech: swordHeart (tier-2) still NOT unlocked below library milestone",
+    "tmp.sect.upgrades[2].unlocked === false");
+// Now earn the library milestone by pushing best to the threshold.
+boot("player.sect.best = new Decimal(SECT_DATA.milestones[1].at); updateMilestones('sect'); updateTemp(); updateTemp();");
+check("slice-5 tech: library milestone earned (hasMilestone sect 1)",
+    "hasMilestone('sect', 1) === true");
+check("slice-5 tech: swordHeart (tier-2) NOW unlocked after library milestone",
+    "tmp.sect.upgrades[2].unlocked === true");
+// Buy swordHeart (index 2) with sufficient points.
+boot("player.sect.points = new Decimal(TECHNIQUE_DATA[2].cost + 100); updateTemp(); updateTemp();");
+boot("buyUpgrade('sect', 2); updateTemp(); updateTemp();");
+check("slice-5 tech: swordHeart (index 2) purchased after library milestone",
+    "hasUpgrade('sect', 2) === true");
+
+// 24. Discount: a metal lattice node's tmp cost drops by the azureSword latticeDiscount after
+//     joining (compare before/after), a non-metal node's cost unchanged.
+//
+//     The metal root node (buyableId 11, element "metal") should have its cost folded with
+//     sectLatticeDiscount("metal"). azureSword has latticeDiscount 0.75, so next-tier cost
+//     should be floor(normalCost * 0.75). The earth root (buyableId 15, element "earth")
+//     must be unchanged (discount returns identity for non-archetype element).
+//
+//     State: archetype = azureSword (joined). Metal root (dao 11) is at tier 2 (Seed, maxed);
+//     earth root (dao 15) is at tier 0 (unowned). We need to compare costs.
+//     The metal node at tier 2 is MAXED (purchaseLimit = 2 for Glimpse+Seed), so we check a
+//     non-maxed metal node. Use the sword node (dao 21, buyableId 21, element "metal") which
+//     is at tier 1 (Glimpse). Its next cost should be node.costs[1] * 0.75 (floor).
+//     Node sword: costs[1] = 800 (Seed cost). Discounted: floor(800 * 0.75) = 600.
+boot("updateTemp(); updateTemp();");
+// Isolate: read the sword node's tmp cost (it's at tier 1, next is Seed).
+// tmp.dao.buyables[21].cost is costs[1] * sectLatticeDiscount("metal")
+check("slice-5 discount: sword node (metal, buyableId 21) tmp cost is discounted by azureSword latticeDiscount",
+    "(function(){ var swordNode = LATTICE_DATA.nodes.find(function(n){return n.buyableId===21;}); var rawSeedCost = swordNode.costs[1]; var discountedCost = Math.floor(rawSeedCost * SECT_DATA.archetypes[0].latticeDiscount); return tmp.dao.buyables[21].cost.eq(discountedCost); })()");
+// Compare earth root (buyableId 15, element "earth") — its cost must be undiscounted.
+// Earth root is at tier 0, so next cost = costs[0] = 100 (unchanged, no discount).
+check("slice-5 discount: earth root (element earth, buyableId 15) cost NOT discounted (identity)",
+    "(function(){ var earthNode = LATTICE_DATA.nodes.find(function(n){return n.buyableId===15;}); var rawGlimpseCost = earthNode.costs[0]; return tmp.dao.buyables[15].cost.eq(rawGlimpseCost); })()");
+// Verify sectLatticeDiscount() returns the archetype's discount for metal, identity for earth.
+check("slice-5 discount: sectLatticeDiscount('metal') equals azureSword.latticeDiscount",
+    "sectLatticeDiscount('metal').eq(SECT_DATA.archetypes[0].latticeDiscount)");
+check("slice-5 discount: sectLatticeDiscount('earth') equals 1 (identity for non-archetype element)",
+    "sectLatticeDiscount('earth').eq(1)");
+
+// 25. Arsenal: the sectFoundationBell automation (AUTOMATION_DATA[3], grantedBy sect milestone 2).
+//     (a) Before the arsenal milestone: f has no auto-prestige.
+boot("player.sect.best = new Decimal(SECT_DATA.milestones[2].at - 1); updateMilestones('sect'); updateTemp(); updateTemp();");
+check("slice-5 arsenal: before arsenal milestone, automationGranted(AUTOMATION_DATA[3]) is false",
+    "automationGranted(AUTOMATION_DATA[3]) === false");
+// f's autoPrestige must be false (no granted arsenal row targeting f).
+boot("player.f.unlocked = true; player.f.best = new Decimal(22); player.points = new Decimal(0); updateTemp(); updateTemp();");
+check("slice-5 arsenal: tmp.f.autoPrestige false before arsenal milestone",
+    "tmp.f.autoPrestige === false");
+//     (b) Earn the arsenal milestone. Then check automationGranted and the threshold semantics.
+boot("player.sect.best = new Decimal(SECT_DATA.milestones[2].at); updateMilestones('sect'); updateTemp(); updateTemp();");
+check("slice-5 arsenal: arsenal milestone earned (hasMilestone sect 2)",
+    "hasMilestone('sect', 2) === true");
+check("slice-5 arsenal: automationGranted(AUTOMATION_DATA[3]) true after arsenal milestone",
+    "automationGranted(AUTOMATION_DATA[3]) === true");
+//     Threshold semantics (gainFraction): f.points = 0 (the pending gain trivially >= 0 x fraction),
+//     so autoPrestige fires. Then f.points = HUGE so the gain is tiny relative to current -> holds off.
+//     f.canReset requires player.points >= f.requires(); grant enough Qi for both sub-cases.
+boot("player.q.best = new Decimal(substageThreshold('q', '6th Level')); player.q.points = new Decimal(substageThreshold('q', '6th Level')); updateMilestones('q');");
+boot("player.points = new Decimal(layers.f.requires().times(4)); player.f.points = new Decimal(0); updateTemp(); updateTemp();");
+check("slice-5 arsenal: tmp.f.autoPrestige true when f.points is zero (gain >= fraction * 0)",
+    "tmp.f.autoPrestige === true && tmp.f.canReset === true");
+// Set f.points huge so pending gain is tiny relative to current: holds off.
+// Keep Qi (player.points) sufficient for canReset.
+boot("player.f.points = new Decimal(1e12); player.points = new Decimal(layers.f.requires().times(4)); updateTemp(); updateTemp();");
+check("slice-5 arsenal: tmp.f.autoPrestige false when f.points huge (gain < gainFraction * 1e12)",
+    "tmp.f.autoPrestige === false && tmp.f.canReset === true");
+//     (c) End-to-end: drive a gameLoop tick while f.canReset and autoPrestige would fire.
+//         Set f.points back to zero so the threshold is met, give enough Qi for f canReset.
+boot("player.f.points = new Decimal(0); player.points = new Decimal(layers.f.requires().times(4)); updateTemp(); updateTemp();");
+check("slice-5 arsenal: pre-gameLoop: tmp.f.autoPrestige true and canReset true",
+    "tmp.f.autoPrestige === true && tmp.f.canReset === true");
+boot("gameLoop(0.001); updateTemp(); updateTemp();");
+check("slice-5 arsenal: f auto-prestiges through gameLoop (f.points > 0 after tick)",
+    "player.f.points.gt(0)");
+
+// 26. Persistence: sect archetype/techniques/contribution and journal unlocked entries
+//     survive an n prestige AND a forced resetRow of the whole tree (life + eternal immunity).
+//
+//     State: archetype = azureSword, techniques 0/1/2 bought, sect.best = arsenal threshold.
+//     journal.unlocked may have entries from prior blocks (checked below).
+//     Set up for n prestige.
+boot("player.b.coreGrade = 0; player.c.unlocked = true; player.c.best = new Decimal(2);");
+boot("player.f.unlocked = true; player.f.best = new Decimal(22); player.f.points = new Decimal(22);");
+boot("player.q.best = new Decimal(substageThreshold('q', '6th Level')); player.q.points = new Decimal(substageThreshold('q', '6th Level')); updateMilestones('q');");
+boot("player.points = new Decimal(REALM_DATA.find(function(r){return r.id==='n';}).reqBase); updateTemp(); updateTemp();");
+// Snapshot sect state before n prestige.
+boot("var sectArchBefore = player.sect.archetype; var sectBestBefore = player.sect.best.toNumber();");
+boot("var sectHasAzureForm = hasUpgrade('sect', 0); var journalUnlockedBefore = player.journal.unlocked.slice();");
+boot("doReset('n'); updateTemp(); updateTemp();");
+check("slice-5 persist: sect archetype SURVIVES n prestige (life-scoped)",
+    "player.sect.archetype === sectArchBefore");
+check("slice-5 persist: sect best SURVIVES n prestige (never falls)",
+    "player.sect.best.toNumber() === sectBestBefore");
+check("slice-5 persist: techniques owned SURVIVE n prestige (life-scoped upgrades)",
+    "hasUpgrade('sect', 0) === true");
+check("slice-5 persist: journal.unlocked SURVIVES n prestige (eternal-scoped)",
+    "JSON.stringify(player.journal.unlocked) === JSON.stringify(journalUnlockedBefore)");
+// Now force a resetRow of the entire tree (doReset('c', true) cascades c/f/q).
+boot("var sectArchAfterReset = player.sect.archetype; var journalAfterReset = player.journal.unlocked.slice();");
+boot("doReset('c', true); updateTemp(); updateTemp();");
+check("slice-5 persist: sect archetype SURVIVES forced c cascade (life-scoped)",
+    "player.sect.archetype === sectArchAfterReset");
+check("slice-5 persist: journal.unlocked SURVIVES forced c cascade (eternal-scoped)",
+    "JSON.stringify(player.journal.unlocked) === JSON.stringify(journalAfterReset)");
+check("slice-5 persist: sect techniques SURVIVE forced c cascade (life-scoped upgrades)",
+    "hasUpgrade('sect', 0) === true");
+
+// 27. Journal: entry latches when its condition first holds and STAYS unlocked after the
+//     condition's inputs reset; shouldNotify true while unread, false after mark-read;
+//     the achievement-conditioned entry (Outer Disciple) and the sectJoined entry latch.
+//
+//     Reset journal to a clean slate for this block.
+boot("player.journal.unlocked = []; player.journal.read = []; updateTemp(); updateTemp();");
+//     (a) qi-threshold entry: 'firstBreath' latches on layerUnlocked:'q'.
+//         The q layer IS already unlocked (player.q.unlocked = true from prior blocks).
+boot("player.q.unlocked = true; updateTemp();");
+boot("layers.journal.update.call({layer:'journal'}); updateTemp();");
+check("slice-5 journal: firstBreath entry latches when q is unlocked (layerUnlocked gate)",
+    "player.journal.unlocked.indexOf('firstBreath') !== -1");
+//     (b) shouldNotify true while the entry is unread.
+check("slice-5 journal: shouldNotify() true while firstBreath is unread",
+    "layers.journal.shouldNotify.call({layer:'journal'}) === true");
+//     (c) The entry stays unlocked after q resets (q.unlocked becomes false).
+//         A real q prestige does NOT affect player.q.unlocked (it stays true once latched
+//         by TMT's normal reset flow — only the game's own unlock/canReset cycle touches it).
+//         To test pure latch persistence: forcibly unlatch q.unlocked, drive an update tick,
+//         and confirm firstBreath is still in journal.unlocked (not re-evaluated).
+boot("player.q.unlocked = false; layers.journal.update.call({layer:'journal'}); updateTemp();");
+check("slice-5 journal: firstBreath STAYS latched after q.unlocked is reset (latch is permanent)",
+    "player.journal.unlocked.indexOf('firstBreath') !== -1");
+//     (d) Reflect clickable (id 0) marks all read; shouldNotify drops to false.
+boot("clickClickable('journal', 0); updateTemp();");
+check("slice-5 journal: Reflect clickable marks firstBreath read (read array contains it)",
+    "player.journal.read.indexOf('firstBreath') !== -1");
+check("slice-5 journal: shouldNotify() false after Reflect (all unlocked entries are read)",
+    "layers.journal.shouldNotify.call({layer:'journal'}) === false");
+//     (e) sectJoined entry latches: set archetype + drive update.
+boot("player.sect.archetype = SECT_DATA.archetypes[0].key; updateTemp();");
+boot("layers.journal.update.call({layer:'journal'}); updateTemp();");
+check("slice-5 journal: sectJoined entry latches when sectJoined() is true",
+    "player.journal.unlocked.indexOf('sectJoined') !== -1");
+//     (f) Outer Disciple achievement entry (outerDisciple key, when: achievement:['gate',11]).
+//         Gate achievement 11 (outerDisciple) requires Foundation + meridians>=6 + Flesh temper.
+//         Set up the state: f unlocked/best, meridians 6+, and a temper tier reached.
+boot("player.q.unlocked = true; player.q.best = new Decimal(substageThreshold('q', '6th Level')); updateMilestones('q');");
+boot("player.f.unlocked = true; player.f.best = new Decimal(1); updateMilestones('f');");
+boot("setBuyableAmount('b', 11, new Decimal(6));"); // 6 primary meridians
+// Flesh temper (index 1 in BODY_DATA.temperTiers, fromLevel 5): the gate achievement requires
+// temperTier:"Flesh" whose label matches BODY_DATA.temperTiers[1] (key "flesh", fromLevel 5).
+// temperTierIndexByKey("Flesh") matches tier.label === "Flesh" -> returns index 1; the player
+// must be at temperLevel >= BODY_DATA.temperTiers[1].fromLevel for the meets() check to pass.
+boot("setBuyableAmount('b', BODY_DATA.temperBuyableId, new Decimal(BODY_DATA.temperTiers[1].fromLevel)); updateTemp(); updateTemp();");
+boot("updateAchievements('gate'); updateTemp(); updateTemp();");
+check("slice-5 journal: gate achievement 11 (Outer Disciple) earned (prerequisite for outerDisciple entry)",
+    "hasAchievement('gate', 11) === true");
+boot("layers.journal.update.call({layer:'journal'}); updateTemp();");
+check("slice-5 journal: outerDisciple entry latches when gate achievement 11 is held",
+    "player.journal.unlocked.indexOf('outerDisciple') !== -1");
+
+// 28. Hints: the joinSect row fires in its EARLY window only (sect revealed, archetype
+//     unset, nothing later-game matching — it sits near the BOTTOM of the cascade per the
+//     slice-5 review: joining is optional and must never pin the guidance), is shadowed
+//     by realm progression for a non-joiner, and stops firing once joined.
+//
+//     (a) joinSect fires in its window: revealed + unjoined + a genuinely early state
+//         (q below 4th Level, no lattice nodes, no foundation/core/NS) so no later row
+//         shadows it from above and it beats climbQi from below.
+boot("LATTICE_DATA.nodes.forEach(function(node){ setBuyableAmount('dao', node.buyableId, new Decimal(0)); });");
+boot("player.sect.revealed = true; player.sect.archetype = '';"
+    + "player.q.unlocked = true; player.q.best = new Decimal(substageThreshold('q', '4th Level') - 1);"
+    + "player.b.coreGrade = BODY_DATA.grades.coreGrade.startIndex; player.c.unlocked = false;"
+    + "player.f.unlocked = false; player.f.best = new Decimal(0); player.n.unlocked = false;"
+    + "player.b.soulAspect = ''; updateTemp(); updateTemp();");
+check("slice-5 hints: joinSect hint fires in the early revealed-but-unjoined window",
+    "cultivationCurrentHint().key === 'joinSect'");
+//     (a2) The slice-5 review's regression case: a player who NEVER joins must still get
+//          realm-progression guidance — at 6th Level + 4 meridians (f's unlock recipe),
+//          breakToFoundation shadows joinSect from above.
+boot("player.q.best = new Decimal(substageThreshold('q', '6th Level')); updateTemp(); updateTemp();");
+check("slice-5 hints: breakToFoundation shadows joinSect for a non-joiner at 6th Level",
+    "cultivationCurrentHint().key === 'breakToFoundation'");
+boot("player.q.best = new Decimal(substageThreshold('q', '4th Level') - 1); updateTemp(); updateTemp();");
+//     (b) After joining, joinSect stops firing entirely (sectUnjoined false); the cascade
+//         falls through to climbQi in this early state.
+boot("player.sect.archetype = SECT_DATA.archetypes[0].key; updateTemp(); updateTemp();");
+check("slice-5 hints: joinSect does NOT fire once sect is joined (sectJoined true -> hintSectUnjoined false)",
+    "cultivationCurrentHint().key !== 'joinSect'");
+//     (c) Re-verify the complete hint for the current state. Restore q.unlocked (was cleared
+//         in block 27 for latch-persistence testing). Set q.best below 4th Level so openLattice
+//         does not fire; clear core/foundation/NS flags so higher-priority rows do not shadow;
+//         archetype is already set (joined). Also zero dao buyables so anyDaoNode:1 (enterTrance
+//         row 9) does not shadow climbQi: the dao nodes from earlier blocks are life-scoped and
+//         persist, but we need the hint window that would apply to a player who had NO lattice
+//         nodes yet (the semantic intent of the assertion: joinSect shadowed BY joining, leaving
+//         the ordinary q-climb hint to fire). This is the last block, so zeroing dao state here
+//         does not break any downstream block.
+boot("LATTICE_DATA.nodes.forEach(function(node){ setBuyableAmount('dao', node.buyableId, new Decimal(0)); });");
+boot("player.q.unlocked = true; player.q.best = new Decimal(substageThreshold('q', '4th Level') - 1); player.b.coreGrade = BODY_DATA.grades.coreGrade.startIndex; player.c.unlocked = false; player.f.unlocked = false; player.f.best = new Decimal(0); player.n.unlocked = false; player.b.soulAspect = ''; updateTemp(); updateTemp();");
+check("slice-5 hints: below 4th Level + joined sect -> climbQi fires (joinSect shadowed by joining)",
+    "cultivationCurrentHint().key === 'climbQi'");
 
 // ---------------------------------------------------------------------------
 // Verdict.

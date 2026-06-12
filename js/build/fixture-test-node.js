@@ -104,7 +104,12 @@ function cleanTreeData() {
             // The Dao lattice is a life-scoped side layer (design §4.2): now that the fixture
             // applies LATTICE_DATA, registeredLayerIds() lists "dao", so it needs an entry here
             // for the persistence-scope clean cases — matching trees.js's real dao life entry.
-            dao: { scope: "life" }
+            dao: { scope: "life" },
+            // Slice-5 side layers (design §4.3/§1.6): the fixture now applies SECT_DATA / JOURNAL_DATA,
+            // so registeredLayerIds() lists "sect" (life) and "journal" (eternal). They need entries
+            // here for the persistence-scope clean cases — matching trees.js's real sect/journal entries.
+            sect: { scope: "life" },
+            journal: { scope: "eternal" }
         }
     };
 }
@@ -197,7 +202,12 @@ function automationTreeData() {
             na: { scope: "tree", tree: "act1" },
             b: { scope: "life" },
             gate: { scope: "life" },
-            dao: { scope: "life" }
+            dao: { scope: "life" },
+            // Mirror the slice-5 side layers so the automation/soul-aspect cases (which apply
+            // SECT_DATA / JOURNAL_DATA via applyGlobals) keep registeredLayerIds() and TREE_DATA
+            // in sync — otherwise checkAutomationData's registered-layer guard would false-error.
+            sect: { scope: "life" },
+            journal: { scope: "eternal" }
         }
     };
 }
@@ -228,6 +238,63 @@ function cleanSoulAspect() {
     };
 }
 
+// Synthetic CLEAN technique library (design §4.3). Two school techniques (one per archetype's
+// school) plus one universal canon technique. Unique keys; school in grammar; libraryTier 1/2;
+// ascending positive costs; effect keys in {qiMult,insightMult}, every value >= 1.
+function cleanTechniqueData() {
+    return [
+        { key: "swordForm", name: "Sword Form", school: "sword", libraryTier: 1, cost: 600,
+          effect: { qiMult: 1.12 } },
+        { key: "swordHeart", name: "Sword Heart", school: "sword", libraryTier: 2, cost: 9000,
+          effect: { insightMult: 1.3 } },
+        { key: "stoneSkin", name: "Stone Skin", school: "formation", libraryTier: 1, cost: 600,
+          effect: { qiMult: 1.12 } },
+        { key: "breathCanon", name: "Breath Canon", school: "universal", libraryTier: 1, cost: 1200,
+          effect: { qiMult: 1.1 } }
+    ];
+}
+
+// Synthetic CLEAN sect side-spine (design §4.3). reveal flows through the shared oracle (a realm
+// gate over the clean realm set); contribution sub-linear (exponent 0.5); two archetypes with
+// unique keys, both on the clean lattice's "metal" element (the element-resolution check only
+// needs the element to own SOME node); each lists ONLY its own school + (optionally) universal;
+// milestones ascending with recognized rewards.
+function cleanSectData() {
+    return {
+        id: "sect",
+        name: "Unaffiliated",
+        reveal: { realm: ["qa", "1st Level"] },
+        contribution: { resource: "Contribution", rate: 0.5, exponent: 0.5 },
+        archetypes: [
+            { key: "azureSword", name: "Azure Sword", element: "metal", latticeDiscount: 0.75,
+              techniques: ["swordForm", "swordHeart"] },
+            { key: "stoneFormation", name: "Stone Formation", element: "metal", latticeDiscount: 0.75,
+              techniques: ["stoneSkin"] }
+        ],
+        milestones: [
+            { key: "stipend", at: 250, reward: { qiMult: 1.15 } },
+            { key: "library", at: 4000, reward: { libraryTier: 2 } },
+            { key: "arsenal", at: 30000, reward: { arsenal: true } }
+        ]
+    };
+}
+
+// Synthetic CLEAN journal (design §1.6). Unique keys; non-empty title + text; every `when` valid
+// via the shared oracle (including the achievement / sectJoined extensions); the FIRST entry is
+// qi-only so the journal is reachable from a fresh save (never permanently empty).
+function cleanJournalData() {
+    return {
+        id: "journal",
+        name: "Journal",
+        entries: [
+            { key: "firstBreath", when: { qi: 1 }, title: "First Breath", text: "You draw qi." },
+            { key: "foundation", when: { realm: ["fa", "Early"] }, title: "Foundation", text: "It holds." },
+            { key: "deed", when: { achievement: ["gate", 11] }, title: "A Deed", text: "Seen." },
+            { key: "joined", when: { sectJoined: true }, title: "Joined", text: "You belong." }
+        ]
+    };
+}
+
 // A realm set carrying the soul aspect on its frontier row, for the soul-aspect cases.
 function soulAspectRealmData() {
     const realms = automationRealmData();
@@ -246,6 +313,11 @@ function applyGlobals(overrides) {
     sandbox.LATTICE_DATA = overrides.LATTICE_DATA || cleanLatticeData();
     sandbox.STANCE_DATA = overrides.STANCE_DATA || cleanStanceData();
     sandbox.AUTOMATION_DATA = overrides.AUTOMATION_DATA || cleanAutomationData();
+    // Slice-5 globals (design §4.3/§1.6). Always applied so registeredLayerIds() lists sect/journal
+    // for every case (matching the TREE_DATA entries mirrored above); overridable per FAIL case.
+    sandbox.SECT_DATA = overrides.SECT_DATA || cleanSectData();
+    sandbox.TECHNIQUE_DATA = overrides.TECHNIQUE_DATA || cleanTechniqueData();
+    sandbox.JOURNAL_DATA = overrides.JOURNAL_DATA || cleanJournalData();
 }
 
 // Run a single exposed check by name against the currently-applied globals and
@@ -295,6 +367,9 @@ runCase("clean two-tree / hint data", "checkHintData", {}, true);
 runCase("clean two-tree / achievement scope", "checkAchievementScopeDiscipline", {}, true);
 runCase("clean lattice / lattice data", "checkLatticeData", {}, true);
 runCase("clean stances / stance data", "checkStanceData", {}, true);
+runCase("clean sect / sect data", "checkSectData", {}, true);
+runCase("clean techniques / technique data", "checkTechniqueData", {}, true);
+runCase("clean journal / journal data", "checkJournalData", {}, true);
 
 // ---------------------------------------------------------------------------
 // FAIL (1): a registered layer (fb) missing from TREE_DATA.layers.
@@ -624,6 +699,136 @@ runCase("clean soul aspect / soul aspect data", "checkSoulAspectData",
         "checkSoulAspectData",
         { REALM_DATA: realms, TREE_DATA: automationTreeData() }, false, "formless");
 })();
+
+// ---------------------------------------------------------------------------
+// FAIL (SE1): a sect archetype whose element is on NO lattice node -> the element-
+// resolution check fires (its discount region is empty), naming the phantom element.
+// ---------------------------------------------------------------------------
+(function () {
+    const sect = cleanSectData();
+    sect.archetypes[0].element = "plasma"; // no lattice node carries "plasma"
+    runCase("FAIL(SE1) sect archetype element not on any lattice node",
+        "checkSectData", { SECT_DATA: sect }, false, "plasma");
+})();
+
+// ---------------------------------------------------------------------------
+// FAIL (SE2): a sect archetype latticeDiscount > 1 (a penalty, not a discount) ->
+// the (0,1] discount-range check fires, naming the offending archetype.
+// ---------------------------------------------------------------------------
+(function () {
+    const sect = cleanSectData();
+    sect.archetypes[1].latticeDiscount = 1.5; // > 1 is a price PENALTY, not a discount
+    runCase("FAIL(SE2) sect archetype latticeDiscount greater than 1",
+        "checkSectData", { SECT_DATA: sect }, false, "stoneFormation");
+})();
+
+// ---------------------------------------------------------------------------
+// FAIL (SE3): a sect archetype referencing a PHANTOM technique key (no TECHNIQUE_DATA
+// row) -> the technique-resolution check fires, naming the phantom key.
+// ---------------------------------------------------------------------------
+(function () {
+    const sect = cleanSectData();
+    sect.archetypes[0].techniques = ["swordForm", "ghostStrike"]; // ghostStrike is no row
+    runCase("FAIL(SE3) sect archetype references a phantom technique key",
+        "checkSectData", { SECT_DATA: sect }, false, "ghostStrike");
+})();
+
+// ---------------------------------------------------------------------------
+// FAIL (T1): a SCHOOL technique no archetype offers -> the offered-coverage check
+// fires (unreachable dead content), naming the orphaned technique.
+// ---------------------------------------------------------------------------
+(function () {
+    const techniques = cleanTechniqueData();
+    techniques.push({ key: "orphanArt", name: "Orphan Art", school: "sword", libraryTier: 1,
+        cost: 500, effect: { qiMult: 1.1 } }); // sword school, listed by no archetype
+    runCase("FAIL(T1) school technique offered by no archetype",
+        "checkTechniqueData", { TECHNIQUE_DATA: techniques }, false, "orphanArt");
+})();
+
+// ---------------------------------------------------------------------------
+// FAIL (J1): a journal entry whose `when` uses an INVALID condition key (an unknown
+// realm/stage) -> the shared checkCondition oracle reports it through checkJournalData.
+// ---------------------------------------------------------------------------
+(function () {
+    const journal = cleanJournalData();
+    journal.entries[1].when = { realm: ["fa", "NoSuchStage"] }; // unknown stage label
+    runCase("FAIL(J1) journal entry with an invalid condition",
+        "checkJournalData", { JOURNAL_DATA: journal }, false, "NoSuchStage");
+})();
+
+// ---------------------------------------------------------------------------
+// FAIL (J2): a journal with NO fresh-save-reachable entry (every `when` gated past a
+// fresh save) -> the never-permanently-empty check fires.
+// ---------------------------------------------------------------------------
+(function () {
+    const journal = cleanJournalData();
+    // Replace the qi-only first entry with a gated one, so NO entry is fresh-save reachable.
+    journal.entries[0].when = { realm: ["fa", "Late"] };
+    runCase("FAIL(J2) journal with no fresh-save-reachable entry",
+        "checkJournalData", { JOURNAL_DATA: journal }, false, "fresh save");
+})();
+
+// ---------------------------------------------------------------------------
+// FAIL (AU1): an automation granted by a SECT milestone OUT OF RANGE (the slice-5
+// sect milestone source) -> checkAutomationData's milestone-range check fires, naming
+// the row. The clean sect has 3 milestones (0..2); milestone 99 is unreachable.
+// ---------------------------------------------------------------------------
+(function () {
+    const automation = cleanAutomationData();
+    automation.push({ key: "sectBell", grantedBy: { layer: "sect", milestone: 99 },
+        automates: { layer: "fa", action: "prestige", gainFraction: 0.05 } });
+    runCase("FAIL(AU1) automation granted by an out-of-range sect milestone",
+        "checkAutomationData",
+        { REALM_DATA: automationRealmData(), TREE_DATA: automationTreeData(),
+          AUTOMATION_DATA: automation }, false, "sectBell");
+})();
+
+// ---------------------------------------------------------------------------
+// FAIL (C1): an UNKNOWN condition key. meets() silently ignores keys it does not
+// recognize, turning the clause always-true — checkCondition's unknown-key
+// rejection must catch the typo. Routed through checkJournalData (any
+// checkCondition caller works).
+// ---------------------------------------------------------------------------
+(function () {
+    const journal = cleanJournalData();
+    journal.entries[0].when = { qiTypo: 5 };
+    runCase("FAIL(C1) condition with an unknown grammar key",
+        "checkJournalData", { JOURNAL_DATA: journal }, false, "qiTypo");
+})();
+
+// ---------------------------------------------------------------------------
+// Dead-mult / cost-fold NEGATIVES (slice-5 review): checkNoDeadMultipliers takes
+// (errors, factorySource) — drive it directly with synthetic factory sources so a
+// future refactor dropping a consumer or the discount fold is regression-caught.
+// In this sandbox no live factory functions exist, so consumerReferences falls
+// back to the factorySource scan — exactly the path under test.
+// ---------------------------------------------------------------------------
+function runDeadMultCase(caseName, factorySource, expectedToken) {
+    applyGlobals({});
+    const errors = [];
+    sandbox.cultivationLintChecks.checkNoDeadMultipliers(errors, factorySource);
+    const named = errors.some(function (e) { return e.indexOf(expectedToken) !== -1; });
+    const ok = errors.length >= 1 && named;
+    if (!ok) anyFailed = true;
+    console.log((ok ? "PASS" : "FAIL") + " — " + caseName
+        + (ok ? " (error names '" + expectedToken + "')"
+              : " (no error naming '" + expectedToken + "': " + errors.join(" | ") + ")"));
+}
+
+// FAIL (D1): stipend consumer missing from the factory source -> dead stipend mult.
+// The source carries the cost fold (so D1 isolates the consumer) but no sectStipendQiMult.
+runDeadMultCase("FAIL(D1) sect stipend qiMult with no consumer",
+    "function makeDaoNodeBuyable() { return cost.times(sectLatticeDiscount(node.element)); }",
+    "sectStipendQiMult");
+
+// FAIL (D2): the lattice-discount COST FOLD dropped from the dao node cost() while
+// SECT_DATA still declares latticeDiscount -> the discount region is dead.
+runDeadMultCase("FAIL(D2) declared latticeDiscount with no cost fold",
+    "function sectStipendQiMult() { return qiMult; } "
+    + "function techniqueQiMult() { return qiMult; } "
+    + "function techniqueInsightMult() { return insightMult; } "
+    + "function makeDaoNodeBuyable() { return cost; }",
+    "sectLatticeDiscount");
 
 // ---------------------------------------------------------------------------
 // Verdict.

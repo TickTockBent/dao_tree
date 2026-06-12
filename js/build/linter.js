@@ -46,7 +46,16 @@
             // aspect effect.qiMult (resp. insightMult) must have its matching reader consume the
             // field token, so an aspect bonus can't be computed into nothing (§9.2).
             soulAspectQiEffect: "soulAspectQiMult",
-            soulAspectInsightEffect: "soulAspectInsightMult"
+            soulAspectInsightEffect: "soulAspectInsightMult",
+            // Sect consumers (design §4.3, slice 5). The stipend milestone's reward.qiMult folds
+            // into cultivationQiPerSecond via sectStipendQiMult, and OWNED techniques' effect.qiMult
+            // (resp. insightMult) compound via techniqueQiMult (resp. techniqueInsightMult). Each
+            // declared multiplier must have its matching reader consume the carrying field token,
+            // so a stipend / technique bonus can't be computed into nothing (§9.2). (The lattice
+            // DISCOUNT is NOT here: it changes a COST, verified by the cost-fold check below.)
+            sectStipendQiMult: "sectStipendQiMult",
+            techniqueQiEffect: "techniqueQiMult",
+            techniqueInsightEffect: "techniqueInsightMult"
         };
 
         // A consumer is "live" if the named factory function references the data
@@ -201,6 +210,63 @@
             && !consumerReferences(consumers.soulAspectInsightEffect, "insightMult")) {
             errors.push("Dead multiplier: soul aspect insightMult has no consumer (soulAspectInsightMult).");
         }
+
+        // Sect stipend + technique multipliers -> sectStipendQiMult / techniqueQiMult /
+        // techniqueInsightMult (design §4.3, slice 5). Guarded on SECT_DATA / TECHNIQUE_DATA
+        // presence (the data-only fixture harness loads neither). The stipend milestone's
+        // reward.qiMult must have a consumer; any technique declaring a qiMult (resp. insightMult)
+        // effect must have its matching reader consume the field token (same mechanism as aspects).
+        if (typeof SECT_DATA !== "undefined" && SECT_DATA && SECT_DATA.milestones) {
+            var sectDeclaresStipendQiMult = false;
+            SECT_DATA.milestones.forEach(function (milestone) {
+                if (milestone.reward && milestone.reward.qiMult !== undefined) sectDeclaresStipendQiMult = true;
+            });
+            if (sectDeclaresStipendQiMult
+                && !consumerReferences(consumers.sectStipendQiMult, "qiMult")) {
+                errors.push("Dead multiplier: sect stipend qiMult has no consumer (sectStipendQiMult).");
+            }
+        }
+        if (typeof TECHNIQUE_DATA !== "undefined" && TECHNIQUE_DATA) {
+            var techniqueDeclaresQiMult = false;
+            var techniqueDeclaresInsightMult = false;
+            TECHNIQUE_DATA.forEach(function (technique) {
+                var techEffect = technique.effect || {};
+                if (techEffect.qiMult !== undefined) techniqueDeclaresQiMult = true;
+                if (techEffect.insightMult !== undefined) techniqueDeclaresInsightMult = true;
+            });
+            if (techniqueDeclaresQiMult
+                && !consumerReferences(consumers.techniqueQiEffect, "qiMult")) {
+                errors.push("Dead multiplier: technique qiMult has no consumer (techniqueQiMult).");
+            }
+            if (techniqueDeclaresInsightMult
+                && !consumerReferences(consumers.techniqueInsightEffect, "insightMult")) {
+                errors.push("Dead multiplier: technique insightMult has no consumer (techniqueInsightMult).");
+            }
+        }
+
+        // Sect lattice DISCOUNT cost-fold verification (design §4.3, slice 5). A discount changes
+        // a COST, not a multiplier, so it has no dead-mult consumer entry — but the §4.3 "Dao-
+        // lattice discount region" REQUIRES the discount to actually fold into the dao node
+        // cost(). Prove the fold exists: when SECT_DATA declares any archetype latticeDiscount,
+        // the factory source's makeDaoNodeBuyable must reference sectLatticeDiscount (the reader),
+        // so a declared discount can't be silently dropped from the price the player pays.
+        if (typeof SECT_DATA !== "undefined" && SECT_DATA && SECT_DATA.archetypes) {
+            var sectDeclaresLatticeDiscount = SECT_DATA.archetypes.some(function (archetype) {
+                return archetype.latticeDiscount !== undefined;
+            });
+            if (sectDeclaresLatticeDiscount && factorySource) {
+                // The fold must be an actual MULTIPLY of the node cost by sectLatticeDiscount
+                // (".times(sectLatticeDiscount("), not merely a mention of the reader's name —
+                // so renaming the call to an identity still trips this. makeDaoNodeBuyable must
+                // also be present (the node-cost builder that carries the fold).
+                var foldPresent = factorySource.indexOf("function makeDaoNodeBuyable") !== (ZERO - ONE)
+                    && factorySource.indexOf(".times(sectLatticeDiscount(") !== (ZERO - ONE);
+                if (!foldPresent) {
+                    errors.push("Sect discount: SECT_DATA declares a latticeDiscount but the dao node "
+                        + "cost() does not fold sectLatticeDiscount — the discount region is dead (§4.3).");
+                }
+            }
+        }
     }
 
     // Resolve a realm sub-stage label (or numeric token) to its `at` threshold.
@@ -348,6 +414,68 @@
                 }
             }
         }
+
+        // achievement: [layerId, achievementId] — the meets() grammar key the slice-5 sect /
+        // journal entries use (design §4.3 / §FACTORY SURFACE). It latches on hasAchievement(
+        // layerId, id). Validated here so journal entries, gate done() conditions, hints, and any
+        // future achievement-gated unlock all inherit ONE reachability rule (the shared oracle):
+        // the referenced layer must be registered, and FOR THE GATE LAYER the achievement id must
+        // resolve to a real GATE_DATA.achievements row — a phantom (layer, id) can never be earned,
+        // so the condition is permanently unsatisfiable (a completability dead-end, §9.3).
+        if (condition.achievement !== undefined) {
+            var achievementLayerId = condition.achievement[ZERO];
+            var achievementRowId = condition.achievement[ONE];
+            if (registeredLayerIds().indexOf(achievementLayerId) === ZERO - ONE) {
+                errors.push(label + ": achievement references unregistered layer '"
+                    + achievementLayerId + "'.");
+            } else if (achievementLayerId === GATE_DATA.id) {
+                // The gate layer is the only achievement-bearing layer in v0.1; its ids must
+                // resolve so a journal/hint gate can't latch on a non-existent deed (§8/§9.3).
+                var achievementRowExists = GATE_DATA.achievements.some(function (ach) {
+                    return ach.id === achievementRowId;
+                });
+                if (!achievementRowExists) {
+                    errors.push(label + ": achievement references unknown id '" + achievementRowId
+                        + "' on the gate layer (no GATE_DATA.achievements row — unreachable, §9.3).");
+                }
+            }
+        }
+
+        // sectJoined: true — the slice-5 meets() grammar key that latches once the player has
+        // joined a sect (sectJoined() true; design §4.3). It carries no parameter to range-check;
+        // the ONLY well-formed value is boolean true (a sectJoined:false would be a no-op gate that
+        // can never gate anything, so reject any non-true value as a data error). Reachability is
+        // intrinsic: joining a sect is a no-cost pick available the moment the sect layer reveals,
+        // so a sectJoined:true condition is always reachable from a fresh save once SECT_DATA exists.
+        if (condition.sectJoined !== undefined && condition.sectJoined !== true) {
+            errors.push(label + ": sectJoined must be boolean true (a sectJoined:"
+                + condition.sectJoined + " gate can never be satisfied).");
+        }
+
+        // contribution: N — sect standing high-water (contributionBest, §4.3). Contribution
+        // accrues unbounded once joined, so any positive value is reachable; non-positive
+        // values are vacuous gates (data errors).
+        if (condition.contribution !== undefined && !(condition.contribution > ZERO)) {
+            errors.push(label + ": contribution requirement must be > 0.");
+        }
+
+        // UNKNOWN-KEY REJECTION. meets() (and the hint/journal evaluators) IGNORE keys they
+        // do not recognize, so a typo'd key silently turns its clause into "always true" —
+        // the worst possible failure for a gate. Every key must be in the known grammar:
+        // the meets() keys plus the engine-extension keys the hint/journal evaluators
+        // handle before delegating (layerUnlocked / coreForged / coreBelowCeiling /
+        // aspectUnchosen / sectUnjoined). Context-specific whitelists (checkHintData's
+        // grammarKeys) stay stricter where they apply.
+        var knownConditionKeys = ["qi", "realm", "meridians", "temperTier",
+            "primaryMeridiansAll", "daoNode", "anyDaoNode", "daoElementTier",
+            "achievement", "sectJoined", "contribution",
+            "layerUnlocked", "coreForged", "coreBelowCeiling", "aspectUnchosen", "sectUnjoined"];
+        Object.keys(condition).forEach(function (conditionKey) {
+            if (knownConditionKeys.indexOf(conditionKey) === ZERO - ONE) {
+                errors.push(label + ": unknown condition key '" + conditionKey
+                    + "' — meets() would silently ignore it, making the clause always-true.");
+            }
+        });
     }
 
     // ----- §9.3 completability -------------------------------------------
@@ -534,6 +662,13 @@
     var KIND_CHECKPOINT = "checkpoint";
     var KIND_META = "meta";
 
+    // Sect technique school names (design §4.3). Shared by checkSectData / checkTechniqueData so
+    // the school grammar lives in ONE place. "universal" is the shared canon (both archetypes);
+    // "sword"/"formation" are the slice-5 school schools, each taught by exactly one archetype.
+    var SECT_TECHNIQUE_SWORD = "sword";
+    var SECT_TECHNIQUE_FORMATION = "formation";
+    var SECT_TECHNIQUE_UNIVERSAL = "universal";
+
     // Every layer id the factory registers: realm rows + the Body + the gate layer, and
     // the Dao lattice (design §4.2) WHEN its data table is loaded. LATTICE_DATA is guarded
     // because not every harness loads lattice.js (the in-browser build and the runtime smoke
@@ -546,6 +681,16 @@
         ids.push(GATE_DATA.id);
         if (typeof LATTICE_DATA !== "undefined" && LATTICE_DATA && LATTICE_DATA.id) {
             ids.push(LATTICE_DATA.id);
+        }
+        // The Sect side-spine (design §4.3) and the Journal (design §1.6), slice 5. Guarded on
+        // their data tables like LATTICE_DATA: not every harness loads sect.js / journal.js
+        // (the data-only fixture may not), so when absent they simply aren't registered here —
+        // matching what the factory registers in that same context.
+        if (typeof SECT_DATA !== "undefined" && SECT_DATA && SECT_DATA.id) {
+            ids.push(SECT_DATA.id);
+        }
+        if (typeof JOURNAL_DATA !== "undefined" && JOURNAL_DATA && JOURNAL_DATA.id) {
+            ids.push(JOURNAL_DATA.id);
         }
         return ids;
     }
@@ -797,7 +942,12 @@
             // Slice-4 additions (§11): anyDaoNode / daoElementTier are meets() grammar keys
             // that pass through the hint engine's strip list to meets(); aspectUnchosen is a
             // hint-only key evaluated by hintEngine.js's hintAspectUnchosen() function.
-            "anyDaoNode", "daoElementTier", "aspectUnchosen"];
+            "anyDaoNode", "daoElementTier", "aspectUnchosen",
+            // Slice-5 additions (§11): achievement / sectJoined are meets() grammar keys that
+            // pass through the hint engine's strip list to meets() (factory extension, §4.3);
+            // sectUnjoined is a hint-only key evaluated by hintEngine.js's hintSectUnjoined()
+            // function (!sectJoined() — fires while the sect layer is revealed but unjoined).
+            "achievement", "sectJoined", "sectUnjoined"];
         var registered = registeredLayerIds();
         var lastIndex = hints.length - ONE;
         var alwaysCount = ZERO;
@@ -1167,10 +1317,16 @@
                     milestoneCount = grantRealm.substages.length;
                 } else if (grantLayer === BODY_DATA.id) {
                     milestoneCount = BODY_DATA.temperTiers.length;
+                } else if (typeof SECT_DATA !== "undefined" && SECT_DATA
+                    && grantLayer === SECT_DATA.id && SECT_DATA.milestones) {
+                    // Slice-5 milestone source (design §4.3): the sect layer's milestones are
+                    // its contribution high-water ladder (SECT_DATA.milestones); a grantedBy.
+                    // milestone id is an index into that array (the arsenal grant uses index 2).
+                    milestoneCount = SECT_DATA.milestones.length;
                 }
                 if (milestoneCount === null) {
                     errors.push("Automation '" + rowId + "': grantedBy.layer '" + grantLayer
-                        + "' has no milestone source (not a realm or the body layer, §1.7).");
+                        + "' has no milestone source (not a realm, the body layer, or the sect layer, §1.7).");
                 } else if (!(grantMilestone >= ZERO && grantMilestone < milestoneCount)) {
                     errors.push("Automation '" + rowId + "': grantedBy.milestone " + grantMilestone
                         + " is out of range for layer '" + grantLayer + "' (0.."
@@ -1332,6 +1488,275 @@
         });
     }
 
+    // ----- §4.3 sect side-spine integrity ---------------------------------
+    // SECT_DATA is the slice-5 horizontal-standing grammar (design §4.3): a LIFE-scoped
+    // contribution economy whose archetype pick discounts a Dao-lattice region and unlocks a
+    // technique library. This check proves the side-spine is a real, completable choice — never a
+    // dead discount, never a phantom technique:
+    //   - reveal flows through the shared checkCondition oracle (§5a grammar);
+    //   - contribution rate > 0 and 0 < exponent <= 1 (the SUB-LINEAR accrual law: an exponent
+    //     above 1 lets late-game Qi trivialize the sect economy, §4.3; a non-positive rate banks
+    //     nothing);
+    //   - AT LEAST TWO archetypes with unique keys (the §4.3 "archetypes matter" build choice);
+    //   - each archetype's element resolves to a real LATTICE_DATA node element (the discount
+    //     region must exist) and 0 < latticeDiscount <= 1 (a discount, never a penalty > 1, never
+    //     a free 0);
+    //   - every archetype technique key resolves to a TECHNIQUE_DATA row whose school is consistent
+    //     with the archetype (a sword archetype may only list sword/universal techniques) — a key
+    //     pointing at a phantom or wrong-school technique is dead identity data;
+    //   - milestones have strictly ascending `at`s with recognized reward keys (qiMult >= 1, or
+    //     libraryTier, or arsenal) — an out-of-order milestone is earned before its predecessor.
+    function checkSectData(errors) {
+        if (typeof SECT_DATA === "undefined" || !SECT_DATA) {
+            errors.push("Sect: SECT_DATA table is required (§4.3).");
+            return;
+        }
+
+        // reveal flows through the one shared reachability oracle (§5a grammar).
+        checkCondition(errors, "Sect reveal", SECT_DATA.reveal);
+
+        // The contribution accrual law: rate > 0, 0 < exponent <= 1 (sub-linear, §4.3).
+        var contribution = SECT_DATA.contribution || {};
+        if (!(contribution.rate > ZERO)) {
+            errors.push("Sect: contribution.rate must be > 0 (a non-positive rate banks "
+                + "nothing, §4.3).");
+        }
+        if (!(contribution.exponent > ZERO && contribution.exponent <= ONE)) {
+            errors.push("Sect: contribution.exponent must be in (0,1] — sub-linear in Qi/sec so "
+                + "late-game Qi cannot trivialize the sect economy (§4.3).");
+        }
+
+        // At least two archetypes with unique keys (the §4.3 build choice).
+        var archetypes = SECT_DATA.archetypes || [];
+        if (!(archetypes.length >= ONE + ONE)) {
+            errors.push("Sect: SECT_DATA.archetypes must offer at least two archetypes (the "
+                + "§4.3 build choice).");
+        }
+        var seenArchetypeKeys = {};
+        archetypes.forEach(function (archetype) {
+            if (seenArchetypeKeys[archetype.key]) {
+                errors.push("Sect: duplicate archetype key '" + archetype.key + "' (§4.3).");
+            }
+            seenArchetypeKeys[archetype.key] = true;
+
+            // The archetype's element must own a real lattice node (its discount region must
+            // exist). Guarded on LATTICE_DATA like the soul-aspect element check — a harness with
+            // no lattice can't resolve it, so the discount-region check is vacuous there.
+            if (typeof LATTICE_DATA !== "undefined" && LATTICE_DATA && LATTICE_DATA.nodes) {
+                var elementHasNode = LATTICE_DATA.nodes.some(function (n) {
+                    return n.element === archetype.element;
+                });
+                if (!elementHasNode) {
+                    errors.push("Sect: archetype '" + archetype.key + "' element '"
+                        + archetype.element + "' matches no lattice node element — its discount "
+                        + "region is empty (§4.3).");
+                }
+            }
+
+            // latticeDiscount in (0,1]: a discount, never a penalty (> 1), never free (0 or below).
+            if (!(archetype.latticeDiscount > ZERO && archetype.latticeDiscount <= ONE)) {
+                errors.push("Sect: archetype '" + archetype.key + "' latticeDiscount "
+                    + archetype.latticeDiscount + " must be in (0,1] — a discount, never a "
+                    + "penalty and never free (§4.3).");
+            }
+
+            // Each listed technique key must resolve to a TECHNIQUE_DATA row, and the archetype's
+            // school techniques must all share ONE non-universal school (its school is derived from
+            // its own list, never a hardcoded element→school map): a list mixing two schools, or
+            // naming a phantom key, is inconsistent identity data (§4.3). Universal techniques are
+            // always allowed and do not pin the school. Guarded on TECHNIQUE_DATA presence.
+            if (typeof TECHNIQUE_DATA !== "undefined" && TECHNIQUE_DATA) {
+                var archetypeSchool = null;
+                (archetype.techniques || []).forEach(function (techniqueKey) {
+                    var techniqueRow = TECHNIQUE_DATA.find(function (t) { return t.key === techniqueKey; });
+                    if (!techniqueRow) {
+                        errors.push("Sect: archetype '" + archetype.key + "' lists technique '"
+                            + techniqueKey + "' which is not a TECHNIQUE_DATA row (phantom "
+                            + "technique, §4.3).");
+                        return;
+                    }
+                    if (techniqueRow.school === SECT_TECHNIQUE_UNIVERSAL) return;
+                    if (archetypeSchool === null) {
+                        archetypeSchool = techniqueRow.school;
+                    } else if (techniqueRow.school !== archetypeSchool) {
+                        errors.push("Sect: archetype '" + archetype.key + "' lists technique '"
+                            + techniqueKey + "' of school '" + techniqueRow.school
+                            + "', inconsistent with the archetype's school '" + archetypeSchool
+                            + "' (an archetype teaches ONE school plus universal, §4.3).");
+                    }
+                });
+            }
+        });
+
+        // Milestones: strictly ascending `at`s, recognized reward keys.
+        var rewardKeys = ["qiMult", "libraryTier", "arsenal"];
+        var previousAt = null;
+        (SECT_DATA.milestones || []).forEach(function (milestone, milestoneIndex) {
+            if (previousAt !== null && !(milestone.at > previousAt)) {
+                errors.push("Sect: milestone '" + milestone.key + "' at " + milestone.at
+                    + " is not above the previous milestone's at " + previousAt
+                    + " — milestones must ascend (§4.3).");
+            }
+            previousAt = milestone.at;
+
+            var reward = milestone.reward || {};
+            Object.keys(reward).forEach(function (rewardKey) {
+                if (rewardKeys.indexOf(rewardKey) === ZERO - ONE) {
+                    errors.push("Sect: milestone '" + milestone.key + "' reward key '" + rewardKey
+                        + "' not in {qiMult, libraryTier, arsenal} (§4.3).");
+                }
+            });
+            // A stipend qiMult is a bonus, never a suppressor (the gate/aspect bonus discipline).
+            if (reward.qiMult !== undefined && !(reward.qiMult >= ONE)) {
+                errors.push("Sect: milestone '" + milestone.key + "' reward.qiMult " + reward.qiMult
+                    + " must be >= 1 — a stipend is a bonus, never a penalty (§4.3).");
+            }
+        });
+    }
+
+    // ----- §4.3 technique library integrity -------------------------------
+    // TECHNIQUE_DATA is the permanent arts library (design §4.3, LIFE scope): TMT upgrades on the
+    // sect layer, bought with Contribution, school-gated by archetype. This check proves the library
+    // is well-formed and that no technique is dead content:
+    //   - unique keys; school in {sword, formation, universal}; libraryTier 1 or 2; cost > 0;
+    //     effect keys a subset of {qiMult, insightMult}, every value >= 1 (a permanent arts bonus,
+    //     never a penalty — same bonus discipline as lattice nodes §4.2 / soul aspects §5);
+    //   - EVERY SCHOOL technique must be offered by SOME archetype (an orphaned sword technique no
+    //     Azure Sword archetype lists is unreachable dead content, §4.3);
+    //   - EVERY UNIVERSAL technique must be offered by ALL archetypes (the shared canon is available
+    //     to both archetypes by definition; a universal technique missing from an archetype's list
+    //     would silently hide the shared canon from that archetype).
+    function checkTechniqueData(errors) {
+        if (typeof TECHNIQUE_DATA === "undefined" || !TECHNIQUE_DATA) {
+            errors.push("Technique: TECHNIQUE_DATA table is required (§4.3).");
+            return;
+        }
+
+        var schoolKeys = [SECT_TECHNIQUE_SWORD, SECT_TECHNIQUE_FORMATION, SECT_TECHNIQUE_UNIVERSAL];
+        var validTiers = [ONE, ONE + ONE];
+        var effectKeys = ["qiMult", "insightMult"];
+        var seenTechniqueKeys = {};
+
+        TECHNIQUE_DATA.forEach(function (technique) {
+            if (seenTechniqueKeys[technique.key]) {
+                errors.push("Technique: duplicate technique key '" + technique.key + "' (§4.3).");
+            }
+            seenTechniqueKeys[technique.key] = true;
+
+            if (schoolKeys.indexOf(technique.school) === ZERO - ONE) {
+                errors.push("Technique '" + technique.key + "': school '" + technique.school
+                    + "' not in {sword, formation, universal} (§4.3).");
+            }
+            if (validTiers.indexOf(technique.libraryTier) === ZERO - ONE) {
+                errors.push("Technique '" + technique.key + "': libraryTier " + technique.libraryTier
+                    + " must be 1 or 2 (§4.3).");
+            }
+            if (!(technique.cost > ZERO)) {
+                errors.push("Technique '" + technique.key + "': cost must be > 0 (§4.3).");
+            }
+            var effect = technique.effect || {};
+            Object.keys(effect).forEach(function (effectKey) {
+                if (effectKeys.indexOf(effectKey) === ZERO - ONE) {
+                    errors.push("Technique '" + technique.key + "': effect key '" + effectKey
+                        + "' not in {qiMult, insightMult} (§4.3).");
+                } else if (!(effect[effectKey] >= ONE)) {
+                    errors.push("Technique '" + technique.key + "': " + effectKey + " is "
+                        + effect[effectKey] + " — a technique is a bonus, every value must be >= 1 (§4.3).");
+                }
+            });
+        });
+
+        // Offered-coverage (§4.3). A SCHOOL technique is offered ONLY to the archetype whose list
+        // names it (the factory's techniqueSchoolAvailable reads the archetype's techniques array),
+        // so a school technique no archetype lists is unreachable dead content. A UNIVERSAL technique
+        // is the shared canon: the factory offers it to ALL archetypes BY SCHOOL (school==="universal"
+        // returns true once joined, independent of any list), so being well-formed school "universal"
+        // IS the all-archetype offering — universal techniques are deliberately absent from archetype
+        // lists. We therefore only need to prove the school-technique reachability here. Guarded on
+        // SECT_DATA presence (the archetype lists live there).
+        if (typeof SECT_DATA !== "undefined" && SECT_DATA && SECT_DATA.archetypes) {
+            var archetypes = SECT_DATA.archetypes;
+            TECHNIQUE_DATA.forEach(function (technique) {
+                if (technique.school === SECT_TECHNIQUE_UNIVERSAL) return; // offered to all by school
+                var offeredBySome = archetypes.some(function (archetype) {
+                    return (archetype.techniques || []).indexOf(technique.key) !== ZERO - ONE;
+                });
+                if (!offeredBySome) {
+                    errors.push("Technique '" + technique.key + "': a '" + technique.school
+                        + "' school technique is offered by NO archetype — unreachable dead "
+                        + "content (§4.3).");
+                }
+            });
+        }
+    }
+
+    // ----- §1.6 journal reachability --------------------------------------
+    // JOURNAL_DATA is the slice-5 narrative journal (design §1.6, ETERNAL scope): entries latch
+    // once their `when` condition is met and never re-lock. This check proves the journal is
+    // well-formed and never permanently empty:
+    //   - unique entry keys; title + text non-empty (a blank entry is a UI hole);
+    //   - every `when` flows through the shared checkCondition oracle (the achievement / sectJoined
+    //     extensions included) so no entry latches on an unreachable or malformed condition;
+    //   - AT LEAST ONE entry is reachable from a FRESH SAVE — a qi-only (or layerUnlocked-of-the-
+    //     root-realm) condition — so the journal is never permanently empty (design §1.6: the
+    //     journal is the anticipation engine; a journal with no first beat anticipates nothing).
+    function checkJournalData(errors) {
+        if (typeof JOURNAL_DATA === "undefined" || !JOURNAL_DATA) {
+            errors.push("Journal: JOURNAL_DATA table is required (§1.6).");
+            return;
+        }
+        var entries = JOURNAL_DATA.entries;
+        if (!entries || !(entries.length > ZERO)) {
+            errors.push("Journal: JOURNAL_DATA.entries must be non-empty (§1.6).");
+            return;
+        }
+
+        var rootRealmId = REALM_DATA[ZERO] ? REALM_DATA[ZERO].id : undefined;
+        var seenEntryKeys = {};
+        var sawFreshReachable = false;
+
+        entries.forEach(function (entry) {
+            var entryId = entry.key || "(unkeyed)";
+            if (seenEntryKeys[entry.key]) {
+                errors.push("Journal: duplicate entry key '" + entry.key + "' (§1.6).");
+            }
+            seenEntryKeys[entry.key] = true;
+
+            if (!entry.title) {
+                errors.push("Journal: entry '" + entryId + "' has an empty title (§1.6).");
+            }
+            if (!entry.text) {
+                errors.push("Journal: entry '" + entryId + "' has empty text (§1.6).");
+            }
+
+            // The `when` condition flows through the one shared oracle (achievement / sectJoined
+            // included). layerUnlocked is a hint-only key, so resolve it against registered layers
+            // exactly as checkHintData does (checkCondition does not validate layerUnlocked).
+            checkCondition(errors, "Journal entry '" + entryId + "' when", entry.when);
+            if (entry.when && entry.when.layerUnlocked !== undefined
+                && registeredLayerIds().indexOf(entry.when.layerUnlocked) === ZERO - ONE) {
+                errors.push("Journal: entry '" + entryId + "' layerUnlocked references "
+                    + "unregistered layer '" + entry.when.layerUnlocked + "' (§1.6).");
+            }
+
+            // Fresh-save reachability: a qi-only condition, OR layerUnlocked of the ROOT realm
+            // (which unlocks from Qi alone — the §9.3 bootstrap), is reachable from a brand-new
+            // save. At least one entry must qualify so the journal is never permanently empty.
+            if (entry.when) {
+                var whenKeys = Object.keys(entry.when);
+                var qiOnly = whenKeys.length === ONE && entry.when.qi !== undefined;
+                var rootUnlockOnly = whenKeys.length === ONE
+                    && entry.when.layerUnlocked === rootRealmId;
+                if (qiOnly || rootUnlockOnly) sawFreshReachable = true;
+            }
+        });
+
+        if (!sawFreshReachable) {
+            errors.push("Journal: no entry is reachable from a fresh save (a qi-only or root-realm "
+                + "layerUnlocked condition) — the journal would be permanently empty (§1.6).");
+        }
+    }
+
     // ----- §11 no numeric literals in js/build/*.js -----------------------
     // sourceTexts: { filename -> source string }. The node harness supplies these
     // by reading files; in-browser we cannot read source, so the check is skipped
@@ -1423,6 +1848,13 @@
         checks.automationData = "ran";
         checkSoulAspectData(errors);
         checks.soulAspectData = "ran";
+        // Sect side-spine / technique library / journal integrity (design §4.3/§1.6, slice 5).
+        checkSectData(errors);
+        checks.sectData = "ran";
+        checkTechniqueData(errors);
+        checks.techniqueData = "ran";
+        checkJournalData(errors);
+        checks.journalData = "ran";
         checks.noNumericLiterals = checkNoNumericLiterals(errors, sourceTexts);
         return { ok: errors.length === ZERO, errors: errors, checks: checks };
     }
@@ -1436,6 +1868,7 @@
     // tripping the unrelated dead-multiplier / completability / grade-scaling checks.
     // Each takes an errors array and reads the data globals from this scope's root.
     root.cultivationLintChecks = {
+        checkNoDeadMultipliers: checkNoDeadMultipliers,
         checkPersistenceScopes: checkPersistenceScopes,
         checkKeepRules: checkKeepRules,
         checkHintData: checkHintData,
@@ -1443,6 +1876,9 @@
         checkLatticeData: checkLatticeData,
         checkStanceData: checkStanceData,
         checkAutomationData: checkAutomationData,
-        checkSoulAspectData: checkSoulAspectData
+        checkSoulAspectData: checkSoulAspectData,
+        checkSectData: checkSectData,
+        checkTechniqueData: checkTechniqueData,
+        checkJournalData: checkJournalData
     };
 })(typeof globalThis !== "undefined" ? globalThis : this);

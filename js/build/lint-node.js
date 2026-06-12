@@ -20,8 +20,13 @@ const buildDir = path.join(projectRoot, "js", "build");
 // Files that define the data globals + the linter, loaded in dependency order.
 // trees.js / keep-rules.js / hints.js reference nothing at load; they sit with
 // their data siblings before linter.js so the new §8.1/§8.2/§8.5 checks can read them.
+// Required data files: these MUST exist for the linter to run.
 const dataFiles = ["constants.js", "realms.js", "body.js", "gates.js",
     "trees.js", "keep-rules.js", "lattice.js", "stances.js", "hints.js", "automation.js"];
+// Slice-5 data files: loaded when present (the other agent delivers these in the same slice).
+// When absent, the linter runs against the pre-sect data set — it still validates all prior
+// invariants. The files are listed here so they are loaded in dependency order once present.
+const optionalDataFiles = ["sect.js", "techniques.js", "journal.js"];
 const linterFile = "linter.js";
 
 // js/build/*.js files subject to the no-numeric-literal scan (generated/factory
@@ -44,6 +49,16 @@ const context = vm.createContext(sandbox);
 dataFiles.forEach(function (file) {
     const full = path.join(dataDir, file);
     if (!fs.existsSync(full)) fail("missing data file: " + full);
+    vm.runInContext(fs.readFileSync(full, "utf8"), context, { filename: full });
+});
+
+// Load optional slice-5 files if present; warn but do not fail when absent.
+optionalDataFiles.forEach(function (file) {
+    const full = path.join(dataDir, file);
+    if (!fs.existsSync(full)) {
+        console.warn("LINT NOTE: optional data file not yet present (expected once slice 5 lands): " + file);
+        return;
+    }
     vm.runInContext(fs.readFileSync(full, "utf8"), context, { filename: full });
 });
 

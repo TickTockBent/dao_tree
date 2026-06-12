@@ -24,6 +24,8 @@
 //     coreBelowCeiling: true             forged core is below its Foundation ceiling
 //     aspectUnchosen: true               n layer unlocked AND player.b.soulAspect === ""
 //                                        (evaluated via soulAspectRow() factory accessor)
+//     sectUnjoined: true                 sect layer revealed AND archetype not chosen
+//                                        (evaluated via !sectJoined() factory accessor; slice 5)
 //
 // Stage labels must exactly match js/data/realms.js substage labels — a mismatch
 // produces a nonsensical condition (the engine falls back to the catch-all) and
@@ -32,7 +34,7 @@
 var HINT_DATA = {
     hints: [
         {
-            // Row 1 (slice 4): NS layer is unlocked but the Soul Aspect has not yet been
+            // Row 2 (slice 4): NS layer is unlocked but the Soul Aspect has not yet been
             // chosen. Fires immediately after the first NS prestige and persists until the
             // player picks an aspect (the choice is once-per-life, §5 table NS row). Sits
             // ABOVE all core rows because NS states are later-game than core states; once
@@ -42,7 +44,7 @@ var HINT_DATA = {
             text: "Your nascent soul stirs within the Golden Core, formless and eager — choose its aspect and give it a face."
         },
         {
-            // Row 2 (slice 4): player has reached the first NS substage (Early Nascent Soul,
+            // Row 3 (slice 4): player has reached the first NS substage (Early Nascent Soul,
             // n.best >= 1) but aspect is already chosen (or this fires after chooseAspect
             // is cleared). Guides the player deeper into the NS arc toward Soul Formation.
             // Sits directly below chooseAspect; shadows coreComplete once NS progression
@@ -124,6 +126,18 @@ var HINT_DATA = {
             key: "enterTrance",
             when: { anyDaoNode: 1 },
             text: "Enter Breathing Trance to trade some Qi speed for faster Insight — the lattice grows quicker in stillness."
+        },
+        {
+            // Slice 5: sect revealed (q 2nd Level) but no archetype chosen. Joining is
+            // OPTIONAL, so this row must never pin the cascade: it sits near the BOTTOM,
+            // above only climbQi/gatherQi, so it surfaces in the early window (q 2nd ->
+            // 4th Level) where nothing later matches, then openLattice / breakToFoundation
+            // / the core and NS rows shadow it for a player who chooses not to join.
+            // The grammar has no negation, so the hint-only key sectUnjoined (hintEngine:
+            // sectIsRevealed() && !sectJoined()) carries the "revealed but unjoined" state.
+            key: "joinSect",
+            when: { sectUnjoined: true },
+            text: "A sect has taken notice of your progress — visit the Sect tab and choose your path. The choice shapes your techniques and your Dao."
         },
         {
             // Row 10: Qi Condensation is unlocked but player hasn't hit 4th Level yet

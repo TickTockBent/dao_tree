@@ -68,5 +68,20 @@ var AUTOMATION_DATA = [
         key: "nascentExtraordinaryMeridians",
         grantedBy: { layer: "n", milestone: 0 },
         automates: { layer: "b", action: "buyable", buyableKey: "extraordinaryMeridian" }
+    },
+    {
+        // The ARSENAL (design §4.3 "arsenal automations", slice 5): the sect's arsenal grants
+        // an auto-Foundation-prestige bell once the player reaches the arsenal contribution
+        // milestone (SECT_DATA milestone 2). By then the player is post-core pushing toward
+        // Nascent Soul, so re-prestiging Foundation is the decisionless grind the arsenal
+        // should erase. gainFraction is the design's "auto-prestige AT THRESHOLD" (§5): the
+        // automated f breakthrough fires only when the pending f gain is at least this fraction
+        // of f's current currency, so the bell does not zero the Foundation pool every tick and
+        // starve the forge fuel / Nascent Soul sink below it (the same starvation guard the q
+        // auto-prestige carries). The grant resolves through the sect layer's milestone source
+        // (SECT_DATA.milestones), which the linter's milestone-source check now knows. ⟨tune⟩
+        key: "sectFoundationBell",
+        grantedBy: { layer: "sect", milestone: 2 },   // arsenal milestone (SECT_DATA.milestones[2])
+        automates: { layer: "f", action: "prestige", gainFraction: 0.05 }
     }
 ];

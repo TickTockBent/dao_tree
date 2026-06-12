@@ -31,6 +31,27 @@
 // Hint-only condition keys evaluated here (not delegated to meets()).
 // ---------------------------------------------------------------------------
 
+// True when the sect layer is revealed (player.sect exists and is unlocked) AND
+// the player has not yet chosen an archetype (player.sect.archetype === "").
+// Evaluated here as a hint-only key because: (a) the grammar has no negation so we
+// cannot express "sect shown AND !sectJoined()" through meets() directly; (b) this
+// key only needs to exist in the hint cascade, not in the full meets() grammar; and
+// (c) we use the sectJoined() factory accessor (defined in layerFactory.js's sect
+// extension, slice 5) defensively — when the sect factory surface is absent (pre-
+// slice-5 saves), this returns false so the joinSect row never fires early. (§4.3)
+function hintSectUnjoined() {
+    if (typeof sectJoined !== "function") return false;
+    // The sect layer must be REVEALED (the §5a reveal gate met), not merely loaded — the
+    // sect layer's `unlocked` engine flag is always true (the tab is active from boot), so
+    // checking it would fire this hint on a fresh save before the sect is even visible. The
+    // sectIsRevealed() factory accessor is the authoritative reveal latch (player.sect.revealed
+    // || meets(SECT_DATA.reveal)); guard it defensively so a pre-slice-5 save (no sect factory)
+    // never fires the joinSect row early.
+    if (typeof sectIsRevealed !== "function") return false;
+    if (!sectIsRevealed()) return false;
+    return !sectJoined();
+}
+
 // True when a core has been forged: stored grade index is at or above zero.
 // Mirrors coreIsForged() logic in layerFactory.js but reads through
 // getCoreGradeIndex() so the single grade store is authoritative.
@@ -90,13 +111,20 @@ function hintRowMatches(row) {
     if (condition.aspectUnchosen === true) {
         if (!hintAspectUnchosen()) return false;
     }
+    // sectUnjoined: hint-only key (sect layer revealed AND archetype not yet chosen).
+    // Evaluated here via hintSectUnjoined(); does NOT pass through to meets() because
+    // meets() has no negation and we need "revealed AND NOT joined" (§4.3 / slice 5).
+    if (condition.sectUnjoined === true) {
+        if (!hintSectUnjoined()) return false;
+    }
 
     // Build a stripped condition containing only the meets()-compatible keys so
-    // we can delegate without passing hint-only keys through. anyDaoNode and
-    // daoElementTier ARE meets() keys (factory grammar, slice 4) — they pass
-    // through to meets() exactly like realm/meridians/qi. The hint-only keys
-    // (layerUnlocked, coreForged, coreBelowCeiling, aspectUnchosen) are consumed
-    // above and excluded from the meetable set so meets() never sees them.
+    // we can delegate without passing hint-only keys through. anyDaoNode,
+    // daoElementTier, achievement, and sectJoined ARE meets() keys (factory
+    // grammar, slice 4/5) — they pass through to meets() exactly like
+    // realm/meridians/qi. The hint-only keys (layerUnlocked, coreForged,
+    // coreBelowCeiling, aspectUnchosen, sectUnjoined) are consumed above and
+    // excluded from the meetable set so meets() never sees them.
     var meetableCondition = {};
     var hasMeetableKeys = false;
 
@@ -130,6 +158,25 @@ function hintRowMatches(row) {
     // matches when ANY node of the named element is owned at tier >= N.
     if (condition.daoElementTier !== undefined) {
         meetableCondition.daoElementTier = condition.daoElementTier;
+        hasMeetableKeys = true;
+    }
+    // achievement: [layerId, achievementId] — passes through to meets() (factory grammar,
+    // slice 5). matches when hasAchievement(layerId, achievementId) is true. The factory's
+    // meets() extension handles the actual evaluation so the hint engine delegates cleanly.
+    if (condition.achievement !== undefined) {
+        meetableCondition.achievement = condition.achievement;
+        hasMeetableKeys = true;
+    }
+    // sectJoined: true — passes through to meets() (factory grammar, slice 5).
+    // matches when sectJoined() returns true (an archetype has been chosen this life).
+    if (condition.sectJoined !== undefined) {
+        meetableCondition.sectJoined = condition.sectJoined;
+        hasMeetableKeys = true;
+    }
+    // contribution: N — passes through to meets() (factory grammar, slice 5):
+    // sect standing high-water (contributionBest), used by gate/journal conditions.
+    if (condition.contribution !== undefined) {
+        meetableCondition.contribution = condition.contribution;
         hasMeetableKeys = true;
     }
 
