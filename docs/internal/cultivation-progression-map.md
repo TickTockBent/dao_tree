@@ -104,6 +104,7 @@ The failures diagnosed in the reference, turned into rules.
 3. **Completability invariant.** For every gated objective, assert the goal is reachable *under that gate's own active modifiers* from a fresh entry. No "win condition requires the resource the gate suppresses."
 4. **Balance as data.** Realm costs, sub-stage thresholds, multiplier sources, gate conditions, and the realm ladder itself live in one typed config driving both UI and math — so invariants 2–3 are machine-checkable and knobs A/B are config flips, not rewrites.
 5. **Early choices echo late.** Body-tempering / meridian / qi-purity decisions in the first hour set ceilings (core grade → realm grades) still felt in Acts II–III.
+6. **Meta-prestige is never a ransom.** Optional meta systems (reincarnation loops, optional challenge runs, stances) are accelerants and variety, never requirements: every gated objective is reachable, within its act's tuned pacing budget, without engaging any optional meta system. Distinct from invariant 3 (completability under a single gate's own modifiers) — this constrains the meta loop as a whole. Machine-checked by a no-meta pacing-sim run. *(Added per `cultivation-design-expansion-v0.1.1.md` §3.)*
 
 ---
 
