@@ -36,6 +36,10 @@ var TREE_DATA = {
         f:    { scope: "tree", tree: "act1" },
         c:    { scope: "tree", tree: "act1" },
         b:    { scope: "life" },
-        gate: { scope: "life" }
+        gate: { scope: "life" },
+        // The Dao lattice (design §4.2): comprehension never resets within a life, so it is
+        // LIFE-scoped — a member of no tree, untouched by any realm breakthrough cascade.
+        // Reincarnation persistence (Glimpses free, Seeds via memory fragments) is a future slice.
+        dao:  { scope: "life" }
     }
 };

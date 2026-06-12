@@ -85,6 +85,8 @@ const engineFiles = [
     "js/data/gates.js",
     "js/data/trees.js",
     "js/data/keep-rules.js",
+    "js/data/lattice.js",
+    "js/data/stances.js",
     "js/data/hints.js",
     "js/build/linter.js",
     "js/build/layerFactory.js",
@@ -202,6 +204,134 @@ check("hint: forged core below ceiling shows warmCore",
 boot("player.b.coreGrade = 4; updateTemp();");
 check("hint: core at its ceiling shows coreComplete",
     "cultivationCurrentHint().key === 'coreComplete'");
+
+// ---------------------------------------------------------------------------
+// Slice 3 — Dao lattice, stances, and hint. Appended after the existing 18
+// assertions; the first two lines of each numbered block call boot() to set
+// up the minimal state that block exercises. The 4th Level threshold and the
+// coreGrade/foundationGrade sentinel indices are read from the loaded data
+// tables (no literals). The existing 18 assertions must not be disturbed.
+// ---------------------------------------------------------------------------
+
+// State entering this block (from block 7):
+//   player.q.unlocked = true,  player.q.best = 0
+//   player.f.unlocked = true,  player.f.best = 0
+//   player.c.unlocked = true   (set by block 7 setup)
+//   player.b.coreGrade = 4,    player.b.foundationGrade = 3
+//   player.dao: fresh (revealed false, points 0, activeStance "")
+//   player.b.buyables[11] = 4 (meridians set in block 4 and not reset by c)
+
+// 8. Dao layer registered, life-scoped, and carries the correct start-data
+//    shape. Life-scoped layers must NOT carry a doReset (topological immunity,
+//    same rule block 1 asserts for b and gate). player.dao is seeded at boot.
+check("dao: registered and life-scoped",
+    "!!layers.dao && TREE_DATA.layers.dao.scope === 'life'");
+check("dao: carries NO doReset (life-scope topological immunity)",
+    "layers.dao.doReset === undefined");
+check("dao: player.dao has Insight points and activeStance in startData",
+    "player.dao.points !== undefined && player.dao.activeStance !== undefined");
+
+// 9. Reveal gating: the dao layer must be HIDDEN (tmp.dao.layerShown false)
+//    and insightPerSecond() zero until q reaches the 4th Level threshold (at:20,
+//    read from REALM_DATA via substageThreshold — no hardcoded number). After
+//    setting q.best to that threshold and calling the dao layer's update(),
+//    the revealed flag latches and Insight starts accruing.
+//
+//    The q layer is already unlocked (block 3), so realmBest("q") reads live.
+check("dao reveal: hidden and insightPerSecond zero before 4th Level",
+    "tmp.dao.layerShown === false && insightPerSecond().eq(0)");
+boot("player.q.best = new Decimal(substageThreshold('q', '4th Level')); updateTemp(); updateTemp();");
+check("dao reveal: layerShown true once q.best reaches 4th Level threshold",
+    "tmp.dao.layerShown === true");
+boot("layers.dao.update.call({layer: 'dao'}, 1);");
+check("dao reveal: revealed flag latches after first update() tick",
+    "player.dao.revealed === true");
+check("dao reveal: insightPerSecond() accrues once revealed (baseRate > 0)",
+    "insightPerSecond().gt(0)");
+check("dao reveal: player.dao.points gained after 1-second update tick",
+    "player.dao.points.gt(0)");
+
+// 10. Node purchase. Grant Insight, buy the metal root Glimpse (buyableId 11,
+//     cost 100, qiMult 1.03). Before the purchase the ring-2 sword node
+//     (buyableId 21, requires: ["metal"]) must be locked; after it is open.
+//     The daoNodeQiMult()/daoNodeInsightMult() readers must reflect the tier.
+boot("player.dao.points = new Decimal(2000); updateTemp(); updateTemp();");
+check("dao nodes: ring-2 sword locked until metal root Glimpse exists",
+    "tmp.dao.buyables[21].unlocked === false");
+boot("buyBuyable('dao', 11); updateTemp(); updateTemp();");
+check("dao nodes: metal root Glimpse bought (buyable amount 1)",
+    "getBuyableAmount('dao', 11).eq(1)");
+check("dao nodes: Insight deducted by the root Glimpse cost (100)",
+    "player.dao.points.lt(2000)");
+check("dao nodes: daoNodeQiMult() reflects Glimpse effect (> 1 after purchase)",
+    "daoNodeQiMult().gt(1)");
+check("dao nodes: ring-2 sword unlocked after metal root Glimpse",
+    "tmp.dao.buyables[21].unlocked === true");
+boot("buyBuyable('dao', 21); updateTemp(); updateTemp();");
+check("dao nodes: sword Glimpse bought (buyable amount 1)",
+    "getBuyableAmount('dao', 21).eq(1)");
+check("dao nodes: daoNodeInsightMult() reflects sword Glimpse insightMult (> 1)",
+    "daoNodeInsightMult().gt(1)");
+
+// 11. Stance toggling. The sword Glimpse just bought unlocks Sword Trance via
+//     meets({daoNode:["sword",1]}) — that also proves the meets() daoNode extension.
+//     Breathing Trance (clickableId 41) is always available.
+//     Semantics (pinned §6.1):
+//       - Clicking inactive stance -> activates it; stanceQiMult < 1, insightMult > 1.
+//       - Clicking a second stance -> activates it, deactivates the first (maxActive 1).
+//       - Clicking the active stance -> deactivates it; multipliers return to identity (1).
+check("stances: meets daoNode extension confirms sword Glimpse unlocks Sword Trance",
+    "meets({daoNode: ['sword', 1]}) === true && tmp.dao.clickables[42].unlocked === true");
+boot("clickClickable('dao', 41);");
+check("stances: Breathing Trance active after clicking clickable 41",
+    "player.dao.activeStance === 'breathingTrance'");
+check("stances: stanceQiMult() < 1 while Breathing Trance active (qi trade-down)",
+    "stanceQiMult().lt(1)");
+check("stances: stanceInsightMult() > 1 while Breathing Trance active (insight trade-up)",
+    "stanceInsightMult().gt(1)");
+check("stances: insightPerSecond() rises while Breathing Trance active",
+    "insightPerSecond().gt(new Decimal(LATTICE_DATA.insight.baseRate))");
+boot("clickClickable('dao', 42);");
+check("stances: Sword Trance activates and Breathing Trance deactivates (maxActive 1)",
+    "player.dao.activeStance === 'swordTrance'");
+boot("clickClickable('dao', 42);");
+check("stances: clicking active Sword Trance deactivates it (activeStance returns to none)",
+    "player.dao.activeStance === ''");
+check("stances: stanceQiMult() identity (1) when no stance active",
+    "stanceQiMult().eq(1)");
+check("stances: stanceInsightMult() identity (1) when no stance active",
+    "stanceInsightMult().eq(1)");
+
+// 12. Persistence. With nodes and a stance active, trigger an f prestige
+//     (doReset('f')) and verify player.dao is completely untouched — its node
+//     tiers, Insight balance, and activeStance all survive. f is already unlocked
+//     (from blocks 4-5); re-establish the f prestige conditions (q 6th Level + 4
+//     meridians) from the live state to avoid a second getStartPlayer() call.
+boot("clickClickable('dao', 41);"); // Re-activate Breathing Trance before persistence test.
+boot("player.q.best = new Decimal(substageThreshold('q', '6th Level')); player.q.points = new Decimal(substageThreshold('q', '6th Level')); updateTemp(); updateMilestones('q');");
+boot("player.points = new Decimal(layers.f.requires().times(4)); updateTemp(); updateTemp();");
+boot("doReset('f'); updateTemp(); updateTemp();");
+check("persistence: doReset('f') leaves dao node tiers intact",
+    "getBuyableAmount('dao', 11).eq(1) && getBuyableAmount('dao', 21).eq(1)");
+check("persistence: doReset('f') leaves dao Insight balance intact",
+    "player.dao.points.gt(0)");
+check("persistence: doReset('f') leaves dao activeStance intact",
+    "player.dao.activeStance === 'breathingTrance'");
+check("persistence: doReset('f') leaves dao revealed flag intact",
+    "player.dao.revealed === true");
+
+// 13. Hint: openLattice fires in the 4th-Level window. The coreComplete /
+//     chooseForge hints from block 7 and the climbFoundation hint triggered by
+//     the persistence-test f prestige all shadow openLattice in later game; reset
+//     those guards here so the intended 4th-Level window is actually exercised.
+//     coreGrade and c.unlocked are restored to their pre-forge sentinels (data
+//     values, no literals); f.best is zeroed so climbFoundation (fires at
+//     "Early Foundation" at:1) does not shadow; q.best is set below 6th Level
+//     so breakToFoundation does not shadow.
+boot("player.b.coreGrade = BODY_DATA.grades.coreGrade.startIndex; player.c.unlocked = false; player.f.best = new Decimal(0); updateTemp();");
+boot("player.q.best = new Decimal(substageThreshold('q', '4th Level')); updateTemp(); updateTemp();");
+check("hint: openLattice fires in the 4th-Level window (no higher-priority hint matches)",
+    "cultivationCurrentHint().key === 'openLattice'");
 
 // ---------------------------------------------------------------------------
 // Verdict.

@@ -30,7 +30,17 @@
             temperQiBonus: "temperMult",
             gateQiMult: "gateMult",
             coreGlobalMult: "coreGradeMult",
-            foundationFMult: "foundationGradeMult"
+            foundationFMult: "foundationGradeMult",
+            // Dao lattice + stance consumers (design §4.2/§6.1). Each declared multiplier on a
+            // lattice node effect / stance modifier must be folded into a live factory reader,
+            // verified the SAME way (the named function references the carrying data field),
+            // so a lattice bonus or stance trade can't be computed into nothing (§9.2). Each
+            // value is the CONSUMER FUNCTION NAME (matching the map's existing convention).
+            latticeNodeQiMult: "daoNodeQiMult",
+            latticeNodeInsightMult: "daoNodeInsightMult",
+            stanceQiModifier: "stanceQiMult",
+            stanceInsightModifier: "stanceInsightMult",
+            insightTrickle: "insightPerSecond"
         };
 
         // A consumer is "live" if the named factory function references the data
@@ -114,6 +124,54 @@
                 errors.push("Dead multiplier: core globalMult has no consumer (coreGradeMult).");
             }
         }
+
+        // Lattice node effects -> daoNodeQiMult / daoNodeInsightMult, and the Insight trickle
+        // baseRate -> insightPerSecond (§4.2). Guarded on LATTICE_DATA presence because the
+        // data-only fixture harness loads no lattice; when present, any node carrying a qiMult
+        // (resp. insightMult) effect must have its matching reader consume that field token.
+        if (typeof LATTICE_DATA !== "undefined" && LATTICE_DATA && LATTICE_DATA.nodes) {
+            var latticeDeclaresQiMult = false;
+            var latticeDeclaresInsightMult = false;
+            LATTICE_DATA.nodes.forEach(function (node) {
+                (node.effects || []).forEach(function (effect) {
+                    if (effect.qiMult !== undefined) latticeDeclaresQiMult = true;
+                    if (effect.insightMult !== undefined) latticeDeclaresInsightMult = true;
+                });
+            });
+            if (latticeDeclaresQiMult && !consumerReferences(consumers.latticeNodeQiMult, "qiMult")) {
+                errors.push("Dead multiplier: lattice node qiMult has no consumer (daoNodeQiMult).");
+            }
+            if (latticeDeclaresInsightMult && !consumerReferences(consumers.latticeNodeInsightMult, "insightMult")) {
+                errors.push("Dead multiplier: lattice node insightMult has no consumer (daoNodeInsightMult).");
+            }
+            if (LATTICE_DATA.insight && LATTICE_DATA.insight.baseRate !== undefined
+                && !consumerReferences(consumers.insightTrickle, "baseRate")) {
+                errors.push("Dead multiplier: lattice insight.baseRate has no consumer (insightPerSecond).");
+            }
+        }
+
+        // Stance modifiers -> stanceQiMult / stanceInsightMult (§6.1). Guarded on STANCE_DATA
+        // presence; any stance declaring a qiMult (resp. insightMult) modifier must have its
+        // matching reader consume that field — verified through the modifiers object token.
+        if (typeof STANCE_DATA !== "undefined" && STANCE_DATA && STANCE_DATA.stances) {
+            var stanceDeclaresQiMult = false;
+            var stanceDeclaresInsightMult = false;
+            STANCE_DATA.stances.forEach(function (stance) {
+                var modifiers = stance.modifiers || {};
+                if (modifiers.qiMult !== undefined) stanceDeclaresQiMult = true;
+                if (modifiers.insightMult !== undefined) stanceDeclaresInsightMult = true;
+            });
+            if (stanceDeclaresQiMult
+                && !(consumerReferences(consumers.stanceQiModifier, "qiMult")
+                    && consumerReferences(consumers.stanceQiModifier, "modifiers"))) {
+                errors.push("Dead multiplier: stance qiMult has no consumer (stanceQiMult).");
+            }
+            if (stanceDeclaresInsightMult
+                && !(consumerReferences(consumers.stanceInsightModifier, "insightMult")
+                    && consumerReferences(consumers.stanceInsightModifier, "modifiers"))) {
+                errors.push("Dead multiplier: stance insightMult has no consumer (stanceInsightMult).");
+            }
+        }
     }
 
     // Resolve a realm sub-stage label (or numeric token) to its `at` threshold.
@@ -191,6 +249,32 @@
                 if (tier.fromLevel > temperRow.limit) {
                     errors.push(label + ": temper tier " + tier.label + " needs level "
                         + tier.fromLevel + " but temper cap is " + temperRow.limit + ".");
+                }
+            }
+        }
+        // daoNode: [nodeKey, tierNumber] — the lattice node's owned tier must satisfy the
+        // gate (design §4.2 lattice grammar; §6.1 stance unlocks). Validated HERE so realm
+        // gates, hints, and stance unlocks all inherit it through the one shared oracle. The
+        // referenced node must exist and the tier must be within [1, tiers.length]: tier 0
+        // is "owns nothing" (never a gate) and a tier above the deepest declared tier can
+        // never be owned (unreachable). Guarded on LATTICE_DATA presence so harnesses that
+        // load no lattice (the synthetic fixture's daoNode-free cases) don't false-error.
+        if (condition.daoNode !== undefined) {
+            if (typeof LATTICE_DATA === "undefined" || !LATTICE_DATA || !LATTICE_DATA.nodes) {
+                errors.push(label + ": daoNode condition requires LATTICE_DATA to be loaded.");
+            } else {
+                var requiredNodeKey = condition.daoNode[ZERO];
+                var requiredNodeTier = condition.daoNode[ONE];
+                var referencedNode = LATTICE_DATA.nodes.find(function (n) { return n.key === requiredNodeKey; });
+                if (!referencedNode) {
+                    errors.push(label + ": references unknown dao node '"
+                        + requiredNodeKey + "'.");
+                } else {
+                    var tierCount = LATTICE_DATA.tiers ? LATTICE_DATA.tiers.length : ZERO;
+                    if (!(requiredNodeTier >= ONE && requiredNodeTier <= tierCount)) {
+                        errors.push(label + ": daoNode '" + requiredNodeKey + "' tier "
+                            + requiredNodeTier + " is out of range (1.." + tierCount + ").");
+                    }
                 }
             }
         }
@@ -380,12 +464,19 @@
     var KIND_CHECKPOINT = "checkpoint";
     var KIND_META = "meta";
 
-    // Every layer id the factory registers: realm rows + the Body + the gate layer.
+    // Every layer id the factory registers: realm rows + the Body + the gate layer, and
+    // the Dao lattice (design §4.2) WHEN its data table is loaded. LATTICE_DATA is guarded
+    // because not every harness loads lattice.js (the in-browser build and the runtime smoke
+    // do; the data-only lint-node harness may not) — when absent the lattice simply isn't a
+    // registered layer here, matching what the factory registers in that same context.
     function registeredLayerIds() {
         var ids = [];
         REALM_DATA.forEach(function (realm) { ids.push(realm.id); });
         ids.push(BODY_DATA.id);
         ids.push(GATE_DATA.id);
+        if (typeof LATTICE_DATA !== "undefined" && LATTICE_DATA && LATTICE_DATA.id) {
+            ids.push(LATTICE_DATA.id);
+        }
         return ids;
     }
 
@@ -712,6 +803,250 @@
         });
     }
 
+    // ----- §4.2 Dao lattice integrity -------------------------------------
+    // LATTICE_DATA is a comprehension DAG (design §4.2): five elemental roots with no
+    // requires, ring-2 nodes each requiring a root. This check proves the graph and its
+    // cost/effect schema are well-formed so makeDaoLayer (and the daoNode* readers) build a
+    // completable lattice: keys/buyableIds unique; every requires references a real node; the
+    // requires graph is ACYCLIC and every node is reachable from a root (an empty-requires
+    // node) — an unreachable node can never be bought, an effect computed into nothing; costs
+    // and effects are positional over tiers (strictly ascending positive costs; effect keys a
+    // subset of {qiMult,insightMult}, every value >= 1 because nodes are pure bonuses, §4.2);
+    // conflicts reference real nodes with no self/duplicate pair; the Insight baseRate is
+    // positive; and the reveal condition passes the shared checkCondition oracle (§5a grammar).
+    function checkLatticeData(errors) {
+        if (typeof LATTICE_DATA === "undefined" || !LATTICE_DATA) {
+            errors.push("Lattice: LATTICE_DATA table is required (§4.2).");
+            return;
+        }
+        var nodes = LATTICE_DATA.nodes;
+        if (!nodes || !(nodes.length > ZERO)) {
+            errors.push("Lattice: LATTICE_DATA.nodes must be non-empty (§4.2).");
+            return;
+        }
+
+        var tiers = LATTICE_DATA.tiers || [];
+        var tierCount = tiers.length;
+        var effectKeys = ["qiMult", "insightMult"];
+
+        // Uniqueness of node keys and buyableIds (the buyableIds drive the tab layout, §4.2).
+        var seenKeys = {};
+        var seenBuyableIds = {};
+        nodes.forEach(function (node) {
+            if (seenKeys[node.key]) {
+                errors.push("Lattice: duplicate node key '" + node.key + "' (§4.2).");
+            }
+            seenKeys[node.key] = true;
+            if (seenBuyableIds[node.buyableId] !== undefined) {
+                errors.push("Lattice: duplicate buyableId " + node.buyableId
+                    + " (nodes '" + seenBuyableIds[node.buyableId] + "' and '" + node.key + "', §4.2).");
+            }
+            seenBuyableIds[node.buyableId] = node.key;
+        });
+
+        // Every requires entry references an existing node key.
+        nodes.forEach(function (node) {
+            (node.requires || []).forEach(function (req) {
+                if (!seenKeys[req]) {
+                    errors.push("Lattice: node '" + node.key + "' requires unknown node '"
+                        + req + "' (§4.2).");
+                }
+            });
+        });
+
+        // Acyclicity + reachability from a root. A root is an empty-requires node; every node
+        // must be reachable by walking requires-edges back to a root, and the requires graph
+        // must contain no cycle (a cycle is both unreachable and an infinite unlock loop, §4.2).
+        var nodeByKey = {};
+        nodes.forEach(function (node) { nodeByKey[node.key] = node; });
+
+        // Cycle detection via DFS over requires-edges, three-colour (white/grey/black).
+        var visitState = {};
+        function detectCycle(nodeKey, stack) {
+            if (visitState[nodeKey] === "black") return false;
+            if (visitState[nodeKey] === "grey") {
+                errors.push("Lattice: requires cycle through node '" + nodeKey
+                    + "' (path " + stack.concat(nodeKey).join(" -> ") + ") — the graph must be acyclic (§4.2).");
+                return true;
+            }
+            var node = nodeByKey[nodeKey];
+            if (!node) return false;
+            visitState[nodeKey] = "grey";
+            var found = false;
+            (node.requires || []).forEach(function (req) {
+                if (nodeByKey[req] && detectCycle(req, stack.concat(nodeKey))) found = true;
+            });
+            visitState[nodeKey] = "black";
+            return found;
+        }
+        nodes.forEach(function (node) {
+            if (visitState[node.key] === undefined) detectCycle(node.key, []);
+        });
+
+        // Reachability: walk requires back to a root (an empty-requires node). The walk carries
+        // a `seen` set so it terminates even through a cycle (a cyclic component reaches no root
+        // and is correctly reported as orphaned) — independent of the cycle pass above, so a
+        // graph with a root-bearing component AND a disjoint cyclic orphan is fully diagnosed.
+        function reachesRoot(nodeKey, seen) {
+            var node = nodeByKey[nodeKey];
+            if (!node) return false;
+            var requires = node.requires || [];
+            if (requires.length === ZERO) return true;       // a root
+            var reaches = false;
+            requires.forEach(function (req) {
+                if (seen[req]) return;
+                var nextSeen = {};
+                Object.keys(seen).forEach(function (k) { nextSeen[k] = true; });
+                nextSeen[nodeKey] = true;
+                if (reachesRoot(req, nextSeen)) reaches = true;
+            });
+            return reaches;
+        }
+        nodes.forEach(function (node) {
+            if (!reachesRoot(node.key, {})) {
+                errors.push("Lattice: node '" + node.key
+                    + "' is not reachable from any root (orphan, §4.2).");
+            }
+        });
+
+        // Costs + effects are positional over tiers. Costs strictly ascending and positive;
+        // effects one object per tier, keys a subset of {qiMult,insightMult}, every value >= 1.
+        nodes.forEach(function (node) {
+            var costs = node.costs || [];
+            if (costs.length !== tierCount) {
+                errors.push("Lattice: node '" + node.key + "' has " + costs.length
+                    + " costs but " + tierCount + " tiers (§4.2).");
+            }
+            costs.forEach(function (cost, costIndex) {
+                if (!(cost > ZERO)) {
+                    errors.push("Lattice: node '" + node.key + "' cost at tier " + costIndex
+                        + " must be positive (§4.2).");
+                }
+                if (costIndex > ZERO && !(cost > costs[costIndex - ONE])) {
+                    errors.push("Lattice: node '" + node.key + "' costs must be strictly "
+                        + "ascending (cost " + cost + " at tier " + costIndex
+                        + " not above " + costs[costIndex - ONE] + ", §4.2).");
+                }
+            });
+
+            var effects = node.effects || [];
+            if (effects.length !== tierCount) {
+                errors.push("Lattice: node '" + node.key + "' has " + effects.length
+                    + " effects but " + tierCount + " tiers (§4.2).");
+            }
+            effects.forEach(function (effect, effectIndex) {
+                Object.keys(effect).forEach(function (effectKey) {
+                    if (effectKeys.indexOf(effectKey) === ZERO - ONE) {
+                        errors.push("Lattice: node '" + node.key + "' tier " + effectIndex
+                            + " effect key '" + effectKey
+                            + "' not in {qiMult, insightMult} (§4.2).");
+                    } else if (!(effect[effectKey] >= ONE)) {
+                        errors.push("Lattice: node '" + node.key + "' tier " + effectIndex
+                            + " " + effectKey + " is " + effect[effectKey]
+                            + " — nodes are bonuses, every value must be >= 1 (§4.2).");
+                    }
+                });
+            });
+        });
+
+        // Conflicts reference real nodes, no self-conflict, no duplicate pair (order-insensitive).
+        var seenConflictPairs = {};
+        (LATTICE_DATA.conflicts || []).forEach(function (pair) {
+            var first = pair[ZERO];
+            var second = pair[ONE];
+            if (!seenKeys[first]) {
+                errors.push("Lattice: conflict references unknown node '" + first + "' (§4.2).");
+            }
+            if (!seenKeys[second]) {
+                errors.push("Lattice: conflict references unknown node '" + second + "' (§4.2).");
+            }
+            if (first === second) {
+                errors.push("Lattice: node '" + first + "' conflicts with itself (§4.2).");
+            }
+            var canonicalPair = first < second ? first + "|" + second : second + "|" + first;
+            if (seenConflictPairs[canonicalPair]) {
+                errors.push("Lattice: duplicate conflict pair [" + first + ", " + second + "] (§4.2).");
+            }
+            seenConflictPairs[canonicalPair] = true;
+        });
+
+        // Insight baseRate must be positive (a non-positive trickle banks nothing, §4.2).
+        if (!LATTICE_DATA.insight || !(LATTICE_DATA.insight.baseRate > ZERO)) {
+            errors.push("Lattice: insight.baseRate must be > 0 (§4.2).");
+        }
+
+        // The reveal condition flows through the one shared reachability oracle (§5a grammar).
+        checkCondition(errors, "Lattice unlock", LATTICE_DATA.unlock);
+    }
+
+    // ----- §6.1 stance integrity ------------------------------------------
+    // STANCE_DATA is the self-imposed-difficulty grammar (design §6.1): voluntary toggles with
+    // an opportunity cost. This check proves each stance is a real TRADE, never a free buff:
+    // keys/clickableIds unique; maxActive >= 1; every modifiers key a subset of {qiMult,
+    // insightMult}; ALL modifier values > 0 (a stance may slow a resource, never zero it —
+    // completability §6.3); AND every stance trades — at least one modifier < 1 and at least one
+    // > 1 (§6.1 opportunity cost; a stance with no downside is a settings toggle, not a stance).
+    // Unlock conditions flow through checkCondition (now including the daoNode grammar key).
+    function checkStanceData(errors) {
+        if (typeof STANCE_DATA === "undefined" || !STANCE_DATA) {
+            errors.push("Stances: STANCE_DATA table is required (§6.1).");
+            return;
+        }
+        if (!(STANCE_DATA.maxActive >= ONE)) {
+            errors.push("Stances: maxActive must be >= 1 (§6.1).");
+        }
+        var stances = STANCE_DATA.stances;
+        if (!stances || !(stances.length > ZERO)) {
+            errors.push("Stances: STANCE_DATA.stances must be non-empty (§6.1).");
+            return;
+        }
+
+        var modifierKeys = ["qiMult", "insightMult"];
+        var seenStanceKeys = {};
+        var seenClickableIds = {};
+
+        stances.forEach(function (stance) {
+            if (seenStanceKeys[stance.key]) {
+                errors.push("Stances: duplicate stance key '" + stance.key + "' (§6.1).");
+            }
+            seenStanceKeys[stance.key] = true;
+            if (seenClickableIds[stance.clickableId] !== undefined) {
+                errors.push("Stances: duplicate clickableId " + stance.clickableId
+                    + " (stances '" + seenClickableIds[stance.clickableId] + "' and '"
+                    + stance.key + "', §6.1).");
+            }
+            seenClickableIds[stance.clickableId] = stance.key;
+
+            var modifiers = stance.modifiers || {};
+            var sawBelowOne = false;
+            var sawAboveOne = false;
+            Object.keys(modifiers).forEach(function (modKey) {
+                if (modifierKeys.indexOf(modKey) === ZERO - ONE) {
+                    errors.push("Stances: stance '" + stance.key + "' modifier key '" + modKey
+                        + "' not in {qiMult, insightMult} (§6.1).");
+                    return;
+                }
+                var value = modifiers[modKey];
+                if (!(value > ZERO)) {
+                    errors.push("Stances: stance '" + stance.key + "' " + modKey + " is " + value
+                        + " — a stance may slow a resource, never zero it (§6.3).");
+                }
+                if (value < ONE) sawBelowOne = true;
+                if (value > ONE) sawAboveOne = true;
+            });
+            // The opportunity-cost rule (§6.1): a stance must trade DOWN and UP. A stance whose
+            // every modifier is >= 1 is a free buff (a settings toggle), not a stance.
+            if (!(sawBelowOne && sawAboveOne)) {
+                errors.push("Stances: stance '" + stance.key
+                    + "' must TRADE — at least one modifier < 1 and at least one > 1; a "
+                    + "free-lunch stance is a settings toggle, not a stance (§6.1).");
+            }
+
+            // Unlock condition flows through the shared oracle (daoNode included).
+            checkCondition(errors, "Stance '" + stance.key + "' unlock", stance.unlock);
+        });
+    }
+
     // ----- §11 no numeric literals in js/build/*.js -----------------------
     // sourceTexts: { filename -> source string }. The node harness supplies these
     // by reading files; in-browser we cannot read source, so the check is skipped
@@ -793,6 +1128,11 @@
         checks.hintData = "ran";
         checkAchievementScopeDiscipline(errors);
         checks.achievementScopeDiscipline = "ran";
+        // Dao lattice + stance integrity (design §4.2/§6.1).
+        checkLatticeData(errors);
+        checks.latticeData = "ran";
+        checkStanceData(errors);
+        checks.stanceData = "ran";
         checks.noNumericLiterals = checkNoNumericLiterals(errors, sourceTexts);
         return { ok: errors.length === ZERO, errors: errors, checks: checks };
     }
@@ -809,6 +1149,8 @@
         checkPersistenceScopes: checkPersistenceScopes,
         checkKeepRules: checkKeepRules,
         checkHintData: checkHintData,
-        checkAchievementScopeDiscipline: checkAchievementScopeDiscipline
+        checkAchievementScopeDiscipline: checkAchievementScopeDiscipline,
+        checkLatticeData: checkLatticeData,
+        checkStanceData: checkStanceData
     };
 })(typeof globalThis !== "undefined" ? globalThis : this);

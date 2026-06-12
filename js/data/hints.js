@@ -62,7 +62,26 @@ var HINT_DATA = {
             text: "Open 4 meridians and break through to Foundation Establishment."
         },
         {
-            // Row 6: Qi Condensation is unlocked but player hasn't hit 6th Level yet.
+            // Row 6: Dao Lattice is revealed at 4th Level (§4.2) and the player
+            // has not yet been guided by a more-specific row above. This row sits
+            // BELOW breakToFoundation/climbFoundation so it only surfaces in the
+            // 4th-Level-to-5th-Level window: breakToFoundation (6th Level) and
+            // climbFoundation (Foundation layer) shadow it once those thresholds
+            // are met, while rows 1–4 require states (core forged, c/f unlocked)
+            // that do not yet exist at 4th Level. The realm gate rather than
+            // layerUnlocked:"dao" is used because the "dao" layer is registered by
+            // js/data/lattice.js (landing this slice concurrently); relying on the
+            // realm threshold is safe and grammar-compatible today (§8.5). There is
+            // no OR in the meets() grammar, so no "any node owned" universal signal
+            // exists for the enterTrance row — that row is intentionally omitted
+            // (see concerns: enterTrance cannot be expressed without contorting data).
+            key: "openLattice",
+            when: { realm: ["q", "4th Level"] },
+            text: "The Dao Lattice has revealed itself — explore it with Insight and claim your first Glimpse."
+        },
+        {
+            // Row 7: Qi Condensation is unlocked but player hasn't hit 4th Level yet
+            // (and no higher-priority hint matched).
             key: "climbQi",
             when: { layerUnlocked: "q" },
             text: "Climb the Qi Condensation levels and open your meridians — they never reset."

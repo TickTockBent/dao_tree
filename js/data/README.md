@@ -11,3 +11,5 @@ literals in generated code" rule). See `docs/internal/early-game-spec-v0.1.2.md`
 - `trees.js` — `TREE_DATA` (persistence scopes tree/life/eternal + tree membership; the factory compiles each layer's `doReset` from it — design doc §8.1)
 - `keep-rules.js` — `KEEP_RULES` (milestone-gated keys that survive a prestige — design doc §1.2/§8.2)
 - `hints.js` — `HINT_DATA` (guidance cascade, first match wins, unconditional catch-all last — design doc §1.5)
+- `lattice.js` — `LATTICE_DATA` (the Dao lattice: 15 elemental nodes with Glimpse/Seed tiers, Insight currency, declared conflicts — design doc §4.2/§8.7)
+- `stances.js` — `STANCE_DATA` (voluntary toggleable challenge stances with opportunity cost — design doc §6.1/§8.4)

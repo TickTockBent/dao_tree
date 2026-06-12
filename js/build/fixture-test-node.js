@@ -100,7 +100,11 @@ function cleanTreeData() {
             qb: { scope: "tree", tree: "act2" },
             fb: { scope: "tree", tree: "act2" },
             b: { scope: "life" },
-            gate: { scope: "life" }
+            gate: { scope: "life" },
+            // The Dao lattice is a life-scoped side layer (design §4.2): now that the fixture
+            // applies LATTICE_DATA, registeredLayerIds() lists "dao", so it needs an entry here
+            // for the persistence-scope clean cases — matching trees.js's real dao life entry.
+            dao: { scope: "life" }
         }
     };
 }
@@ -127,6 +131,47 @@ function cleanHintData() {
     };
 }
 
+// Synthetic CLEAN lattice (design §4.2): one root (no requires) and one ring-2 node that
+// requires it — minimally a reachable, acyclic graph with two tiers. Costs strictly ascending
+// & positive; effects one per tier, keys in {qiMult,insightMult}, every value >= 1; one valid
+// conflict pair; a positive Insight baseRate; a reveal condition the shared oracle accepts.
+function cleanLatticeData() {
+    return {
+        id: "dao",
+        name: "Dao Lattice",
+        unlock: { realm: ["qa", "1st Level"] },
+        insight: { resource: "Insight", baseRate: 0.5 },
+        tiers: [
+            { key: "glimpse", label: "Glimpse" },
+            { key: "seed", label: "Seed" }
+        ],
+        nodes: [
+            { key: "metal", buyableId: 11, name: "Metal Root", element: "metal", requires: [],
+              costs: [100, 300], effects: [{ qiMult: 1.03 }, { qiMult: 1.06 }] },
+            { key: "sword", buyableId: 21, name: "Sword Intent", element: "metal", requires: ["metal"],
+              costs: [250, 800], effects: [{ insightMult: 1.03 }, { insightMult: 1.07 }] },
+            { key: "stillness", buyableId: 31, name: "Stillness", element: "metal", requires: ["metal"],
+              costs: [600, 2000], effects: [{ insightMult: 1.04 }, { insightMult: 1.09 }] }
+        ],
+        conflicts: [["sword", "stillness"]]
+    };
+}
+
+// Synthetic CLEAN stances (design §6.1): maxActive 1; one free trade-down/up stance and one
+// gated on a real dao node (exercising the extended checkCondition daoNode key). Every stance
+// has a modifier < 1 AND a modifier > 1, every modifier > 0.
+function cleanStanceData() {
+    return {
+        maxActive: 1,
+        stances: [
+            { key: "breathingTrance", clickableId: 41, name: "Breathing Trance",
+              unlock: {}, modifiers: { qiMult: 0.7, insightMult: 2.0 } },
+            { key: "swordTrance", clickableId: 42, name: "Sword Trance",
+              unlock: { daoNode: ["sword", 1] }, modifiers: { qiMult: 0.4, insightMult: 3.5 } }
+        ]
+    };
+}
+
 // Apply a complete set of synthetic globals into the sandbox for one case.
 function applyGlobals(overrides) {
     sandbox.REALM_DATA = overrides.REALM_DATA || cleanRealmData();
@@ -135,6 +180,8 @@ function applyGlobals(overrides) {
     sandbox.TREE_DATA = overrides.TREE_DATA || cleanTreeData();
     sandbox.KEEP_RULES = overrides.KEEP_RULES || cleanKeepRules();
     sandbox.HINT_DATA = overrides.HINT_DATA || cleanHintData();
+    sandbox.LATTICE_DATA = overrides.LATTICE_DATA || cleanLatticeData();
+    sandbox.STANCE_DATA = overrides.STANCE_DATA || cleanStanceData();
 }
 
 // Run a single exposed check by name against the currently-applied globals and
@@ -182,6 +229,8 @@ runCase("clean two-tree / persistence scopes", "checkPersistenceScopes", {}, tru
 runCase("clean two-tree / keep rules", "checkKeepRules", {}, true);
 runCase("clean two-tree / hint data", "checkHintData", {}, true);
 runCase("clean two-tree / achievement scope", "checkAchievementScopeDiscipline", {}, true);
+runCase("clean lattice / lattice data", "checkLatticeData", {}, true);
+runCase("clean stances / stance data", "checkStanceData", {}, true);
 
 // ---------------------------------------------------------------------------
 // FAIL (1): a registered layer (fb) missing from TREE_DATA.layers.
@@ -308,6 +357,99 @@ runCase("clean two-tree / achievement scope", "checkAchievementScopeDiscipline",
     };
     runCase("FAIL(7) eternal achievement gates a tree-scoped layer",
         "checkAchievementScopeDiscipline", { GATE_DATA: gate }, false, "samsaraMilestone");
+})();
+
+// ---------------------------------------------------------------------------
+// FAIL (L1): a requires CYCLE (a -> b -> a). The cycle detector must report it AND
+// the reachability walk must be skipped (a cycle has no root), so the only error is
+// the cycle itself — naming the offending node.
+// ---------------------------------------------------------------------------
+(function () {
+    const lattice = cleanLatticeData();
+    lattice.nodes = [
+        { key: "a", buyableId: 11, requires: ["b"], costs: [100, 300],
+          effects: [{ qiMult: 1.03 }, { qiMult: 1.06 }] },
+        { key: "b", buyableId: 12, requires: ["a"], costs: [100, 300],
+          effects: [{ qiMult: 1.03 }, { qiMult: 1.06 }] }
+    ];
+    lattice.conflicts = [];
+    runCase("FAIL(L1) lattice requires cycle a->b->a",
+        "checkLatticeData", { LATTICE_DATA: lattice }, false, "cycle");
+})();
+
+// ---------------------------------------------------------------------------
+// FAIL (L2): an ORPHAN node unreachable from any root. A root-bearing component
+// (metal -> sword) coexists with a disjoint pair whose requires loop only among
+// themselves (orphanA <-> orphanB), so neither reaches an empty-requires root. In a
+// finite graph a rootless region is necessarily cyclic, so this case also trips the
+// cycle pass; the reachability walk runs independently and flags the orphans by name.
+// ---------------------------------------------------------------------------
+(function () {
+    const lattice = cleanLatticeData();
+    lattice.nodes = [
+        { key: "metal", buyableId: 11, requires: [], costs: [100, 300],
+          effects: [{ qiMult: 1.03 }, { qiMult: 1.06 }] },
+        { key: "sword", buyableId: 21, requires: ["metal"], costs: [250, 800],
+          effects: [{ insightMult: 1.03 }, { insightMult: 1.07 }] },
+        { key: "orphanA", buyableId: 31, requires: ["orphanB"], costs: [600, 2000],
+          effects: [{ insightMult: 1.04 }, { insightMult: 1.09 }] },
+        { key: "orphanB", buyableId: 32, requires: ["orphanA"], costs: [600, 2000],
+          effects: [{ insightMult: 1.04 }, { insightMult: 1.09 }] }
+    ];
+    lattice.conflicts = [];
+    runCase("FAIL(L2) lattice orphan node unreachable from any root",
+        "checkLatticeData", { LATTICE_DATA: lattice }, false, "orphan");
+})();
+
+// ---------------------------------------------------------------------------
+// FAIL (L3): non-ascending tier costs (seed cost not above glimpse cost).
+// ---------------------------------------------------------------------------
+(function () {
+    const lattice = cleanLatticeData();
+    lattice.nodes[0].costs = [300, 100]; // descending — must trip the ascending-costs rule
+    runCase("FAIL(L3) lattice non-ascending tier costs",
+        "checkLatticeData", { LATTICE_DATA: lattice }, false, "ascending");
+})();
+
+// ---------------------------------------------------------------------------
+// FAIL (L4): a conflict referencing an UNKNOWN node key.
+// ---------------------------------------------------------------------------
+(function () {
+    const lattice = cleanLatticeData();
+    lattice.conflicts = [["sword", "phantom"]];
+    runCase("FAIL(L4) lattice conflict references an unknown node",
+        "checkLatticeData", { LATTICE_DATA: lattice }, false, "phantom");
+})();
+
+// ---------------------------------------------------------------------------
+// FAIL (L5): a node effect with a value < 1 (nodes are bonuses, every value >= 1).
+// ---------------------------------------------------------------------------
+(function () {
+    const lattice = cleanLatticeData();
+    lattice.nodes[0].effects = [{ qiMult: 0.9 }, { qiMult: 1.06 }]; // a penalty, not a bonus
+    runCase("FAIL(L5) lattice node effect value below 1",
+        "checkLatticeData", { LATTICE_DATA: lattice }, false, "metal");
+})();
+
+// ---------------------------------------------------------------------------
+// FAIL (S1): a stance with NO cost (all modifiers >= 1) -> the tradeoff rule fires.
+// ---------------------------------------------------------------------------
+(function () {
+    const stances = cleanStanceData();
+    stances.stances[0].modifiers = { qiMult: 1.5, insightMult: 2.0 }; // pure free buff
+    runCase("FAIL(S1) stance with no cost (all modifiers >= 1)",
+        "checkStanceData", { STANCE_DATA: stances }, false, "TRADE");
+})();
+
+// ---------------------------------------------------------------------------
+// FAIL (S2): a stance unlock daoNode referencing an UNKNOWN node -> the extended
+// checkCondition (daoNode grammar) fires through checkStanceData.
+// ---------------------------------------------------------------------------
+(function () {
+    const stances = cleanStanceData();
+    stances.stances[1].unlock = { daoNode: ["nonesuch", 1] };
+    runCase("FAIL(S2) stance unlock daoNode references an unknown node",
+        "checkStanceData", { STANCE_DATA: stances }, false, "nonesuch");
 })();
 
 // ---------------------------------------------------------------------------

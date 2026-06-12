@@ -200,9 +200,116 @@ function substageThreshold(realmId, label) {
 }
 
 // ---------------------------------------------------------------------------
+// Dao lattice live readers (design §4.2). The dao layer is LIFE-scoped and may
+// not exist yet in player (revealed mid-Qi-Condensation), so every reader is
+// defensive like the Body readers (daoExists() mirrors bodyExists()). The
+// lattice's currency is Insight (player.dao.points); nodes are buyables whose
+// owned amount is the highest tier owned (Glimpse=1, Seed=2).
+// ---------------------------------------------------------------------------
+function daoLayerId() { return LATTICE_DATA.id; }
+
+function daoExists() {
+    return !!(player[daoLayerId()] && player[daoLayerId()].unlocked);
+}
+
+// True once the reveal gate (LATTICE_DATA.unlock) has been met. Latched on the dao
+// layer's `revealed` flag so the layer stays shown once seen (§4.2 never resets / the
+// realm reveal-latch pattern) — Insight accrues only while this is true (no banking).
+function daoIsRevealed() {
+    if (daoExists() && player[daoLayerId()].revealed) return true;
+    return meets(LATTICE_DATA.unlock);
+}
+
+function daoNodeByKey(nodeKey) {
+    return LATTICE_DATA.nodes.find(function (node) { return node.key === nodeKey; });
+}
+
+// Owned tier of a lattice node = its buyable amount (0 none, 1 Glimpse, 2 Seed).
+function daoNodeTierOwned(nodeKey) {
+    if (!daoExists()) return factoryDecimalZero();
+    var node = daoNodeByKey(nodeKey);
+    if (!node) return factoryDecimalZero();
+    return getBuyableAmount(daoLayerId(), node.buyableId);
+}
+
+// Product of every owned node tier's qiMult effect (design §4.2 lattice→Qi coupling).
+// Each node carries one effect object per tier; a tier contributes only its qiMult (the
+// insightMult-flavoured nodes are identity here). No dead mult: folded into
+// cultivationQiPerSecond() (§9.2).
+function daoNodeQiMult() {
+    var product = factoryDecimalOne();
+    if (!daoExists()) return product;
+    LATTICE_DATA.nodes.forEach(function (node) {
+        var owned = getBuyableAmount(daoLayerId(), node.buyableId);
+        node.effects.forEach(function (effect, tierIndex) {
+            if (effect.qiMult !== undefined && owned.gte(tierIndex + FACTORY_ONE)) {
+                product = product.times(effect.qiMult);
+            }
+        });
+    });
+    return product;
+}
+
+// Product of every owned node tier's insightMult effect — compounds the Insight trickle.
+function daoNodeInsightMult() {
+    var product = factoryDecimalOne();
+    if (!daoExists()) return product;
+    LATTICE_DATA.nodes.forEach(function (node) {
+        var owned = getBuyableAmount(daoLayerId(), node.buyableId);
+        node.effects.forEach(function (effect, tierIndex) {
+            if (effect.insightMult !== undefined && owned.gte(tierIndex + FACTORY_ONE)) {
+                product = product.times(effect.insightMult);
+            }
+        });
+    });
+    return product;
+}
+
+// The currently-active stance row (design §6.1), or null when none. The active stance is
+// stored as player.dao.activeStance (a key string; "" = none).
+function activeStanceRow() {
+    if (!daoExists()) return null;
+    var activeKey = player[daoLayerId()].activeStance;
+    if (!activeKey) return null;
+    var matchedStance = STANCE_DATA.stances.find(function (stance) { return stance.key === activeKey; }) || null;
+    // A stance modifier must never outlive its unlock gate: if a future slice ever
+    // resets the gating state (lattice nodes are life-scoped today, but reincarnation
+    // will reset them), self-heal by deactivating rather than applying a hidden stance.
+    if (matchedStance && !meets(matchedStance.unlock)) {
+        player[daoLayerId()].activeStance = "";
+        return null;
+    }
+    return matchedStance;
+}
+
+// Active stance's qiMult (identity when none) — folded into cultivationQiPerSecond().
+function stanceQiMult() {
+    var stance = activeStanceRow();
+    if (!stance || stance.modifiers.qiMult === undefined) return factoryDecimalOne();
+    return new Decimal(stance.modifiers.qiMult);
+}
+
+// Active stance's insightMult (identity when none) — compounds the Insight trickle.
+function stanceInsightMult() {
+    var stance = activeStanceRow();
+    if (!stance || stance.modifiers.insightMult === undefined) return factoryDecimalOne();
+    return new Decimal(stance.modifiers.insightMult);
+}
+
+// Insight/sec (design §4.2): baseRate x daoNodeInsightMult() x stanceInsightMult(), zero
+// until the lattice is revealed (no pre-unlock banking). The dao layer's update() accrues
+// this each tick; the tab displays the breakdown.
+function insightPerSecond() {
+    if (!daoIsRevealed()) return factoryDecimalZero();
+    return new Decimal(LATTICE_DATA.insight.baseRate)
+        .times(daoNodeInsightMult())
+        .times(stanceInsightMult());
+}
+
+// ---------------------------------------------------------------------------
 // meets(condition) — uniform unlock / done evaluator over a condition object.
 // Keys combine with AND. Supports: qi, realm:[id, numberOrLabel], meridians,
-// temperTier, primaryMeridiansAll. (§5 unlock / §8 done.)
+// temperTier, primaryMeridiansAll, daoNode:[nodeKey, tier]. (§5 unlock / §8 done.)
 // ---------------------------------------------------------------------------
 function meets(condition) {
     if (!condition) return true;
@@ -235,6 +342,16 @@ function meets(condition) {
 
     if (condition.primaryMeridiansAll !== undefined && condition.primaryMeridiansAll) {
         if (meridiansOpened().lt(primaryMeridianRow().limit)) satisfied = false;
+    }
+
+    // daoNode: [nodeKey, tierNumber] — the lattice node's owned tier (its buyable amount)
+    // must be >= tierNumber (design §4.2; pinned grammar). Guards the dao layer existing in
+    // player (defensive like the bodyExists cross-layer readers) so a pre-reveal save where
+    // player.dao is unseeded simply fails the condition rather than throwing.
+    if (condition.daoNode !== undefined) {
+        var requiredNodeKey = condition.daoNode[FACTORY_ZERO];
+        var requiredNodeTier = condition.daoNode[FACTORY_ONE];
+        if (daoNodeTierOwned(requiredNodeKey).lt(requiredNodeTier)) satisfied = false;
     }
 
     return satisfied;
@@ -304,14 +421,19 @@ function coreGradeMult() {
     return new Decimal(matched.globalMult);
 }
 
-// The one public entry the rewritten getPointGen multiplies into baseRate.
+// The one public entry the rewritten getPointGen multiplies into baseRate. The Dao
+// lattice (daoNodeQiMult, design §4.2) and the active stance (stanceQiMult, §6.1) join
+// the pipeline here — both identity until the lattice is revealed / a stance is active,
+// so this is byte-for-byte the prior product for any pre-lattice save (no dead mult §9.2).
 function cultivationQiPerSecond() {
     return qiBaseRate()
         .times(meridianMult())
         .times(temperMult())
         .times(realmMult())
         .times(gateMult())
-        .times(coreGradeMult());
+        .times(coreGradeMult())
+        .times(daoNodeQiMult())
+        .times(stanceQiMult());
 }
 
 // ---------------------------------------------------------------------------
@@ -1002,6 +1124,189 @@ function makeGateLayer() {
 }
 
 // ---------------------------------------------------------------------------
+// makeDaoLayer() — the LIFE-scoped row:"side" Dao lattice container (design §4.2/§6.1).
+// type:"none" container (like Body): Insight is player.dao.points, but the lattice has no
+// prestige resource line — nodes are buyables, stances are clickable toggles. Revealed
+// mid-Qi-Condensation and never reset within a life. ALL numbers resolve from LATTICE_DATA /
+// STANCE_DATA / FACTORY_NUMERICS — zero literals (§11).
+// ---------------------------------------------------------------------------
+
+// One lattice node buyable (design §4.2). purchaseLimit = the tier count, so a node tops
+// out at Seed; cost(x) reads costs[x]; unlocked when every prerequisite node owns tier >= 1
+// (Glimpse). Buying spends Insight (player.dao.points).
+function makeDaoNodeBuyable(node) {
+    var tierCount = LATTICE_DATA.tiers.length;
+    return {
+        title: node.name,
+        cost: function (x) {
+            // x is the NEXT tier index (0 Glimpse, 1 Seed); cost is positional over costs[].
+            return new Decimal(node.costs[x]);
+        },
+        effect: function (x) {
+            // Effect of the tier just past (x), surfaced in tmp for the display (no dead mult).
+            var tierIndex = x > FACTORY_ZERO ? x - FACTORY_ONE : FACTORY_ZERO;
+            return node.effects[tierIndex];
+        },
+        purchaseLimit: new Decimal(tierCount),
+        unlocked: function () {
+            // A node reveals once all its prerequisites own at least a Glimpse (tier >= 1).
+            var allMet = true;
+            node.requires.forEach(function (prereqKey) {
+                if (daoNodeTierOwned(prereqKey).lt(FACTORY_ONE)) allMet = false;
+            });
+            return allMet;
+        },
+        canAfford: function () {
+            return player[this.layer].points.gte(tmp[this.layer].buyables[this.id].cost);
+        },
+        buy: function () {
+            var cost = tmp[this.layer].buyables[this.id].cost;
+            player[this.layer].points = player[this.layer].points.sub(cost);
+            setBuyableAmount(this.layer, this.id, getBuyableAmount(this.layer, this.id).add(FACTORY_ONE));
+        },
+        display: function () {
+            var owned = getBuyableAmount(this.layer, this.id);
+            var ownedWhole = owned.toNumber();
+            var nextTierIndex = ownedWhole;
+            var ownedTierLabel = ownedWhole > FACTORY_ZERO
+                ? LATTICE_DATA.tiers[ownedWhole - FACTORY_ONE].label
+                : "—";
+            var line = node.name + "<br>Owned: " + ownedTierLabel
+                + " (" + formatWhole(owned) + " / " + formatWhole(new Decimal(tierCount)) + ")";
+            if (nextTierIndex < tierCount) {
+                var nextTier = LATTICE_DATA.tiers[nextTierIndex];
+                var nextEffect = node.effects[nextTierIndex];
+                var effectWord = nextEffect.qiMult !== undefined ? "Qi/sec" : "Insight/sec";
+                var effectValue = nextEffect.qiMult !== undefined ? nextEffect.qiMult : nextEffect.insightMult;
+                line += "<br>Next: " + nextTier.label + " — x" + format(new Decimal(effectValue))
+                    + " " + effectWord;
+                line += "<br>Cost: " + format(new Decimal(node.costs[nextTierIndex])) + " "
+                    + LATTICE_DATA.insight.resource;
+            } else {
+                line += "<br>Fully comprehended.";
+            }
+            return line;
+        }
+    };
+}
+
+function makeDaoNodeBuyables() {
+    var buyablesObject = {};
+    LATTICE_DATA.nodes.forEach(function (node) {
+        buyablesObject[node.buyableId] = makeDaoNodeBuyable(node);
+    });
+    return buyablesObject;
+}
+
+// One stance toggle clickable (design §6.1). Pinned semantics: clicking an inactive stance
+// activates it and (maxActive 1) deactivates any other; clicking the active stance turns it
+// off. Free, costless, instant — no resource, no reset. Display shows the modifiers as
+// percentages and the active state.
+function makeStanceClickable(stance) {
+    var percentBase = new Decimal(FACTORY_HUNDRED);
+    function modifierLine() {
+        var parts = [];
+        if (stance.modifiers.qiMult !== undefined) {
+            var qiPercent = new Decimal(stance.modifiers.qiMult).times(percentBase);
+            parts.push("Qi/sec " + format(qiPercent) + "%");
+        }
+        if (stance.modifiers.insightMult !== undefined) {
+            var insightPercent = new Decimal(stance.modifiers.insightMult).times(percentBase);
+            parts.push("Insight/sec " + format(insightPercent) + "%");
+        }
+        return parts.join(", ");
+    }
+    return {
+        title: stance.name,
+        display: function () {
+            var isActive = player[this.layer].activeStance === stance.key;
+            var line = stance.name + (isActive ? " — ACTIVE" : "") + "<br>" + modifierLine();
+            line += isActive ? "<br>Click to release." : "<br>Click to enter this stance.";
+            return line;
+        },
+        unlocked: function () { return meets(stance.unlock); },
+        canClick: function () { return true; },
+        onClick: function () {
+            // Toggle exclusivity (maxActive 1, §6.1): same stance -> off; otherwise -> this one.
+            if (player[this.layer].activeStance === stance.key) {
+                player[this.layer].activeStance = "";
+            } else {
+                player[this.layer].activeStance = stance.key;
+            }
+        }
+    };
+}
+
+function makeStanceClickables() {
+    var clickablesObject = {};
+    STANCE_DATA.stances.forEach(function (stance) {
+        clickablesObject[stance.clickableId] = makeStanceClickable(stance);
+    });
+    return clickablesObject;
+}
+
+function makeDaoLayer() {
+    return {
+        name: LATTICE_DATA.name,
+        symbol: LATTICE_DATA.symbol,
+        color: LATTICE_DATA.color,
+        row: "side",
+        type: "none", // container layer: Insight is the resource, but nodes/stances drive it
+        resource: LATTICE_DATA.insight.resource,
+        startData: function () {
+            return {
+                unlocked: true,
+                revealed: false,        // latched true once the reveal gate is first met (§4.2)
+                points: factoryDecimalZero(),  // Insight
+                activeStance: ""        // "" = no stance active (§6.1)
+            };
+        },
+        tooltip: function () {
+            return LATTICE_DATA.name + " — comprehension (never resets this life)";
+        },
+        buyables: makeDaoNodeBuyables(),
+        clickables: makeStanceClickables(),
+        // §4.2 reveal: hidden until q 4th Level, then latched shown for the rest of the life.
+        layerShown: function () {
+            if (player[this.layer].revealed) return true;
+            return daoIsRevealed();
+        },
+        // Accrue Insight only while revealed (no pre-unlock banking, §4.2). Latch the
+        // revealed flag the first tick the gate is met so layerShown/insightPerSecond
+        // stay stable even if the player later resets a realm below the reveal gate.
+        update: function (diff) {
+            if (!player[this.layer].revealed && daoIsRevealed()) {
+                player[this.layer].revealed = true;
+            }
+            if (!player[this.layer].revealed) return;
+            player[this.layer].points = player[this.layer].points.add(insightPerSecond().times(diff));
+        },
+        tabFormat: [
+            ["display-text", function () {
+                var perSecond = insightPerSecond();
+                var nodeFactor = daoNodeInsightMult();
+                var stanceFactor = stanceInsightMult();
+                var line = "Comprehension trickles in as <b>Insight</b>, the second cultivation grammar. "
+                    + "Spend it on lattice nodes (permanent Qi / Insight bonuses) and enter stances "
+                    + "(free toggles that trade one resource for another).<br><br>";
+                line += LATTICE_DATA.insight.resource + ": <b>" + format(player[this.layer].points) + "</b><br>";
+                line += LATTICE_DATA.insight.resource + "/sec: <b>" + format(perSecond) + "</b> "
+                    + "(base " + format(new Decimal(LATTICE_DATA.insight.baseRate))
+                    + " x nodes " + format(nodeFactor)
+                    + " x stance " + format(stanceFactor) + ")";
+                return line;
+            }],
+            "blank",
+            ["display-text", function () { return "<b>Lattice nodes</b>"; }],
+            "buyables",
+            "blank",
+            ["display-text", function () { return "<b>Stances</b>"; }],
+            "clickables"
+        ]
+    };
+}
+
+// ---------------------------------------------------------------------------
 // Registration. Run the linter first; on failure it hard-stops load (§11).
 // ---------------------------------------------------------------------------
 function registerCultivationLayers() {
@@ -1029,6 +1334,8 @@ function registerCultivationLayers() {
     addLayer(BODY_DATA.id, makeBodyLayer());
     requireTreeEntry(GATE_DATA.id);
     addLayer(GATE_DATA.id, makeGateLayer());
+    requireTreeEntry(LATTICE_DATA.id);
+    addLayer(LATTICE_DATA.id, makeDaoLayer());
     REALM_DATA.forEach(function (realmData) {
         requireTreeEntry(realmData.id);
         addLayer(realmData.id, makeRealmLayer(realmData));
