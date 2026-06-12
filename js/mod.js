@@ -62,7 +62,20 @@ function addedPlayerData() { return {
 }}
 
 // Display extra things at the top of the page
+// Each entry may be a function() -> HTML string; the TMT engine calls it each
+// tick and renders the result with v-html (see js/technical/temp.js lines 117-121
+// and js/technical/systemComponents.js overlay-head template). An empty string
+// suppresses the entry entirely — the template guards with v-if="thing".
 var displayThings = [
+    function () {
+        // Guidance bar (design doc §1.5): one-line diegetic hint from the
+        // hint engine. Returns "" when the engine is not yet loaded or has
+        // no text, so the entry is invisible until the factory is ready.
+        if (typeof cultivationHintText !== "function") return "";
+        var guidanceText = cultivationHintText();
+        if (!guidanceText) return "";
+        return "<i>Guidance: " + guidanceText + "</i>";
+    }
 ]
 
 // Determines when the game "ends" — the demo-complete beat (spec §1/§7): forging

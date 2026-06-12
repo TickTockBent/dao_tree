@@ -20,6 +20,11 @@ var FACTORY_HUNDRED = FACTORY_NUMERICS.hundred;
 function factoryDecimalOne() { return new Decimal(FACTORY_ONE); }
 function factoryDecimalZero() { return new Decimal(FACTORY_ZERO); }
 
+// The "tree" persistence scope token (design §8.1). Only tree-scoped layers reset
+// via the compiled doReset; life/eternal layers get no doReset (their immunity is
+// topological). A string token, not a number — the §11 scan is for numeric literals.
+var TREE_SCOPE_TREE = "tree";
+
 // ---------------------------------------------------------------------------
 // Data lookups (resolve a realm/body row by id without literals).
 // ---------------------------------------------------------------------------
@@ -62,6 +67,68 @@ function describeUnlockCondition(condition) {
 
 function bodyBuyableByKey(key) {
     return BODY_DATA.buyables.find(function (row) { return row.key === key; });
+}
+
+// ---------------------------------------------------------------------------
+// Tree-scope reset compilation (design §8.1/§8.2). One data-driven decision
+// replaces the reference's per-layer reset guards: TREE_DATA declares scope +
+// membership, KEEP_RULES declares which keys survive a prestige, and the factory
+// compiles a doReset from both. ZERO numeric literals — row comparisons read the
+// REALM_DATA `row` field, milestone ids read KEEP_RULES, never bare numbers (§11).
+// ---------------------------------------------------------------------------
+function treeLayerEntry(layerId) {
+    return TREE_DATA.layers[layerId];
+}
+
+// Row of a layer, read from its REALM_DATA row field (data, never a literal).
+// Side/life layers (Body, gate) have no realm row; they never reset via this path
+// and so never need a comparable row.
+function layerRow(layerId) {
+    var realmData = findRealmData(layerId);
+    return realmData ? realmData.row : undefined;
+}
+
+// Pure decision: when `resettingLayerId` prestiges, should `thisLayerId` reset, and
+// if so with which keep keys? Returns null to mean "do NOT reset this layer"; an
+// array (possibly empty) to mean "reset, preserving these player[thisLayerId] keys".
+//
+// Reset ONLY IF the resetter is tree-scoped, in the SAME tree, and its row is
+// STRICTLY greater than this layer's row. rowReset invokes doReset on the resetting
+// layer itself and on equal-row siblings, so self and equal/lower rows are no-ops —
+// preserving the default cascade byte-for-byte when no keep rule is earned.
+function treeResetKeepKeys(thisLayerId, resettingLayerId) {
+    var thisEntry = treeLayerEntry(thisLayerId);
+    var resetterEntry = treeLayerEntry(resettingLayerId);
+    if (!thisEntry || !resetterEntry) return null;
+
+    var treeScope = TREE_SCOPE_TREE;
+    if (thisEntry.scope !== treeScope || resetterEntry.scope !== treeScope) return null;
+    if (thisEntry.tree !== resetterEntry.tree) return null;
+
+    var resetterRow = layerRow(resettingLayerId);
+    var thisLayerRowValue = layerRow(thisLayerId);
+    if (resetterRow === undefined || thisLayerRowValue === undefined) return null;
+    if (!(resetterRow > thisLayerRowValue)) return null;
+
+    // Collect keep keys from every earned rule targeting this layer on this reset.
+    var keepKeys = [];
+    KEEP_RULES.forEach(function (rule) {
+        if (rule.onResetOf !== resettingLayerId || rule.target !== thisLayerId) return;
+        if (!hasMilestone(rule.grantedBy.layer, rule.grantedBy.milestone)) return;
+        rule.keep.forEach(function (keyName) { keepKeys.push(keyName); });
+    });
+    return keepKeys;
+}
+
+// Compile the doReset for a tree-scoped layer. Bound to layers[thisLayerId] by
+// game.js run(), so `this.layer` is the layer being reset; the argument is the
+// resetting layer id. layerDataReset performs the actual reset with the keep array.
+function makeTreeDoReset() {
+    return function (resettingLayerId) {
+        var keepKeys = treeResetKeepKeys(this.layer, resettingLayerId);
+        if (keepKeys === null) return;
+        layerDataReset(this.layer, keepKeys);
+    };
 }
 
 // Current temper tier index reached for a given temper level (or -1 / below first).
@@ -819,6 +886,21 @@ function makeRealmLayer(realmData) {
         }
     };
 
+    // Compiled doReset (design §8.1/§8.2): attached ONLY to tree-scoped layers, so
+    // a higher-row tree layer prestiging resets lower-row tree layers in the same
+    // tree (the default cascade), now carrying earned KEEP_RULES keys. Life/eternal
+    // layers get NO doReset — their reset immunity stays topological (rowReset's
+    // auto-branch requires !isNaN(row), false for row:"side"). With no keep rule
+    // earned this behaves byte-for-byte like the prior default cascade.
+    // NOTE: carrying a doReset also opts the layer into rowReset's
+    // activeChallenge-clear branch (game.js), which the default branch skips. Benign
+    // while realms declare no challenges; a future realm-with-challenge inherits
+    // clear-on-cascade semantics intentionally.
+    var thisTreeEntry = treeLayerEntry(realmData.id);
+    if (thisTreeEntry && thisTreeEntry.scope === TREE_SCOPE_TREE) {
+        layerData.doReset = makeTreeDoReset();
+    }
+
     // Forge realm augmentation (§7): the one-time forge + refinement loop. Only the
     // realm carrying a forge config (Core Formation) gets these; the math/UI all
     // resolve from REALM_DATA(c).forge, so no other realm is touched.
@@ -932,9 +1014,23 @@ function registerCultivationLayers() {
         }
     }
 
+    // Defense in depth ahead of the linter (design §8.1): every registered layer
+    // MUST declare a TREE_DATA.layers entry (its persistence scope). A missing entry
+    // means the compiled doReset cannot decide the layer's reset closure, so refuse
+    // to load rather than register a layer with undefined reset topology.
+    function requireTreeEntry(layerId) {
+        if (!treeLayerEntry(layerId)) {
+            throw new Error("Cultivation registration: layer '" + layerId
+                + "' has no TREE_DATA.layers scope entry; refusing to register.");
+        }
+    }
+
+    requireTreeEntry(BODY_DATA.id);
     addLayer(BODY_DATA.id, makeBodyLayer());
+    requireTreeEntry(GATE_DATA.id);
     addLayer(GATE_DATA.id, makeGateLayer());
     REALM_DATA.forEach(function (realmData) {
+        requireTreeEntry(realmData.id);
         addLayer(realmData.id, makeRealmLayer(realmData));
     });
 }

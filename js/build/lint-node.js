@@ -18,12 +18,16 @@ const dataDir = path.join(projectRoot, "js", "data");
 const buildDir = path.join(projectRoot, "js", "build");
 
 // Files that define the data globals + the linter, loaded in dependency order.
-const dataFiles = ["constants.js", "realms.js", "body.js", "gates.js"];
+// trees.js / keep-rules.js / hints.js reference nothing at load; they sit with
+// their data siblings before linter.js so the new §8.1/§8.2/§8.5 checks can read them.
+const dataFiles = ["constants.js", "realms.js", "body.js", "gates.js",
+    "trees.js", "keep-rules.js", "hints.js"];
 const linterFile = "linter.js";
 
 // js/build/*.js files subject to the no-numeric-literal scan (generated/factory
-// surface). lint-node.js itself is the harness, not generated code, so excluded.
-const scannedBuildFiles = ["layerFactory.js", "linter.js"];
+// surface). hintEngine.js is part of that surface; lint-node.js and the fixture
+// harness are harnesses, not generated code, so they are excluded from the scan.
+const scannedBuildFiles = ["layerFactory.js", "linter.js", "hintEngine.js"];
 
 function fail(message) {
     console.error("LINT HARNESS ERROR: " + message);
