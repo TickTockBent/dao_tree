@@ -1,5 +1,5 @@
 let modInfo = {
-	name: "Mortal to Golden Core",
+	name: "Dao Tree",
 	author: "ticktockbent",
 	pointsName: "Qi",
 	modFiles: ["layers.js", "tree.js"],

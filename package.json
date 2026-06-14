@@ -1,5 +1,5 @@
 {
-  "name": "cultivation-prestige",
+  "name": "dao-tree",
   "private": true,
   "scripts": {
     "test": "node js/build/check-all.js"
