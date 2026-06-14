@@ -1,0 +1,64 @@
+name: Release to itch.io
+
+# GitHub Pages tracks bleeding edge (every push to main). This workflow only
+# fires when you cut a release tag like `itch-1.2.3`, publishing the same scoped
+# build to itch.io via butler. Manual runs are allowed for re-pushes.
+on:
+  push:
+    tags:
+      - 'itch-*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version label shown on itch.io (e.g. 1.2.3)'
+        required: true
+
+# Configure once in repo settings:
+#   - Secret  BUTLER_API_KEY  -> an itch.io API key (itch.io > Settings > API keys)
+#   - Variable ITCH_TARGET    -> "user/game-slug" (e.g. ticktockbent/cultivation-prestige)
+# The html5 channel is served in-browser once "play in browser" is enabled for
+# that upload on the itch.io game page.
+jobs:
+  butler:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Stage minimal game files
+        run: ./scripts/build-site.sh _site
+
+      - name: Resolve version label
+        id: version
+        run: |
+          set -euo pipefail
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            label="${{ github.event.inputs.version }}"
+          else
+            # refs/tags/itch-1.2.3 -> 1.2.3
+            label="${GITHUB_REF_NAME#itch-}"
+          fi
+          echo "label=${label}" >> "$GITHUB_OUTPUT"
+          echo "Publishing version: ${label}"
+
+      - name: Install butler
+        run: |
+          set -euo pipefail
+          curl -sL -o butler.zip "https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default"
+          unzip -q butler.zip
+          chmod +x butler
+          ./butler -V
+
+      - name: Push to itch.io
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+          ITCH_TARGET: ${{ vars.ITCH_TARGET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BUTLER_API_KEY:-}" ]; then
+            echo "::error::Secret BUTLER_API_KEY is not set."; exit 1
+          fi
+          if [ -z "${ITCH_TARGET:-}" ]; then
+            echo "::error::Variable ITCH_TARGET is not set (expected user/game-slug)."; exit 1
+          fi
+          ./butler push _site "${ITCH_TARGET}:html5" --userversion "${{ steps.version.outputs.label }}"

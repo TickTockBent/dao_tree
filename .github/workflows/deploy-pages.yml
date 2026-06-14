@@ -29,27 +29,12 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      # Stage only the files the game loads at runtime. Everything else in the
-      # repo (docs/, Old Things/, js/Demo/, Node build tooling, *.md, source
-      # images) is deliberately excluded so a future private repo doesn't leak.
+      # Stage only the files the game loads at runtime (everything else — docs/,
+      # Old Things/, js/Demo/, Node build tooling, *.md, source images — is left
+      # out so a future private repo doesn't leak). The script also guards that
+      # every local file index.html references was actually staged.
       - name: Stage minimal game files
-        run: |
-          set -euo pipefail
-          mkdir -p _site/js/data _site/js/technical _site/js/utils _site/js/build
-          # Entry point + root image assets referenced by index.html
-          cp index.html options_wheel.png discord.png _site/
-          # Stylesheets and runtime image assets (particle sprites)
-          cp -r css resources _site/
-          # Root JS modules: mod, game, utils, components, and the dynamically
-          # loaded modFiles (layers.js, tree.js)
-          cp js/*.js _site/js/
-          # Runtime JS subtrees (all .js; READMEs and fixtures left behind)
-          cp js/data/*.js _site/js/data/
-          cp js/technical/*.js _site/js/technical/
-          cp js/utils/*.js _site/js/utils/
-          # From js/build, only the three modules loaded by index.html at runtime;
-          # the rest (check-all, lint-node, pacing-sim, *-node.js) is Node tooling.
-          cp js/build/linter.js js/build/layerFactory.js js/build/hintEngine.js _site/js/build/
+        run: ./scripts/build-site.sh _site
 
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
