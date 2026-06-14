@@ -207,12 +207,15 @@ var REALM_DATA = [
         // first core for an active player. Post-core Qi/sec runs well into the
         // hundreds/thousands (baseRate 2 x meridianMult ~32 at full meridians x
         // temperMult ~1.28 x realmMult [q full + f Great Circle + c Core Forged] x
-        // coreGradeMult [>=2x Cracked, up to 8x] x gateMult 1.25). reqBase 5,000,000
-        // with gainExp 0.5 puts the first NS breakthrough roughly that window past a
-        // forged core that has also climbed c to Core Refined (the unlock gate). The
+        // coreGradeMult [>=2x Cracked, up to 8x] x gateMult 1.25). The
         // 7 sub-stages then span a multi-hour climb (their `at` ladder geometrically
         // outruns a single realm's gain, like the q/f/c spines). All ⟨tune⟩.
-        reqBase: 5000000,
+        // Pass-3 tune (Act I gate, pacing sim): reqBase 5e6 -> 1e6. At 5e6 the full NS
+        // climb to Perfected (at:400) ran ~13.5h on its own — the single largest chunk of
+        // the Act I budget. The reqBase is the high-leverage lever here (the n climb is
+        // banking-bound, not cascade-bound like s), so a 5x cut lands the NS climb near
+        // ~3.5h, pulling Act I to the 8-15h target (expansion §8.8) with gainExp held.
+        reqBase: 1000000,
         gainExp: 0.5,
         // §1.6/§5a: reveal the mountain EARLY — the Nascent Soul node appears the
         // moment the core is forged (Core Forged sub-stage), so the next peak is

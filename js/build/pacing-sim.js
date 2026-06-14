@@ -116,15 +116,31 @@
 const nodeBoot = require("./node-boot.js");
 
 // ---------------------------------------------------------------------------
-// PACING_BUDGETS — pinned phase-timing bands (spec §0.4). Phase D pins these
-// against the --report table under Wes's sign-off; until then `pinned:false`
-// and the bands are empty, so the sim measures and reports but asserts nothing
-// budget-shaped. These are TEST EXPECTATIONS, never game data (they do not move
-// to js/data/). ⟨tune⟩
+// PACING_BUDGETS — pinned phase-timing bands (spec §0.4). Pinned at Gate D on
+// 2026-06-13 (Wes sign-off) against the --report table after the pass-3 pacing
+// retune (primaryMeridian costRatio 3->2, temper 1.7->1.45, n.reqBase 5e6->1e6).
+// All bands are in sim-HOURS, set at ±25% of the observed DILIGENT (budget actor)
+// values; spine-only and max-scar get factor-relative ceilings off the diligent
+// trib-pass high. These are TEST EXPECTATIONS, never game data (they never move to
+// js/data/). A future content/data change that shifts a phase out of band fails the
+// sim — re-calibrate with --report and re-pin under sign-off (do not widen silently).
 // ---------------------------------------------------------------------------
 const PACING_BUDGETS = {
-    pinned: false,
-    bands: {}
+    pinned: true,
+    bands: {
+        latticeReveal:    { low: 0.20, high: 0.33 },   // diligent observed 0.26h
+        forge:            { low: 1.85, high: 3.09 },   // diligent observed 2.47h
+        nsBreakthrough:   { low: 1.85, high: 3.09 },   // diligent observed 2.47h (== forge here)
+        sfUnlock:         { low: 4.15, high: 6.93 },   // diligent observed 5.54h
+        diligentTribPass: { low: 8.75, high: 14.58 }   // diligent observed 11.66h; design budget 8-15h (§8.8)
+    },
+    // spine-only proves optionality (map invariant §6.6): it PASSES, just slower — the
+    // horizontal systems (Dao Seeds + techniques + sect + stances) are ~2.4x rate leverage,
+    // so its ceiling is 2.5x the diligent high (Wes sign-off 2026-06-13), NOT the spec's
+    // optimistic 1.5x (forcing 1.5x would mean nerfing the horizontal payoffs to irrelevance).
+    // max-scar re-banks under the depth-3 debuff: ceiling 2x the diligent high.
+    spineOnlyTribPassMaxFactor: 2.5,
+    maxScarTribPassMaxFactor: 2.0
 };
 
 // ---------------------------------------------------------------------------
@@ -282,6 +298,13 @@ function applyAllEnvOverrides() {
     ov("F_REQ", "REALM_DATA.find(function(r){return r.id==='f';})", "reqBase");
     ov("F_EXP", "REALM_DATA.find(function(r){return r.id==='f';})", "gainExp");
     ov("C_REQ", "REALM_DATA.find(function(r){return r.id==='c';})", "reqBase");
+    // N_REQ/N_EXP/S_REQ/S_EXP complete the q/f/c/n/s sweep set so a tuner can binary-search
+    // the Nascent Soul and Soul Formation curves (the post-foundation climbs that dominate the
+    // Act I time budget) without editing realms.js per probe — same affordance as Q/F/C above.
+    ov("N_REQ", "REALM_DATA.find(function(r){return r.id==='n';})", "reqBase");
+    ov("N_EXP", "REALM_DATA.find(function(r){return r.id==='n';})", "gainExp");
+    ov("S_REQ", "REALM_DATA.find(function(r){return r.id==='s';})", "reqBase");
+    ov("S_EXP", "REALM_DATA.find(function(r){return r.id==='s';})", "gainExp");
     // C_FORGEREQ sweeps SETPIECE_DATA.forge.forgeReq (the slice-6 forge home), NOT the
     // removed realms.js c.forge path (the very read that crashed the old sim).
     ov("C_FORGEREQ", "SETPIECE_DATA.forge", "forgeReq");
@@ -1340,25 +1363,75 @@ function assertStructural(results) {
     return failures;
 }
 
+// Pinned phase-timing assertions (spec §D3) — active only once PACING_BUDGETS.pinned.
+// Phase bands assert the DILIGENT budget actor; spine-only / max-scar get factor-relative
+// trib-pass ceilings. All marks are seconds; bands are hours (÷3600).
+function assertPinned(results) {
+    if (!PACING_BUDGETS.pinned) return [];
+    var failures = [];
+    function req(name, condition) { if (!condition) failures.push(name); }
+
+    var byKey = {};
+    results.forEach(function (r) { byKey[r.profile] = r; });
+    var diligent = byKey.diligent, spine = byKey.spineOnly, maxScar = byKey.maxScar;
+    var B = PACING_BUDGETS.bands;
+
+    function bandReq(label, markSeconds, band) {
+        var h = markSeconds / 3600;
+        req("diligent: " + label + " within [" + band.low + ", " + band.high + "]h (got " +
+            h.toFixed(2) + ")", markSeconds !== undefined && h >= band.low && h <= band.high);
+    }
+    bandReq("lattice reveal", diligent.marks.lattice_reveal, B.latticeReveal);
+    bandReq("forge", diligent.marks.forge, B.forge);
+    bandReq("NS breakthrough", diligent.marks.ns_unlock, B.nsBreakthrough);
+    bandReq("SF unlock", diligent.marks.sf_unlock, B.sfUnlock);
+    bandReq("tribulation pass", diligent.marks.tribulation_pass, B.diligentTribPass);
+
+    // diligent grade/legacy floors (resolved by KEY, never a hardcoded index).
+    var scarredIndex = valOf("SETPIECE_DATA.firstTribulation.grades.findIndex(function(g){return g.key==='scarred';})");
+    var steadyIndex = valOf("LEGACY_DATA.actOne.bands.findIndex(function(b){return b.key==='steady';})");
+    req("diligent: tribulation grade Scarred or better", diligent.tribGradeIndex >= scarredIndex);
+    req("diligent: Act I Legacy Steady or higher", diligent.legacyIndex >= steadyIndex);
+
+    // spine-only ceiling (2.5x the diligent high) — optionality is slow, not free.
+    var spineCeil = B.diligentTribPass.high * PACING_BUDGETS.spineOnlyTribPassMaxFactor;
+    var spineH = spine.marks.tribulation_pass / 3600;
+    req("spine-only: tribulation pass within " + PACING_BUDGETS.spineOnlyTribPassMaxFactor +
+        "x diligent high (" + spineCeil.toFixed(2) + "h, got " + spineH.toFixed(2) + ")",
+        spine.marks.tribulation_pass !== undefined && spineH <= spineCeil);
+
+    // max-scar ceiling (2x the diligent high) — re-bank under the depth-3 debuff.
+    var scarCeil = B.diligentTribPass.high * PACING_BUDGETS.maxScarTribPassMaxFactor;
+    var scarH = maxScar.marks.tribulation_pass / 3600;
+    req("max-scar: tribulation pass within " + PACING_BUDGETS.maxScarTribPassMaxFactor +
+        "x diligent high (" + scarCeil.toFixed(2) + "h, got " + scarH.toFixed(2) + ")",
+        maxScar.marks.tribulation_pass !== undefined && scarH <= scarCeil);
+
+    return failures;
+}
+
 function runDefaultMode() {
     var results = PROFILE_ORDER.map(function (key) { return runProfile(key); });
 
-    console.log("=== Act I pacing sim — default mode (structural assertions only) ===");
+    console.log("=== Act I pacing sim — default mode ===");
     console.log("PACING_BUDGETS.pinned = " + PACING_BUDGETS.pinned +
-        "  →  TIME-BAND ASSERTIONS INACTIVE pending Gate D sign-off.");
+        (PACING_BUDGETS.pinned
+            ? "  →  structural + pinned time-band assertions ACTIVE (Gate D, 2026-06-13)."
+            : "  →  TIME-BAND ASSERTIONS INACTIVE pending Gate D sign-off."));
     console.log("");
     results.forEach(function (r) { printRunDefault(r); console.log(""); });
 
-    var failures = assertStructural(results);
+    var failures = assertStructural(results).concat(assertPinned(results));
     console.log("---");
     if (failures.length > 0) {
-        console.log("STRUCTURAL ASSERTIONS FAILED:");
+        console.log((PACING_BUDGETS.pinned ? "ASSERTIONS FAILED" : "STRUCTURAL ASSERTIONS FAILED") + ":");
         failures.forEach(function (name) { console.log("  FAIL — " + name); });
         process.exit(1);
     }
-    console.log("STRUCTURAL ASSERTIONS: PASS (all three profiles terminal; spine-only passes " +
-        "at any grade; max-scar passes from forced depth-" + DATA.scarMaxDepth +
-        " and completes the heal arc; legacy q/f marks present).");
+    console.log((PACING_BUDGETS.pinned ? "STRUCTURAL + PINNED ASSERTIONS" : "STRUCTURAL ASSERTIONS") +
+        ": PASS (all three profiles terminal; spine-only passes at any grade; max-scar passes " +
+        "from forced depth-" + DATA.scarMaxDepth + " and completes the heal arc; legacy q/f marks " +
+        "present" + (PACING_BUDGETS.pinned ? "; all phase + trib-pass bands hold" : "") + ").");
 }
 
 // ---------------------------------------------------------------------------
@@ -1422,8 +1495,9 @@ function runReportMode() {
     console.log("");
     console.log("C4 aspect reach: spine-only → Formless only (zero Dao nodes, no element Seed); " +
         "diligent/max-scar → element aspect (" + aspectLabel(results[0]) + ").");
-    console.log("Note: bands are NOT pinned (PACING_BUDGETS.pinned=false). This table is the " +
-        "Gate-D calibration surface; Wes pins bands at ±25% of observed before they assert.");
+    console.log("Note: bands ARE pinned (PACING_BUDGETS.pinned=" + PACING_BUDGETS.pinned +
+        ", Gate D 2026-06-13). This table is the calibration surface; default mode asserts the " +
+        "pinned bands. Re-pin under sign-off if a data change moves a phase out of band.");
 }
 
 function pad(text, width) {

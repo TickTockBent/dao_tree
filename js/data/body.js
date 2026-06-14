@@ -65,7 +65,13 @@ var BODY_DATA = {
             title: "Primary Meridian",
             resourceWord: "Qi/sec",
             costBase: 10,
-            costRatio: 3,
+            // costRatio pass-3 tune (Act I gate, pacing sim): 3 -> 2. At 3, meridians 7-12
+            // cost 3x more for a 1.15x rate step, so the back half of the track was effectively
+            // dead weight pre-core (the 11th->12th open cost ~1.8M Qi) — the body-grade build
+            // before the forge ran ~7h on its own. effectBase is UNCHANGED, so the endgame
+            // meridian mult (1.15^12) is identical; only the cost curve relaxes so the late
+            // meridians come online within the act's tuned budget (expansion §8.8).
+            costRatio: 2,
             effectBase: 1.15,
             limit: 12,
             unlock: null
@@ -94,7 +100,11 @@ var BODY_DATA = {
             // costRatio pass-2 tune: 2.2 -> 1.7 so reaching Tendon (level 10, the
             // Core Formation gate §5c) isn't a Qi wall. At 2.2 the 10th temper level
             // alone cost ~30k cumulative; 1.7 keeps tempering a real choice, not a tax.
-            costRatio: 1.7,
+            // Pass-3 tune (Act I gate, pacing sim): 1.7 -> 1.45 so the Bone/Marrow tiers
+            // (levels 15/20) are reachable in budget pre-forge — at 1.7 the body-grade build
+            // stalled before Marrow, and the dead rungs 21-24 (no tier past Marrow, see
+            // temperTiers) cost a fortune for nothing. 1.45 keeps the useful tiers affordable.
+            costRatio: 1.45,
             // Temper's immediate Qi/sec payoff comes from the per-tier milestones
             // (§4b), not a per-level mult, so its per-level effectBase is neutral (1).
             effectBase: 1,
