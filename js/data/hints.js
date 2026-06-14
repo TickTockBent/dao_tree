@@ -34,6 +34,7 @@
 //     tribulationPassed: true            tribGrade resolves to passes:true
 //                                        (tribulationPassed() factory reader)
 //     scarHealed: true                   at least one scar depth healed (scarHealedDepth() > 0)
+//   DEFERRED (2026-06-12): the next synthetic hint-only key past sectUnjoined's pattern should trigger adding negation to meets() rather than growing the shadow grammar.
 //
 // Stage labels must exactly match js/data/realms.js substage labels — a mismatch
 // produces a nonsensical condition (the engine falls back to the catch-all) and

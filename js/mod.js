@@ -13,11 +13,20 @@ let modInfo = {
 
 // Set your version in num and name
 let VERSION = {
-	num: "0.1",
-	name: "Mortal to Golden Core",
+	num: "0.2",
+	name: "The Mortal Road",
 }
 
 let changelog = `<h1>Changelog:</h1><br>
+	<h3>v0.2 — The Mortal Road</h3><br>
+		- Comprehend the Dao Lattice: accumulate Insight to purchase Glimpses and Seeds across the five elemental roots.<br>
+		- Adopt a Stance — Breathing Trance trades Qi speed for Insight; Sword Trance runs deeper into the blade.<br>
+		- Reach Nascent Soul and choose your Soul Aspect: Formless or an elemental path earned through the lattice.<br>
+		- Automation Tier 1 unlocks with the Nascent Soul — meridian purchases and Qi Condensation prestige run themselves.<br>
+		- Join the Azure Sword Sect or the Stone Formation Sect: study techniques, earn a stipend, and accumulate Contribution through deeds.<br>
+		- Ascend to Soul Formation and face the First Tribulation — your temper, meridians, core grade, techniques, and banked Qi become your shield.<br>
+		- Survive a Scarred result and carry the wound: the scar dims your Qi while it heals, but a fully healed depth becomes a permanent Tempered by Ruin buff.<br>
+		- When the tribulation is passed, the Act I Legacy Grade is written — the measure of the mortal road you walked.<br>
 	<h3>v0.1 — Mortal to Golden Core</h3><br>
 		- Gather Qi and walk the cultivator's road from mortal to Golden Core.<br>
 		- Open your meridians and temper your body — permanent attributes that never reset.<br>

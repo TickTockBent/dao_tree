@@ -27,11 +27,9 @@
 
 "use strict";
 
-const fs = require("fs");
-const path = require("path");
-const vm = require("vm");
+const nodeBoot = require("./node-boot.js");
 
-const projectRoot = path.resolve(__dirname, "..", "..");
+const projectRoot = nodeBoot.projectRoot;
 
 function fail(message) {
     console.error("RUNTIME SMOKE ERROR: " + message);
@@ -39,122 +37,18 @@ function fail(message) {
 }
 
 // ---------------------------------------------------------------------------
-// Sandbox with the minimal browser surface the engine touches at load/run time.
+// Boot the real engine headless via the shared shim (js/build/node-boot.js):
+// the full browser-stub sandbox, the engine file load (optional sect/techniques/
+// journal loaded BEFORE the engine list, mirroring index.html minus render-only
+// files), and the save.js load() mirror (updateLayers; fresh player; options;
+// needCanvasUpdate=false; setupTemp/updateTemp x2). The lint/fixture harnesses
+// and the pacing sim consume the same shim. boot(expr) is the fail-on-throw
+// vm.runInContext helper the assertions below drive.
 // ---------------------------------------------------------------------------
-const sandbox = {};
-sandbox.globalThis = sandbox;
-sandbox.window = sandbox;
-sandbox.console = console;
-sandbox.setInterval = function () { return 0; };
-sandbox.clearInterval = function () {};
-sandbox.setTimeout = function () { return 0; };
-sandbox.navigator = { userAgent: "node-smoke" };
-sandbox.document = {
-    getElementById: function () { return null; },
-    createElement: function () { return { style: {} }; },
-    body: { appendChild: function () {}, removeChild: function () {} },
-    title: ""
-};
-sandbox.localStorage = {
-    getItem: function () { return null; },
-    setItem: function () {},
-    removeItem: function () {}
-};
-sandbox.Vue = {
-    set: function (target, key, value) { target[key] = value; },
-    delete: function (target, key) { delete target[key]; }
-};
-sandbox.confirm = function () { return true; };
-sandbox.prompt = function () { return null; };
-sandbox.alert = function () {};
-sandbox.doPopup = function () {};
-// Render-side functions referenced by the engine (canvas.js / Vue app are not loaded).
-sandbox.updateWidth = function () {};
-sandbox.resizeCanvas = function () {};
-sandbox.drawTree = function () {};
-const context = vm.createContext(sandbox);
-
-// Load order mirrors index.html, skipping render-only files (Vue app, loader,
-// canvas, components, displays, particles, themes).
-const engineFiles = [
-    "js/technical/break_eternity.js",
-    "js/technical/layerSupport.js",
-    "js/data/constants.js",
-    "js/data/realms.js",
-    "js/data/setpieces.js",
-    "js/data/legacy.js",
-    "js/data/body.js",
-    "js/data/gates.js",
-    "js/data/trees.js",
-    "js/data/keep-rules.js",
-    "js/data/lattice.js",
-    "js/data/stances.js",
-    "js/data/hints.js",
-    "js/data/automation.js",
-    "js/build/linter.js",
-    "js/build/layerFactory.js",
-    "js/build/hintEngine.js",
-    "js/mod.js",
-    "js/layers.js",
-    "js/tree.js",
-    "js/technical/temp.js",
-    "js/game.js",
-    "js/utils.js",
-    "js/utils/easyAccess.js",
-    "js/utils/NumberFormating.js",
-    "js/utils/options.js",
-    "js/utils/save.js"
-];
-
-// Slice-5 optional data files: loaded when present (see lint-node.js for the same pattern).
-// When absent the smoke test runs against the pre-sect engine state; no assertion currently
-// requires sect/techniques/journal, so the existing 104 assertions pass either way.
-const optionalEngineFiles = [
-    "js/data/sect.js",
-    "js/data/techniques.js",
-    "js/data/journal.js"
-];
-
-optionalEngineFiles.forEach(function (relative) {
-    const full = path.join(projectRoot, relative);
-    if (!fs.existsSync(full)) {
-        console.warn("SMOKE NOTE: optional file not yet present (expected slice 5): " + relative);
-        return;
-    }
-    try {
-        vm.runInContext(fs.readFileSync(full, "utf8"), context, { filename: relative });
-    } catch (loadError) {
-        fail("loading optional " + relative + " threw: " + loadError.stack);
-    }
-});
-
-engineFiles.forEach(function (relative) {
-    const full = path.join(projectRoot, relative);
-    if (!fs.existsSync(full)) fail("missing engine file: " + full);
-    try {
-        vm.runInContext(fs.readFileSync(full, "utf8"), context, { filename: relative });
-    } catch (loadError) {
-        fail("loading " + relative + " threw: " + loadError.stack);
-    }
-});
-
-// ---------------------------------------------------------------------------
-// Boot the player the way loader.js would, minus DOM.
-// ---------------------------------------------------------------------------
-function boot(expression) {
-    try {
-        return vm.runInContext(expression, context);
-    } catch (runError) {
-        fail("evaluating `" + expression + "` threw: " + runError.stack);
-    }
-}
-
-// Mirror save.js load(): back-reference pass, fresh player, temp build.
-boot("updateLayers()");
-boot("player = getStartPlayer()");
-boot("options = getStartOptions ? getStartOptions() : {}");
-boot("needCanvasUpdate = false");
-boot("setupTemp(); updateTemp(); updateTemp();");
+const booted = nodeBoot.bootEngine({ onFail: fail });
+const sandbox = booted.sandbox;
+const context = booted.context;
+const boot = booted.boot;
 
 // ---------------------------------------------------------------------------
 // Assertions.
@@ -1388,6 +1282,37 @@ check("slice-6 hints: tribulationPassed true with the top grade latched",
 check("slice-6 hints: actComplete fires when the tribulation is passed (real key)",
     "cultivationCurrentHint().key === 'actComplete'");
 boot("player.s.tribGrade = -1; updateTemp(); updateTemp();");
+
+// 40. Structural invariance (D4): the scar debuffs Qi accrual only and deliberately does NOT
+//     enter tribulationPreparednessPool(). At IDENTICAL pool inputs (same temper, meridians,
+//     core grade, techniques, banked Qi), the pool value must be the SAME whether scar depth
+//     is 0 or scarConfig().maxDepth. This converts the review's "looks like a bug, isn't"
+//     finding into a pinned machine check: if the pool ever starts subtracting scar depth, a
+//     fully-scarred cultivator could be structurally locked out (death spiral, §6.3).
+//
+//     Set up a state where the pool is nonzero (so the equality is meaningful, not trivially
+//     two zeros): some temper, some meridians, a forged core, and banked Qi. Snapshot the pool
+//     at depth 0, force depth to maxDepth, updateTemp(), re-read, assert Decimal equality.
+//     Restore depth afterward so downstream callers are not affected.
+boot("setBuyableAmount('b', BODY_DATA.temperBuyableId, new Decimal(1));"
+    + "setBuyableAmount('b', 11, new Decimal(4));"
+    + "player.b.coreGrade = 0;"
+    + "player.points = new Decimal(1000000);"
+    + "player.b.scarDepth = BODY_DATA.scar.startDepth;"
+    + "player.b.scarHealProgress = BODY_DATA.scar.startHealProgress;"
+    + "player.b.scarHealedDepth = BODY_DATA.scar.startHealedDepth;"
+    + "updateTemp(); updateTemp();");
+// Pool is nonzero (temper + meridians + core + banked Qi all contribute) — folded into the
+// assertion so that a trivially-zero-baseline cannot produce a false PASS.
+boot("var d4PoolAtDepth0 = tribulationPreparednessPool();");
+boot("player.b.scarDepth = scarConfig().maxDepth; updateTemp(); updateTemp();");
+check("slice-6 D4: tribulationPreparednessPool() is EQUAL at depth 0 and maxDepth (scar never restructures the pool)",
+    "d4PoolAtDepth0.gt(0) && tribulationPreparednessPool().eq(d4PoolAtDepth0)");
+// Restore scar depth to unscarred baseline.
+boot("player.b.scarDepth = BODY_DATA.scar.startDepth;"
+    + "player.b.scarHealProgress = BODY_DATA.scar.startHealProgress;"
+    + "player.b.scarHealedDepth = BODY_DATA.scar.startHealedDepth;"
+    + "updateTemp(); updateTemp();");
 
 // ---------------------------------------------------------------------------
 // Verdict.

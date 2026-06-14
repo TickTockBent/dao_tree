@@ -11,9 +11,9 @@
 
 const fs = require("fs");
 const path = require("path");
-const vm = require("vm");
+const nodeBoot = require("./node-boot.js");
 
-const projectRoot = path.resolve(__dirname, "..", "..");
+const projectRoot = nodeBoot.projectRoot;
 const dataDir = path.join(projectRoot, "js", "data");
 const buildDir = path.join(projectRoot, "js", "build");
 
@@ -21,18 +21,17 @@ const buildDir = path.join(projectRoot, "js", "build");
 // trees.js / keep-rules.js / hints.js reference nothing at load; they sit with
 // their data siblings before linter.js so the new §8.1/§8.2/§8.5 checks can read them.
 // Required data files: these MUST exist for the linter to run.
-const dataFiles = ["constants.js", "realms.js", "setpieces.js", "legacy.js", "body.js", "gates.js",
-    "trees.js", "keep-rules.js", "lattice.js", "stances.js", "hints.js", "automation.js"];
+const dataFiles = nodeBoot.DATA_FILES;
 // Slice-5 data files: loaded when present (the other agent delivers these in the same slice).
 // When absent, the linter runs against the pre-sect data set — it still validates all prior
 // invariants. The files are listed here so they are loaded in dependency order once present.
-const optionalDataFiles = ["sect.js", "techniques.js", "journal.js"];
+const optionalDataFiles = nodeBoot.OPTIONAL_DATA_FILES;
 const linterFile = "linter.js";
 
 // js/build/*.js files subject to the no-numeric-literal scan (generated/factory
 // surface). hintEngine.js is part of that surface; lint-node.js and the fixture
 // harness are harnesses, not generated code, so they are excluded from the scan.
-const scannedBuildFiles = ["layerFactory.js", "linter.js", "hintEngine.js"];
+const scannedBuildFiles = nodeBoot.SCANNED_BUILD_FILES;
 
 function fail(message) {
     console.error("LINT HARNESS ERROR: " + message);
@@ -41,30 +40,33 @@ function fail(message) {
 
 // Minimal sandbox: the linter only touches the data globals (no Decimal/player
 // needed for the data-table checks). globalThis maps to the sandbox itself.
-const sandbox = {};
-sandbox.globalThis = sandbox;
-sandbox.console = console;
-const context = vm.createContext(sandbox);
+const sandbox = nodeBoot.createMinimalSandbox();
+const context = require("vm").createContext(sandbox);
 
-dataFiles.forEach(function (file) {
-    const full = path.join(dataDir, file);
-    if (!fs.existsSync(full)) fail("missing data file: " + full);
-    vm.runInContext(fs.readFileSync(full, "utf8"), context, { filename: full });
+nodeBoot.loadFilesInto(context, dataFiles.map(function (file) { return path.join(dataDir, file); }), {
+    optional: false,
+    filenameFull: true,
+    onFail: fail,
+    missingMessage: function (full) { return "missing data file: " + full; }
 });
 
 // Load optional slice-5 files if present; warn but do not fail when absent.
-optionalDataFiles.forEach(function (file) {
-    const full = path.join(dataDir, file);
-    if (!fs.existsSync(full)) {
-        console.warn("LINT NOTE: optional data file not yet present (expected once slice 5 lands): " + file);
-        return;
+nodeBoot.loadFilesInto(context, optionalDataFiles.map(function (file) { return path.join(dataDir, file); }), {
+    optional: true,
+    filenameFull: true,
+    onFail: fail,
+    onMissing: function (relative) {
+        console.warn("LINT NOTE: optional data file not yet present (expected once slice 5 lands): " + path.basename(relative));
     }
-    vm.runInContext(fs.readFileSync(full, "utf8"), context, { filename: full });
 });
 
 const linterFull = path.join(buildDir, linterFile);
-if (!fs.existsSync(linterFull)) fail("missing linter: " + linterFull);
-vm.runInContext(fs.readFileSync(linterFull, "utf8"), context, { filename: linterFull });
+nodeBoot.loadFilesInto(context, [linterFull], {
+    optional: false,
+    filenameFull: true,
+    onFail: fail,
+    missingMessage: function (full) { return "missing linter: " + full; }
+});
 
 if (typeof sandbox.runCultivationLinter !== "function") {
     fail("runCultivationLinter was not defined after loading linter.js");

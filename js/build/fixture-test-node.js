@@ -20,11 +20,11 @@
 
 "use strict";
 
-const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
+const nodeBoot = require("./node-boot.js");
 
-const projectRoot = path.resolve(__dirname, "..", "..");
+const projectRoot = nodeBoot.projectRoot;
 const buildDir = path.join(projectRoot, "js", "build");
 const linterFull = path.join(buildDir, "linter.js");
 
@@ -36,16 +36,18 @@ function fail(message) {
 // ---------------------------------------------------------------------------
 // Sandbox: only FACTORY_NUMERICS must exist BEFORE linter.js loads (the IIFE
 // captures ZERO/ONE/HUNDRED at load). The data tables are read on each check
-// call, so the fixture reassigns them per case.
+// call, so the fixture reassigns them per case. This stays SYNTHETIC: the
+// minimal (console-only) sandbox plus the linter — no real data files load.
 // ---------------------------------------------------------------------------
-const sandbox = {};
-sandbox.globalThis = sandbox;
-sandbox.console = console;
-sandbox.FACTORY_NUMERICS = { zero: 0, one: 1, hundred: 100 };
+const sandbox = nodeBoot.createMinimalSandbox({ factoryNumerics: true });
 const context = vm.createContext(sandbox);
 
-if (!fs.existsSync(linterFull)) fail("missing linter: " + linterFull);
-vm.runInContext(fs.readFileSync(linterFull, "utf8"), context, { filename: linterFull });
+nodeBoot.loadFilesInto(context, [linterFull], {
+    optional: false,
+    filenameFull: true,
+    onFail: fail,
+    missingMessage: function (full) { return "missing linter: " + full; }
+});
 
 if (!sandbox.cultivationLintChecks) {
     fail("linter.js did not expose root.cultivationLintChecks");

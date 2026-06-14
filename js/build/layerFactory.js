@@ -1236,6 +1236,16 @@ function scarActiveDepth() {
 // scarQiMult() — the active scar debuff folded into cultivationQiPerSecond(): debuffQiMultPerDepth
 // ^ activeDepth. Identity (1) when no active depth (unscarred or fully healed). Never zero — a
 // scarred ascent stays completable (§6.3 / §1.3 "the scarred state is the tuned baseline").
+//
+// DESIGN INTENT (§6.3 completability) — the scar is a Qi-accrual debuff ONLY. It does NOT enter
+// tribulationPreparednessPool(). This is deliberate: a scarred cultivator rebuilds slower (Qi/sec
+// is lower so banking fuel back up takes longer) but is NEVER structurally locked out (the pool
+// reflects what they BUILT — temper, meridians, core, techniques — not how fast they currently
+// farm). If you "fix" this by subtracting the scar from the pool, a max-depth-scarred cultivator
+// gains negative pool weight and can approach a state where the tribulation becomes unpassable
+// regardless of preparation — a death spiral. The smoke harness pins this invariant:
+// tribulationPreparednessPool() must return EQUAL values at depth 0 and depth maxDepth when all
+// other inputs are identical (runtime-smoke-node.js block 40, added for slice 6.5 D4 review).
 function scarQiMult() {
     var config = scarConfig();
     if (!config) return factoryDecimalOne();

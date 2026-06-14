@@ -1,0 +1,7 @@
+{
+  "name": "cultivation-prestige",
+  "private": true,
+  "scripts": {
+    "test": "node js/build/check-all.js"
+  }
+}
