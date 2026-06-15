@@ -1621,6 +1621,37 @@ function maturityReadout(realmId) {
     return line;
 }
 
+// Foundation QUALITY readout (the top-of-page grade bar, §6). Shows the grade your CURRENT
+// build (meridians + temper + realm) would lock in at a breakthrough, the band ladder with
+// that grade marked, a fill bar, and the headroom above it — the quality you GRIND for
+// (auto-cultivation rebuilds to your current grade and rests; it never grinds the build for
+// you, since temper/meridians are grade DECISIONS, §4b). "Rough" resolution by intent — a
+// future metaprogression ("ancestral knowledge") reveals finer detail. Reads gradeScore live.
+function foundationQualityReadout() {
+    var gradeConfig = findRealmData("f").grade;
+    var bands = gradeConfig.bands;
+    var score = foundationGradeScore();
+    var currentBandIndex = foundationBandIndexForScore(score);
+    if (currentBandIndex < FACTORY_ZERO) currentBandIndex = FACTORY_ZERO;
+    var currentBand = bands[currentBandIndex];
+    var topBand = bands[bands.length - FACTORY_ONE];
+    var ladder = bands.map(function (band, index) {
+        return index === currentBandIndex ? "<b>" + band.tier + "</b>" : band.tier;
+    }).join(" › ");
+    var line = "<b>Foundation Quality</b> — current build: <b>" + currentBand.tier
+        + "</b> (×" + format(new Decimal(currentBand.fMult)) + " Foundation gain)<br>"
+        + ladder + "<br>"
+        + "<span style=\"font-family:monospace\">" + maturityBar(score) + "</span><br>";
+    if (currentBandIndex < bands.length - FACTORY_ONE) {
+        line += "<i>What a breakthrough now would lock in. Grind meridians and temper to push "
+            + "toward " + topBand.tier + " — auto-cultivation rebuilds to your current grade, "
+            + "but won't grind the build for you.</i>";
+    } else {
+        line += "<i>" + topBand.tier + " — the finest foundation. There is nothing above this.</i>";
+    }
+    return line;
+}
+
 // Run every granted "buyable" autobuy targeting `layerId`. Called from that layer's
 // automate() tick hook (game.js calls layers[layer].automate() each loop). Auto-buys
 // while affordable, respecting the buyable's own unlocked flag + purchaseLimit EXACTLY
@@ -2407,6 +2438,24 @@ function makeRealmLayer(realmData) {
             "clickables",
             "blank",
             ["bar", "tribulation"]
+        ];
+    }
+
+    // Graded realm (Foundation, §6): custom layout that puts the Foundation QUALITY bar at the
+    // TOP of the page (current grade + the headroom you grind toward), then the standard realm
+    // content, then the auto-cultivation status at the bottom. Only the Foundation is graded and
+    // it carries no setpiece/aspect tabFormat, so this branch never collides with the above.
+    if (realmData.graded && !realmData.setpiece && !realmData.soulAspect) {
+        layerData.tabFormat = [
+            ["display-text", function () { return foundationQualityReadout(); }],
+            "blank",
+            "main-display",
+            "prestige-button",
+            "resource-display",
+            "blank",
+            "milestones",
+            "blank",
+            ["display-text", function () { return maturityReadout(realmData.id); }]
         ];
     }
 

@@ -20,6 +20,9 @@ All notable changes to **Dao Tree**. Versions track the itch.io releases;
   cultivation stage you were at when it unlocked, shown in the entry. Reflecting on
   an entry can also grant a one-time reward; the first two entries (First Breath, A
   Channel Opens) now give +100 Qi.
+- **Foundation quality bar.** The Foundation screen now shows, at the top, the grade
+  your current build would lock in (Flawed → Heaven-grade) and the headroom you can
+  grind toward with meridians and temper. Always visible while building.
 - **Foundation maturity readout.** Realms with auto-cultivation show a maturity bar,
   a rising prestige-cost multiplier as the Foundation matures, and a clear "fully
   formed — resting; your Qi now banks freely" state. No more invisible behavior.
