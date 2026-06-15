@@ -153,6 +153,25 @@ function treeResetKeepKeys(thisLayerId, resettingLayerId) {
     return keepKeys;
 }
 
+// Player-facing note for a sub-stage milestone that ALSO grants a keep rule (§8.2).
+// The keep is otherwise invisible — the player only ever sees the side effect (kept
+// progress, and previously the notification flood) with no indication of WHERE it was
+// earned. This surfaces "your progress now survives the next breakthrough" right on
+// the milestone that grants it. Returns "" when this milestone grants no keep rule.
+function keepRuleNoteForMilestone(grantLayerId, milestoneIndex) {
+    if (typeof KEEP_RULES === "undefined" || !KEEP_RULES) return "";
+    var note = "";
+    KEEP_RULES.forEach(function (rule) {
+        if (!rule.grantedBy) return;
+        if (rule.grantedBy.layer !== grantLayerId || rule.grantedBy.milestone !== milestoneIndex) return;
+        var keptRealm = findRealmData(rule.target);
+        var resetRealm = findRealmData(rule.onResetOf);
+        if (!keptRealm || !resetRealm) return;
+        note = "Keeps " + keptRealm.name + " progress through " + resetRealm.name + " breakthroughs";
+    });
+    return note;
+}
+
 // Compile the doReset for a tree-scoped layer. Bound to layers[thisLayerId] by
 // game.js run(), so `this.layer` is the layer being reset; the argument is the
 // resetting layer id. layerDataReset performs the actual reset with the keep array.
@@ -1695,7 +1714,12 @@ function makeMilestones(realmData) {
         milestones[index] = {
             requirementDescription: stage.label + " (" + stage.at + " "
                 + realmData.resource + ")" + revealText,
-            effectDescription: function () { return "+" + format(stageBonus) + "% Qi/sec"; },
+            effectDescription: function () {
+                var description = "+" + format(stageBonus) + "% Qi/sec";
+                var keepNote = keepRuleNoteForMilestone(realmData.id, index);
+                if (keepNote) description += ". " + keepNote;
+                return description;
+            },
             done: function () {
                 return player[realmData.id].best.gte(stage.at);
             }

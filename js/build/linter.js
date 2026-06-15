@@ -792,7 +792,10 @@
     function startDataKeysForLayer(layerId) {
         var realm = REALM_DATA.find(function (r) { return r.id === layerId; });
         if (realm) {
-            var realmKeys = ["unlocked", "points", "best", "total"];
+            // "milestones" is the engine-provided per-layer earned-milestone array
+            // (getStartPlayer seeds it). It is keepable (KEEP_RULES preserve it so kept
+            // sub-stages do not re-notify on reset), so it belongs in the start shape.
+            var realmKeys = ["unlocked", "points", "best", "total", "milestones"];
             if (realm.setpiece === "forge" || realm.forge) {
                 ["refinementProgress", "warming", "lastForgeCracked"].forEach(function (k) {
                     realmKeys.push(k);

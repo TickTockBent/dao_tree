@@ -26,7 +26,14 @@
 //   onResetOf  string  layer id — the rule fires when THIS layer prestiges.
 //   target     string  layer id — the layer whose keys are preserved.
 //   keep       array   player[target] key names to preserve through the reset
-//                      (passed straight to layerDataReset's keep array).
+//                      (passed straight to layerDataReset's keep array). Keep BOTH
+//                      "best" AND "milestones": best preserves the high-water (and
+//                      the sub-stage Qi multipliers, which read best), and milestones
+//                      preserves the earned sub-stage list so the kept milestones do
+//                      NOT re-fire their unlock notification on every reset (the array
+//                      would otherwise reset to [] and re-complete all at once next
+//                      tick — a notification flood). Both are needed to keep the
+//                      progress AND keep it quiet.
 
 var KEEP_RULES = [
     {
@@ -36,7 +43,7 @@ var KEEP_RULES = [
         grantedBy: { layer: "f", milestone: 3 },
         onResetOf: "f",     // when f prestiges...
         target: "q",        // ...the q layer keeps:
-        keep: ["best"]      // q.best survives, so q sub-stage milestones recompute as kept
+        keep: ["best", "milestones"]   // q.best + earned sub-stages survive (no re-notify)
     },
     {
         // Nascent Soul carries the Foundation forward (expansion §5 / §11 slice 4):
@@ -48,7 +55,7 @@ var KEEP_RULES = [
         grantedBy: { layer: "n", milestone: 2 },
         onResetOf: "n",     // when Nascent Soul prestiges...
         target: "f",        // ...the Foundation layer keeps:
-        keep: ["best"]      // f.best survives, so f sub-stage milestones recompute as kept
+        keep: ["best", "milestones"]   // f.best + earned sub-stages survive (no re-notify)
     },
     {
         // Soul Formation carries the Nascent Soul climb forward (design §5 capstone / slice 6):
@@ -61,6 +68,6 @@ var KEEP_RULES = [
         grantedBy: { layer: "s", milestone: 2 },
         onResetOf: "s",     // when Soul Formation prestiges...
         target: "n",        // ...the Nascent Soul layer keeps:
-        keep: ["best"]      // n.best survives, so n sub-stage milestones recompute as kept
+        keep: ["best", "milestones"]   // n.best + earned sub-stages survive (no re-notify)
     }
 ];

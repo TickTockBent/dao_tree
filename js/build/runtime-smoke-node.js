@@ -113,6 +113,10 @@ check("f prestige (keep rule earned): q.best SURVIVES the reset",
     "player.q.best.eq(90)");
 check("f prestige (keep rule earned): q.points still reset",
     "player.q.points.eq(0)");
+// q.best=90 is 6th Level: the 6 sub-stage milestones (at <= 90) must SURVIVE so they
+// do not re-fire their unlock notification every reset (the keep "milestones" fix).
+check("f prestige (keep rule earned): q.milestones SURVIVE (no re-notify spam)",
+    "player.q.milestones.length === 6 && hasMilestone('q', 5)");
 
 // 6. Forced c reset cascades f and q but never b/gate.
 boot("player.f.points = new Decimal(50); player.q.best = new Decimal(90);");
