@@ -6,6 +6,14 @@ All notable changes to **Dao Tree**. Versions track the itch.io releases;
 ## 0.2.2 — unreleased
 
 ### Fixed
+- **Forge fuel is labeled correctly.** The forge push options showed their fuel cost
+  as "core formation" when the fuel is actually spent from your Foundation, so it
+  looked like you could forge without paying — you were paying, just in Foundation.
+  The cost now reads "foundation" in the buttons and the confirm prompt.
+- **Progress bars are readable when full.** A full refinement ("Warm the Core") or
+  tribulation bar rendered near-white text on the near-white theme fill. Both bars now
+  fill with their own realm color, so a maxed bar (e.g. "Core at its Foundation
+  ceiling") stays legible.
 - **Auto-cultivation no longer soft-locks Core Formation.** The sect arsenal's
   auto-Foundation-prestige used to wipe your Qi forever (worse the better your
   Foundation grade), so you could never bank the 250,000 Qi to forge a core. It now

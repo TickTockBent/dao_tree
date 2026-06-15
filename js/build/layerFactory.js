@@ -760,6 +760,11 @@ function computeAndStoreFoundationGrade() {
 // FACTORY_NUMERICS via factoryDecimal*.
 // ---------------------------------------------------------------------------
 function coreRealmData() { return findRealmData("c"); }
+// The forge is FUELED BY FOUNDATION (§7a): performForge / canAffordForgePush spend
+// player.f.points, not the Core Formation resource. The push-option fuel label must
+// name THAT resource ("foundation"), or the UI reads "25 core formation" while the
+// cost is actually paid in Foundation — the bug this accessor exists to prevent.
+function forgeFuelRealmData() { return findRealmData("f"); }
 // coreForgeData() NOW reads SETPIECE_DATA.forge (the forge migration, slice 6) — a
 // compatibility accessor: the forge config moved from the c row to SETPIECE_DATA.forge
 // VERBATIM, so this returns the identical object it always returned and every other forge
@@ -1958,7 +1963,7 @@ function makeForgePushClickable(pushOption) {
             var crackPercent = new Decimal(pushOption.crackChance).times(percentBase);
             var offsetSign = pushOption.offset > FACTORY_ZERO ? "+" : "";
             var line = "Push +" + formatWhole(new Decimal(pushOption.offset)) + " grade<br>";
-            line += "Fuel: " + format(fuelCost) + " " + coreRealmData().resource + "<br>";
+            line += "Fuel: " + format(fuelCost) + " " + forgeFuelRealmData().resource + "<br>";
             line += "Crack risk: " + format(crackPercent) + "%";
             return line;
         },
@@ -1968,7 +1973,7 @@ function makeForgePushClickable(pushOption) {
             var fuelCost = forgeFuelCost(pushOption);
             var crackPercent = new Decimal(pushOption.crackChance).times(percentBase);
             var prompt = "Forge with " + pushOption.label + "? Spends " + format(fuelCost)
-                + " " + coreRealmData().resource + "; " + format(crackPercent)
+                + " " + forgeFuelRealmData().resource + "; " + format(crackPercent)
                 + "% chance to crack and drop one grade. This forges your core once.";
             if (!confirm(prompt)) return;
             var resultRow = performForge(pushOption);
@@ -1999,6 +2004,10 @@ function makeForgeBars() {
             direction: RIGHT,
             width: refine.barWidth,
             height: refine.barHeight,
+            // Fill with the Core layer's own color, not the theme's near-white --color
+            // default: a FULL bar (e.g. "Core at its Foundation ceiling") would otherwise
+            // be near-white behind near-white text — unreadable. (§ bar contrast)
+            fillStyle: { "background-color": coreRealmData().color },
             unlocked: function () { return coreIsForged(); },
             progress: function () {
                 if (!refinementCanProgress()) return factoryDecimalOne();
@@ -2215,6 +2224,9 @@ function makeTribulationBars() {
             direction: RIGHT,
             width: barConfig.barWidth,
             height: barConfig.barHeight,
+            // Same contrast fix as the refinement bar: fill with the realm's own color so a
+            // full bar (e.g. "Endured: ...") isn't near-white-on-near-white. (§ bar contrast)
+            fillStyle: { "background-color": tribulationRealmData().color },
             unlocked: function () { return tribulationIsActive() || tribulationPassed(); },
             progress: function () {
                 if (!tribulationIsActive()) return tribulationPassed() ? factoryDecimalOne() : factoryDecimalZero();
