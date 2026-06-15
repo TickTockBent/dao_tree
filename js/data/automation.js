@@ -52,6 +52,12 @@
 //                           costExponent number  shapes the falloff: effective fraction =
 //                                               baseFraction x (1 / (1 - completeness))^costExponent.
 //                                               Higher = sharper rise near "fully formed".
+//                           costCap      number  >= 1. Hard ceiling on that multiplier. WITHOUT it
+//                                               the curve asymptotes near completion, so the bell's
+//                                               final pre-rest prestige would demand an absurd Qi
+//                                               bank (tens of millions) and the foundation would
+//                                               never cleanly rest in real play. The cap bounds the
+//                                               last bank and guarantees the bell reaches rest.
 //                           restEpsilon  number  completeness within this of 1.0 counts as
 //                                               fully formed -> the bell rests (and avoids the
 //                                               divide-by-zero at the curve's asymptote).
@@ -77,7 +83,7 @@ var AUTOMATION_DATA = [
         // a player banking Qi for Soul Formation is never fought by the q bell. ⟨tune⟩
         key: "nascentQiPrestige",
         grantedBy: { layer: "n", milestone: 0 },      // first NS sub-stage (Early Nascent Soul)
-        automates: { layer: "q", action: "prestige", maturity: { baseFraction: 0.05, costExponent: 2, restEpsilon: 0.001 } }
+        automates: { layer: "q", action: "prestige", maturity: { baseFraction: 0.05, costExponent: 2, restEpsilon: 0.001, costCap: 5 } }
     },
     {
         // Auto-open Primary Meridians once Nascent Soul is reached (§5). Buying
@@ -110,6 +116,6 @@ var AUTOMATION_DATA = [
         // source (SECT_DATA.milestones), which the linter's milestone-source check knows. ⟨tune⟩
         key: "sectFoundationBell",
         grantedBy: { layer: "sect", milestone: 2 },   // arsenal milestone (SECT_DATA.milestones[2])
-        automates: { layer: "f", action: "prestige", maturity: { baseFraction: 0.05, costExponent: 2, restEpsilon: 0.001, fuelFromForge: true } }
+        automates: { layer: "f", action: "prestige", maturity: { baseFraction: 0.05, costExponent: 2, restEpsilon: 0.001, costCap: 5, fuelFromForge: true } }
     }
 ];

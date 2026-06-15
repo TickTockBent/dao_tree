@@ -227,7 +227,7 @@ function cleanAutomationData() {
         // (row 0, three rows below the frontier) — satisfying the frontier rule. The buyable row
         // exercises the action="buyable" + real-buyableKey path.
         { key: "naRootPrestige", grantedBy: { layer: "na", milestone: 0 },
-          automates: { layer: "qa", action: "prestige", maturity: { baseFraction: 0.05, costExponent: 2, restEpsilon: 0.001 } } },
+          automates: { layer: "qa", action: "prestige", maturity: { baseFraction: 0.05, costExponent: 2, restEpsilon: 0.001, costCap: 5 } } },
         { key: "naPrimaryMeridians", grantedBy: { layer: "na", milestone: 0 },
           automates: { layer: "b", action: "buyable", buyableKey: "primaryMeridian" } }
     ];
@@ -738,7 +738,7 @@ runCase("clean soul aspect / soul aspect data", "checkSoulAspectData",
 // ---------------------------------------------------------------------------
 (function () {
     const automation = cleanAutomationData();
-    automation[0].automates = { layer: "fa", action: "prestige", maturity: { baseFraction: 0.05, costExponent: 2, restEpsilon: 0.001 } }; // covers fa (row 1), NOT qa (row 0)
+    automation[0].automates = { layer: "fa", action: "prestige", maturity: { baseFraction: 0.05, costExponent: 2, restEpsilon: 0.001, costCap: 5 } }; // covers fa (row 1), NOT qa (row 0)
     runCase("FAIL(A3) frontier rule: row-0 realm has no prestige automation",
         "checkAutomationData",
         { REALM_DATA: automationRealmData(), TREE_DATA: automationTreeData(),
@@ -879,7 +879,7 @@ runCase("clean soul aspect / soul aspect data", "checkSoulAspectData",
 (function () {
     const automation = cleanAutomationData();
     automation.push({ key: "sectBell", grantedBy: { layer: "sect", milestone: 99 },
-        automates: { layer: "fa", action: "prestige", maturity: { baseFraction: 0.05, costExponent: 2, restEpsilon: 0.001 } } });
+        automates: { layer: "fa", action: "prestige", maturity: { baseFraction: 0.05, costExponent: 2, restEpsilon: 0.001, costCap: 5 } } });
     runCase("FAIL(AU1) automation granted by an out-of-range sect milestone",
         "checkAutomationData",
         { REALM_DATA: automationRealmData(), TREE_DATA: automationTreeData(),

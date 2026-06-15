@@ -784,6 +784,14 @@ check("slice-5 arsenal: bell FIRES while Foundation is unformed (rebuilding)",
 boot("player.f.best = new Decimal(substageThreshold('f', 'Great Circle')); player.f.points = new Decimal(1e6); player.points = new Decimal(layers.f.requires().times(4)); updateTemp(); updateTemp();");
 check("slice-5 arsenal: bell RESTS when Foundation is fully formed (Qi banks freely)",
     "tmp.f.autoPrestige === false && tmp.f.canReset === true");
+// Time estimator contract: null when resting (nothing to estimate).
+check("slice-5 arsenal: time-to-formed estimate is null when already resting",
+    "secondsUntilAutoPrestigeRests('f') === null");
+// While unformed (with income), the estimate is a finite, positive, bounded number — the cost
+// cap guarantees it converges instead of asymptoting to an absurd final bank.
+boot("player.f.best = new Decimal(0); player.f.points = new Decimal(0); player.points = new Decimal(0); updateTemp(); updateTemp();");
+check("slice-5 arsenal: time-to-formed estimate is finite & positive while building",
+    "(function(){var e=secondsUntilAutoPrestigeRests('f'); return e !== null && e.gt(0) && e.lt(new Decimal('1e9'));})()");
 //     (c) End-to-end: an unformed Foundation auto-prestiges through a real gameLoop tick.
 boot("player.f.best = new Decimal(0); player.f.points = new Decimal(0); player.points = new Decimal(layers.f.requires().times(4)); updateTemp(); updateTemp();");
 check("slice-5 arsenal: pre-gameLoop: bell fires + canReset",

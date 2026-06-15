@@ -19,11 +19,15 @@
 //   maturityBarSegments 20  number of cells in the text maturity bar drawn on an auto-prestige
 //                       realm (the auto-cultivation readout). A display dimension, like the
 //                       forge bar's barWidth in SETPIECE_DATA.
+//   autoPrestigeSimMaxCycles 500  iteration backstop for the auto-prestige time estimator's
+//                       cycle simulation (it converges in well under this; the cap is a runaway
+//                       tripwire, like pacing-sim's eventLoopGuard).
 
 var FACTORY_NUMERICS = {
     zero: 0,
     one: 1,
     hundred: 100,
     firstGridClickableId: 11,
-    maturityBarSegments: 20
+    maturityBarSegments: 20,
+    autoPrestigeSimMaxCycles: 500
 };

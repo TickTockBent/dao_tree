@@ -1478,6 +1478,10 @@
                         errors.push("Automation '" + rowId + "': maturity.restEpsilon must be > 0 "
                             + "— the bell must be able to reach rest at full maturity (§1.7).");
                     }
+                    if (!(maturity.costCap >= ONE)) {
+                        errors.push("Automation '" + rowId + "': maturity.costCap must be >= 1 — it "
+                            + "bounds the cost curve so the bell can actually reach rest (§1.7).");
+                    }
                 }
             } else if (automates.maturity !== undefined) {
                 errors.push("Automation '" + rowId + "': maturity only applies to "

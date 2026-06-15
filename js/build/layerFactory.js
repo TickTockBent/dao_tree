@@ -1545,23 +1545,33 @@ function forgeMaxPushFuel() {
 // How fully formed `layerId` is for auto-prestige, in [0,1] (1 = rest). The MIN of its
 // dimensions, so the bell keeps working while EITHER the sub-stage climb OR (for the
 // fuel-funding realm) the fuel reserve is unfinished.
-function realmAutoCompleteness(layerId, maturityCfg) {
-    var substageRatio = clampUnitInterval(realmBest(layerId).div(realmTopSubstageAt(layerId)));
-    var completeness = substageRatio;
-    if (maturityCfg && maturityCfg.fuelFromForge && player[layerId]) {
-        var fuelRatio = clampUnitInterval(player[layerId].points.div(forgeMaxPushFuel()));
+// Completeness from EXPLICIT state (best, points) — the pure core, so the time estimator
+// can simulate hypothetical states without touching live player data.
+function realmCompletenessFromState(layerId, maturityCfg, best, points) {
+    var completeness = clampUnitInterval(best.div(realmTopSubstageAt(layerId)));
+    if (maturityCfg && maturityCfg.fuelFromForge) {
+        var fuelRatio = clampUnitInterval(points.div(forgeMaxPushFuel()));
         if (fuelRatio.lt(completeness)) completeness = fuelRatio;
     }
     return completeness;
 }
 
-// The per-prestige cost multiplier on the worth-it fraction, rising on a curve as the
-// realm matures: 1 / (1 - completeness)^costExponent. Returns null once completeness is
-// within restEpsilon of fully formed — the signal to REST (also dodges the asymptote).
+function realmAutoCompleteness(layerId, maturityCfg) {
+    var points = (player[layerId] && player[layerId].points) ? player[layerId].points : factoryDecimalZero();
+    return realmCompletenessFromState(layerId, maturityCfg, realmBest(layerId), points);
+}
+
+// The per-prestige cost multiplier on the worth-it fraction, rising on a curve as the realm
+// matures: 1 / (1 - completeness)^costExponent, CAPPED at maturityCfg.costCap. The cap is what
+// makes completion reachable — without it the curve asymptotes and the final pre-rest prestige
+// would demand an absurd bank. Returns null once completeness is within restEpsilon of fully
+// formed — the signal to REST (also dodges the asymptote at the very top).
 function autoPrestigeCostMultiplier(completeness, maturityCfg) {
     var headroom = factoryDecimalOne().sub(completeness);
     if (headroom.lte(new Decimal(maturityCfg.restEpsilon))) return null;
-    return Decimal.pow(factoryDecimalOne().div(headroom), maturityCfg.costExponent);
+    var rawMultiplier = Decimal.pow(factoryDecimalOne().div(headroom), maturityCfg.costExponent);
+    var cap = new Decimal(maturityCfg.costCap);
+    return rawMultiplier.gt(cap) ? cap : rawMultiplier;
 }
 
 // Should the auto-prestige fire this tick? Rests when the realm is fully formed; otherwise
@@ -1597,6 +1607,57 @@ function maturityBar(completeness) {
     return bar;
 }
 
+// Estimate the wall-clock SECONDS until `layerId`'s auto-prestige reaches its rest point, at
+// the CURRENT Qi/sec (held constant). Simulates the prestige loop cycle-by-cycle with the SAME
+// firing/gain math the live bell uses, so it accounts for BOTH income and prestige frequency
+// (the part a single division can't). Returns null when there is nothing honest to show: no
+// auto-prestige granted, already resting, or no Qi income. The gain mirrors getResetGain
+// (Qi/reqBase)^gainExp x gainMult. Because Qi/sec actually GROWS as you climb, the real time is
+// usually shorter — treat the result as a conservative "at current pace" upper bound.
+function secondsUntilAutoPrestigeRests(layerId) {
+    var maturityCfg = prestigeMaturityConfig(layerId);
+    if (!maturityCfg) return null;
+    if (autoPrestigeCostMultiplier(realmAutoCompleteness(layerId, maturityCfg), maturityCfg) === null) {
+        return null; // already resting
+    }
+    if (typeof getPointGen !== "function") return null;
+    var rate = getPointGen();
+    if (rate.lte(FACTORY_ZERO)) return null; // no income -> no meaningful estimate
+    var realmData = findRealmData(layerId);
+    var reqBase = new Decimal(realmData.reqBase);
+    var gainExponent = new Decimal(realmData.gainExp);
+    var gainMultiplier = realmData.graded ? foundationGradeMult() : factoryDecimalOne();
+    var inverseGainExponent = factoryDecimalOne().div(gainExponent);
+
+    var simulatedBest = realmBest(layerId);
+    var simulatedPoints = (player[layerId] && player[layerId].points)
+        ? new Decimal(player[layerId].points) : factoryDecimalZero();
+    var simulatedQi = new Decimal(player.points);
+    var totalSeconds = factoryDecimalZero();
+    var cycle = FACTORY_ZERO;
+    while (cycle < FACTORY_NUMERICS.autoPrestigeSimMaxCycles) {
+        var completeness = realmCompletenessFromState(layerId, maturityCfg, simulatedBest, simulatedPoints);
+        var costMultiplier = autoPrestigeCostMultiplier(completeness, maturityCfg);
+        if (costMultiplier === null) break; // reached rest
+        var effectiveFraction = new Decimal(maturityCfg.baseFraction).times(costMultiplier);
+        // Qi where the gain first clears effectiveFraction x points: invert the gain formula,
+        // then floor at reqBase (the bell can't prestige below canReset).
+        var targetGain = effectiveFraction.times(simulatedPoints);
+        var qiThreshold = reqBase.times(Decimal.pow(targetGain.div(gainMultiplier), inverseGainExponent));
+        if (qiThreshold.lt(reqBase)) qiThreshold = reqBase;
+        if (simulatedQi.lt(qiThreshold)) {
+            totalSeconds = totalSeconds.add(qiThreshold.sub(simulatedQi).div(rate));
+            simulatedQi = qiThreshold;
+        }
+        var cycleGain = Decimal.pow(simulatedQi.div(reqBase), gainExponent).times(gainMultiplier);
+        simulatedPoints = simulatedPoints.add(cycleGain);
+        if (simulatedPoints.gt(simulatedBest)) simulatedBest = simulatedPoints;
+        simulatedQi = factoryDecimalZero();
+        cycle += FACTORY_ONE;
+    }
+    return totalSeconds;
+}
+
 // Player-facing auto-cultivation readout for a realm whose prestige is automated (the
 // arsenal / Nascent Soul bell). Surfaces how formed the realm is and whether the bell is
 // still working or has rested — so the falloff is VISIBLE, never a silent "it stopped".
@@ -1616,7 +1677,12 @@ function maturityReadout(realmId) {
         line += "<i>Fully formed. Auto-cultivation is resting; your Qi now banks freely.</i>";
     } else {
         line += "<i>Auto-cultivation is building your foundation (prestige cost &times;"
-            + format(costMultiplier) + ", rising as it matures).</i>";
+            + format(costMultiplier) + ", rising as it matures).";
+        var estimatedSeconds = secondsUntilAutoPrestigeRests(realmId);
+        if (estimatedSeconds !== null && typeof formatTime === "function") {
+            line += " ~" + formatTime(estimatedSeconds.toNumber()) + " to fully formed at current pace.";
+        }
+        line += "</i>";
     }
     return line;
 }

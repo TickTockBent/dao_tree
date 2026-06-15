@@ -24,8 +24,9 @@ All notable changes to **Dao Tree**. Versions track the itch.io releases;
   your current build would lock in (Flawed → Heaven-grade) and the headroom you can
   grind toward with meridians and temper. Always visible while building.
 - **Foundation maturity readout.** Realms with auto-cultivation show a maturity bar,
-  a rising prestige-cost multiplier as the Foundation matures, and a clear "fully
-  formed — resting; your Qi now banks freely" state. No more invisible behavior.
+  a rising (capped) prestige-cost multiplier as the Foundation matures, an estimated
+  time to fully formed at your current pace, and a clear "fully formed — resting; your
+  Qi now banks freely" state. No more invisible behavior.
 - **Sect ranks now require cultivation.** The inner library opens only to a
   Foundation cultivator and the arsenal only to one who has forged a core; your
   contribution caps at each rank's ceiling until you advance, with the gate shown.
