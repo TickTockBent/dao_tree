@@ -121,8 +121,8 @@ var BODY_DATA = {
     temperTiers: [
         { key: "skin",   label: "Skin",   fromLevel: 1,  qiBonus: 1.05 },
         { key: "flesh",  label: "Flesh",  fromLevel: 5,  qiBonus: 1.05 },
-        { key: "tendon", label: "Tendon", fromLevel: 10, qiBonus: 1.05 },
-        { key: "bone",   label: "Bone",   fromLevel: 15, qiBonus: 1.05 },
+        { key: "tendon", label: "Tendons", fromLevel: 10, qiBonus: 1.05 },
+        { key: "bone",   label: "Bones",  fromLevel: 15, qiBonus: 1.05 },
         { key: "marrow", label: "Marrow", fromLevel: 20, qiBonus: 1.05 }
     ],
 

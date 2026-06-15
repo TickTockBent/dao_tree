@@ -51,7 +51,7 @@ var GATE_DATA = {
             // without a sect, so it gates on sectJoined (the Inner Disciple precedent, id 12).
             // A no-sect (spineOnly) cultivator never earns this rank or its stipend. "Early
             // Foundation" (at:1) is the any-grade reached marker (named stage label, §5a).
-            done: { sectJoined: true, realm: ["f", "Early Foundation"], meridians: 6, temperTier: "Flesh" },
+            done: { sectJoined: true, realm: ["f", "Early Foundation"], meridians: 6, temperTier: "flesh" },
             // +25% Qi/sec sect stipend (§8). Reads nothing it suppresses.
             effect: { qiMult: 1.25 },
             gates: null

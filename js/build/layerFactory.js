@@ -84,7 +84,13 @@ function describeUnlockCondition(condition) {
         requirementParts.push("open all primary meridians");
     }
     if (condition.temperTier !== undefined) {
-        requirementParts.push("temper your body to the " + condition.temperTier + " tier");
+        // Conditions store the stable tier KEY; resolve it to the current display
+        // label so the requirement text tracks label edits (e.g. Tendons/Bones).
+        var requiredTemperTierIndex = temperTierIndexByKey(condition.temperTier);
+        var requiredTemperTierLabel = requiredTemperTierIndex >= FACTORY_ZERO
+            ? BODY_DATA.temperTiers[requiredTemperTierIndex].label
+            : condition.temperTier;
+        requirementParts.push("temper your body to the " + requiredTemperTierLabel + " tier");
     }
     if (condition.qi !== undefined) {
         requirementParts.push("gather " + condition.qi + " Qi");
@@ -173,6 +179,26 @@ function temperTierIndexByKey(tierKey) {
         if (tier.key === tierKey || tier.label === tierKey) foundIndex = index;
     });
     return foundIndex;
+}
+
+// Display string for the Temper buyable's effect line. Temper has no per-level
+// multiplier (BODY_DATA temper effectBase 1), so a generic "x1.0" effect line is
+// meaningless. Instead we surface the next tier the player is climbing toward —
+// each tier grants +5% Qi/sec and a step toward Foundation Grade (the real payoff,
+// see makeTemperMilestones). Past the final tier there is nothing more to reach.
+function nextTemperTierDescription(currentTemperLevel) {
+    var nextTier = null;
+    BODY_DATA.temperTiers.forEach(function (tier) {
+        if (nextTier === null && currentTemperLevel.lt(tier.fromLevel)) nextTier = tier;
+    });
+    if (nextTier === null) {
+        var finalTier = BODY_DATA.temperTiers[BODY_DATA.temperTiers.length - FACTORY_ONE];
+        return "All tiers tempered (" + finalTier.label + ")";
+    }
+    var percentBase = new Decimal(FACTORY_HUNDRED);
+    var nextTierBonusPercent = new Decimal(nextTier.qiBonus).times(percentBase).sub(percentBase);
+    return "Next tier: " + nextTier.label + " at level " + formatWhole(nextTier.fromLevel)
+        + " (+" + format(nextTierBonusPercent) + "% Qi/sec)";
 }
 
 // ---------------------------------------------------------------------------
@@ -1550,7 +1576,13 @@ function makeBuyable(row) {
             var amount = getBuyableAmount(this.layer, this.id);
             var line = row.title + "<br>Amount: " + formatWhole(amount) + " / " + formatWhole(row.limit);
             line += "<br>Cost: " + format(data.cost) + " Qi";
-            line += "<br>Effect: x" + format(data.effect) + " " + row.resourceWord;
+            // Temper has no per-level multiplier (effectBase 1) — its payoff is the
+            // per-tier milestones, so show the next tier instead of an inert "x1.0".
+            if (row.id === BODY_DATA.temperBuyableId) {
+                line += "<br>" + nextTemperTierDescription(amount);
+            } else {
+                line += "<br>Effect: x" + format(data.effect) + " " + row.resourceWord;
+            }
             return line;
         }
     };

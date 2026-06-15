@@ -181,7 +181,7 @@ var REALM_DATA = [
         reqBase: 250000,
         gainExp: 0.5,
         reveal: { realm: ["f", "Great Circle"] }, // §5a: Great Circle reveals the node
-        unlock: { realm: ["f", "Great Circle"], temperTier: "Tendon" },
+        unlock: { realm: ["f", "Great Circle"], temperTier: "tendon" },
         substages: [
             { label: "Core Forged",   at: 1, qiMult: 1.50 },
             { label: "Core Refined",  at: 2, qiMult: 1.75 },

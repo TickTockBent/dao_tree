@@ -160,7 +160,7 @@ var HINT_DATA = {
             // Tendon temper tier that gates Core Formation (§5b).
             key: "climbFoundation",
             when: { realm: ["f", "Early Foundation"] },
-            text: "Climb Foundation toward Great Circle, and temper to Tendon. That opens Core Formation."
+            text: "Climb Foundation toward Great Circle, and temper to Tendons. That opens Core Formation."
         },
         {
             // Row 7: player has reached 6th Level (Foundation is now revealed). Guide
