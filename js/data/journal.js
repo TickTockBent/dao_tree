@@ -48,7 +48,7 @@ var JOURNAL_DATA = {
             when: { layerUnlocked: "q" },
             title: "First Breath",
             text: "You draw in the ambient qi and feel it, for the first time, listen. "
-                + "It is thin and reluctant, but it moves — and that is enough."
+                + "It is thin and reluctant, but it moves. That is enough."
         },
         {
             // Entry 2: first meridian opened. A concrete physical milestone.
@@ -65,19 +65,20 @@ var JOURNAL_DATA = {
             key: "foundationReached",
             when: { realm: ["f", "Early Foundation"] },
             title: "Foundation Laid",
-            text: "The Foundation is not a destination — it is the first honest reckoning "
+            text: "The Foundation is the first honest reckoning "
                 + "with what you are made of. "
                 + "What you built these past weeks either holds now, or it doesn't."
         },
         {
-            // Entry 4: Outer Disciple gate earned (achievement 11 on the gate layer).
-            // The player is recognized by a sect for the first time.
-            // Uses the new achievement meets() key: [layerId, achievementId].
+            // Entry 4: Outer Disciple earned (gate achievement 11). That gate now itself requires
+            // sectJoined (gates.js), so this rank entry only fires for a cultivator who has
+            // actually joined a sect, matching the prose (a sect elder recognizing you). Keying
+            // off the achievement alone is enough; the sect requirement lives at the gate.
             key: "outerDisciple",
             when: { achievement: ["gate", 11] },
             title: "Outer Disciple",
             text: "A sect elder looks you over, says nothing for a long moment, then nods. "
-                + "You are Outer Disciple now — the lowest rung, the first foothold. "
+                + "You are Outer Disciple now, the lowest rung and the first foothold. "
                 + "You have been seen."
         },
         {
@@ -101,8 +102,8 @@ var JOURNAL_DATA = {
             key: "coreForged",
             when: { realm: ["c", "Core Forged"] },
             title: "The Core Holds",
-            text: "The furnace-light fades. In your dantian, something crystalline and permanent settles into place — "
-                + "the Golden Core, yours alone, the weight of every meridian you opened and every impurity you burned away. "
+            text: "The furnace-light fades. In your dantian, something crystalline and permanent settles into place. "
+                + "The Golden Core is yours alone, the weight of every meridian you opened and every impurity you burned away. "
                 + "This is the thing that will outlast the rest."
         },
         {
@@ -111,8 +112,8 @@ var JOURNAL_DATA = {
             key: "sectJoined",
             when: { sectJoined: true },
             title: "You Belong Somewhere Now",
-            text: "The formalities are brief — a token, a bow, a name written in a ledger. "
-                + "What lingers is the weight of it: you have chosen a path among paths, "
+            text: "The formalities are brief: a token, a bow, a name written in a ledger. "
+                + "What lingers is the weight of it. You have chosen a path among paths, "
                 + "and the sect has chosen you back."
         },
         {
@@ -122,7 +123,7 @@ var JOURNAL_DATA = {
             when: { realm: ["n", "Early Nascent Soul"] },
             title: "The Soul Stirs",
             text: "You expected a wall. Instead there is a door, and on the other side of it "
-                + "something looks back at you — not a stranger, but a version of yourself you have not yet earned. "
+                + "something looks back at you. Not a stranger, but a version of yourself you have not yet earned. "
                 + "The nascent soul has awakened. It is waiting."
         },
         {
@@ -139,8 +140,8 @@ var JOURNAL_DATA = {
             when: { realm: ["n", "Early Nascent Soul"], anyDaoNode: 1 },
             title: "A Form in the Formless",
             text: "The soul does not announce what it has become. "
-                + "You simply notice, one morning, that your qi moves differently — "
-                + "shaped now by something that has always been you, but was never spoken aloud."
+                + "You simply notice, one morning, that your qi moves differently, "
+                + "shaped now by something that has always been you but was never spoken aloud."
         },
         {
             // Entry 10: Nascent Soul deepens — Late Nascent Soul. The climb continues.
@@ -149,14 +150,14 @@ var JOURNAL_DATA = {
             title: "The Long Interior",
             text: "The soul matures in silence. "
                 + "You have stopped counting the breakthroughs; what matters now is the quality of attention you bring to each one. "
-                + "The mountain has not gotten smaller — you have gotten larger."
+                + "The mountain has not gotten smaller. You have gotten larger."
         },
         {
             // Entry 11: All primary meridians opened. A completion milestone in the body path.
             key: "allMeridians",
             when: { primaryMeridiansAll: true },
             title: "The Twelve Channels",
-            text: "The last primary meridian opens with less drama than you expected — "
+            text: "The last primary meridian opens with less drama than you expected, "
                 + "a quiet unlocking, like remembering a word you always knew. "
                 + "The body is as ready as it can make itself. The rest is up to the soul."
         },
@@ -167,7 +168,7 @@ var JOURNAL_DATA = {
             key: "soulFormationEntered",
             when: { layerUnlocked: "s" },
             title: "The Shape of the Final Step",
-            text: "The soul does not complete its formation by climbing — it completes it by enduring. "
+            text: "The soul does not complete its formation by climbing. It completes it by enduring. "
                 + "You have reached the Apex of the Nascent Soul. What waits beyond is not a wall but a question: "
                 + "what are you made of, when heaven itself decides to find out?"
         },
@@ -178,7 +179,7 @@ var JOURNAL_DATA = {
             key: "tribulationPassed",
             when: { tribulationPassed: true },
             title: "Through the Storm",
-            text: "The final wave broke and the pool held. Not without cost — your qi ran thin, "
+            text: "The final wave broke and the pool held. Not without cost. Your qi ran thin, "
                 + "your soul bent in ways it had never bent. "
                 + "But it held. The tribulation is behind you, and something it left in you will not leave."
         },
@@ -190,7 +191,7 @@ var JOURNAL_DATA = {
             when: { scarActive: true },
             title: "The Mark It Left",
             text: "The wound is not visible from the outside. "
-                + "You know it by the way your qi moves differently now — heavier in one place, "
+                + "You know it by the way your qi moves differently now, heavier in one place, "
                 + "thinner where it was not thin before. The scar is real. So is the path through it."
         },
         {
@@ -200,7 +201,7 @@ var JOURNAL_DATA = {
             key: "scarHealed",
             when: { scarHealed: true },
             title: "Tempered by Ruin",
-            text: "The weight is gone. Not just the wound — something settled where the wound was. "
+            text: "The weight is gone. Not just the wound. Something settled where the wound was. "
                 + "What the tribulation scarred, cultivation healed into something harder, "
                 + "and what is harder now will not crack the same way again."
         },
@@ -212,7 +213,7 @@ var JOURNAL_DATA = {
             when: { tribulationPassed: true },
             title: "What the Road Records",
             text: "The road does not forget what you did on it. "
-                + "The core you forged, the aspect your soul chose, the tribulation you survived — "
+                + "The core you forged, the aspect your soul chose, the tribulation you survived: "
                 + "all of it written now in the eternal record. "
                 + "This is the first line of your legacy. There will be more."
         }

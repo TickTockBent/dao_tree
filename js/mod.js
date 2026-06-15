@@ -13,35 +13,42 @@ let modInfo = {
 
 // Set your version in num and name
 let VERSION = {
-	num: "0.2",
+	num: "0.2.1",
 	name: "The Mortal Road",
 }
 
 let changelog = `<h1>Changelog:</h1><br>
-	<h3>v0.2 — The Mortal Road</h3><br>
-		- Comprehend the Dao Lattice: accumulate Insight to purchase Glimpses and Seeds across the five elemental roots.<br>
-		- Adopt a Stance — Breathing Trance trades Qi speed for Insight; Sword Trance runs deeper into the blade.<br>
-		- Reach Nascent Soul and choose your Soul Aspect: Formless or an elemental path earned through the lattice.<br>
-		- Automation Tier 1 unlocks with the Nascent Soul — meridian purchases and Qi Condensation prestige run themselves.<br>
-		- Join the Azure Sword Sect or the Stone Formation Sect: study techniques, earn a stipend, and accumulate Contribution through deeds.<br>
-		- Ascend to Soul Formation and face the First Tribulation — your temper, meridians, core grade, techniques, and banked Qi become your shield.<br>
-		- Survive a Scarred result and carry the wound: the scar dims your Qi while it heals, but a fully healed depth becomes a permanent Tempered by Ruin buff.<br>
-		- When the tribulation is passed, the Act I Legacy Grade is written — the measure of the mortal road you walked.<br>
-	<h3>v0.1 — Mortal to Golden Core</h3><br>
+	<h3>v0.2.1</h3><br>
+		- Fixed a display bug that hid in-game choice buttons. Forge pushes, the Soul Aspect, joining a sect and its techniques, the First Tribulation, and the journal's Reflect button now all appear and work.<br>
+		- The journal's new-entry glow now clears once you Reflect on the entries.<br>
+		- Outer Disciple now requires joining a sect, matching the rank.<br>
+		- Reworded the body tempering milestones (for example, "Skin Tempered").<br>
+		- Various text and wording polish.<br>
+	<h3>v0.2: The Mortal Road</h3><br>
+		- Comprehend the Dao Lattice: spend Insight on Glimpses and Seeds across the five elemental roots.<br>
+		- Adopt a Stance. Breathing Trance trades Qi speed for Insight; Sword Trance runs deeper into the blade.<br>
+		- Reach Nascent Soul and choose a Soul Aspect: Formless, or an elemental path earned through the lattice.<br>
+		- Automation Tier 1 arrives with the Nascent Soul, so meridian purchases and Qi Condensation prestige run themselves.<br>
+		- Join the Azure Sword Sect or the Stone Formation Sect. Study techniques, draw a stipend, and earn Contribution through deeds.<br>
+		- Ascend to Soul Formation and face the First Tribulation. Your temper, meridians, core grade, techniques, and banked Qi all stand between you and the storm.<br>
+		- Survive a Scarred result and carry the wound. The scar dims your Qi while it heals, and a fully healed depth becomes a permanent Tempered by Ruin buff.<br>
+		- Pass the tribulation and the Act I Legacy Grade is written: the measure of the road you walked.<br>
+	<h3>v0.1: Mortal to Golden Core</h3><br>
 		- Gather Qi and walk the cultivator's road from mortal to Golden Core.<br>
-		- Open your meridians and temper your body — permanent attributes that never reset.<br>
+		- Open your meridians and temper your body. These are permanent attributes that never reset.<br>
 		- Break through Qi Condensation, Foundation Establishment, and Core Formation.<br>
 		- Your Foundation is graded; a stronger foundation forges a finer core.<br>
 		- Forge your first Golden Core at the climax: push hard for grade, or warm it slowly and safely.<br>
 		- Earn Outer Disciple standing in the sect for a permanent Qi boon.`
 
-let winText = `You have endured the First Tribulation. The heavens descended in wave after wave, and what
-	you prepared across a lifetime — your tempered body, your opened meridians, your Golden Core, the Daos you
-	comprehended, the sect that named you — held against them. Soul Formation is complete, and the Act I Legacy
-	Grade of your mortal road is written into the eternal record: a measure of the life you led that will outlast
-	this one.<br>
-	The mortal road ends here. Beyond lies Act II — the Severing of the Mortal: Spirit Severing, the cutting away
-	of what tied you to the dust, and the long climb toward Mahayana. That frontier awaits a future update.`
+let winText = `You have endured the First Tribulation. The heavens came down wave after wave, and everything
+	you built across a lifetime held against them: your tempered body, your opened meridians, your Golden Core,
+	the Daos you comprehended, the sect that gave you a name. Soul Formation is complete. The Act I Legacy Grade
+	of your mortal road is written into the eternal record, a measure of the life you led that will outlast this
+	one.<br>
+	The mortal road ends here. Beyond it lies Act II, the Severing of the Mortal: Spirit Severing, the cutting
+	away of all that bound you to the dust, and the long climb toward Mahayana. That frontier awaits a future
+	update.`
 
 // If you add new functions anywhere inside of a layer, and those functions have an effect when called, add them here.
 // (The ones here are examples, all official functions are already taken care of)

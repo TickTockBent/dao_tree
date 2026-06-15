@@ -57,7 +57,7 @@ var HINT_DATA = {
             // list (both must be updated together per the checkCondition contract).
             key: "actComplete",
             when: { tribulationPassed: true },
-            text: "Soul Formation is complete — the Legacy of your mortal road is written. Spirit Severing lies ahead, and with it, a heavier question."
+            text: "Soul Formation is complete. The Legacy of your mortal road is written. Spirit Severing lies ahead, and with it a heavier question."
         },
         {
             // Row 2 (slice 6): The First Tribulation is ready to trigger (trigger substage
@@ -69,7 +69,7 @@ var HINT_DATA = {
             // elapsed (tribulationIsReady() reader) — the exact window, no proxy.
             key: "faceTribulation",
             when: { tribulationReady: true },
-            text: "The First Tribulation is ready — your preparations are as complete as this life allows. Trigger it before you climb further; banked Qi fuels the pool."
+            text: "The First Tribulation is ready. Your preparations are as complete as this life allows. Trigger it before you climb further; banked Qi fuels the pool."
         },
         {
             // Row 3 (slice 6): a scar is ACTIVE (scarIsActive(): the failure-scar slot carries
@@ -82,7 +82,7 @@ var HINT_DATA = {
             // Scarred PASS, actComplete shadows it from the top.
             key: "healScar",
             when: { scarActive: true },
-            text: "A scar has been left by the tribulation — it will heal with time. Keep cultivating; the warmth of qi slowly mends what the storm tore."
+            text: "The tribulation left a scar. It will heal in time. Keep cultivating; the warmth of qi slowly mends what the storm tore."
         },
         {
             // Row 4 (slice 6): Soul Formation has been entered (s.best >= 1). Guide the player
@@ -96,7 +96,7 @@ var HINT_DATA = {
             // is live from first SF breakthrough until Apex is reached (s.best 1..119).
             key: "climbSoulFormation",
             when: { realm: ["s", "Early Soul Formation"] },
-            text: "Climb toward Soul Formation — the final test of your mortal road is ahead. The tribulation awaits at the peak."
+            text: "Climb toward Soul Formation. The final test of your mortal road lies ahead, and the tribulation waits at the peak."
         },
         {
             // Row 5 (slice 4): NS layer is unlocked but the Soul Aspect has not yet been
@@ -109,7 +109,7 @@ var HINT_DATA = {
             // the window from first NS breakthrough until s is unlocked.
             key: "chooseAspect",
             when: { layerUnlocked: "n", aspectUnchosen: true },
-            text: "Your nascent soul stirs within the Golden Core, formless and eager — choose its aspect and give it a face."
+            text: "Your nascent soul stirs within the Golden Core, formless and eager. Choose its aspect and give it a face."
         },
         {
             // Row 6 (slice 4): player has reached the first NS substage (Early Nascent Soul,
@@ -123,14 +123,14 @@ var HINT_DATA = {
             // row; while s is not yet unlocked and the player is in NS, this row is live.
             key: "climbNascent",
             when: { realm: ["n", "Early Nascent Soul"] },
-            text: "Deepen the soul — each sub-stage of the Nascent Soul refines it toward the Soul Formation gate at the mountain's edge."
+            text: "Deepen the soul. Each sub-stage of the Nascent Soul refines it toward the Soul Formation gate at the mountain's edge."
         },
         {
             // Row 3: core is forged but hasn't reached its Foundation ceiling yet.
             // Player should be warming it via the refinement loop (§7b).
             key: "warmCore",
             when: { coreForged: true, coreBelowCeiling: true },
-            text: "Warm your core — each full bar raises its grade one tier toward the Foundation ceiling."
+            text: "Warm your core. Each full bar raises its grade one tier toward the Foundation ceiling."
         },
         {
             // Row 4: core is forged and AT its ceiling — the player's Golden Core is as
@@ -146,21 +146,21 @@ var HINT_DATA = {
             // wording does not contradict the NS rows because those rows only fire later.
             key: "coreComplete",
             when: { coreForged: true },
-            text: "Your Golden Core is complete — refine Core Formation toward Core Refined to unlock the Nascent Soul."
+            text: "Your Golden Core is complete. Refine Core Formation toward Core Refined to unlock the Nascent Soul."
         },
         {
             // Row 5: Core Formation is unlocked — bank Foundation fuel and pick a push.
             // Player has the layer but hasn't forged yet.
             key: "chooseForge",
             when: { layerUnlocked: "c" },
-            text: "Bank Foundation fuel and choose your forge push — push harder for a finer core, but risk a crack."
+            text: "Bank Foundation fuel and choose your forge push. Push harder for a finer core, but risk a crack."
         },
         {
             // Row 6: player is in Foundation. Guide them toward Great Circle and the
             // Tendon temper tier that gates Core Formation (§5b).
             key: "climbFoundation",
             when: { realm: ["f", "Early Foundation"] },
-            text: "Climb Foundation toward Great Circle; temper to Tendon — that opens Core Formation."
+            text: "Climb Foundation toward Great Circle, and temper to Tendon. That opens Core Formation."
         },
         {
             // Row 7: player has reached 6th Level (Foundation is now revealed). Guide
@@ -180,7 +180,7 @@ var HINT_DATA = {
             // state — the realm threshold proxy is safe and grammar-compatible (§8.5).
             key: "openLattice",
             when: { realm: ["q", "4th Level"] },
-            text: "The Dao Lattice has revealed itself — explore it with Insight and claim your first Glimpse."
+            text: "The Dao Lattice has revealed itself. Explore it with Insight and claim your first Glimpse."
         },
         {
             // Row 9 (slice 4): the anyDaoNode:1 condition fires once the player owns at
@@ -195,7 +195,7 @@ var HINT_DATA = {
             // NS run where the core has been forgotten).
             key: "enterTrance",
             when: { anyDaoNode: 1 },
-            text: "Enter Breathing Trance to trade some Qi speed for faster Insight — the lattice grows quicker in stillness."
+            text: "Enter Breathing Trance to trade some Qi speed for faster Insight. The lattice grows quicker in stillness."
         },
         {
             // Slice 5: sect revealed (q 2nd Level) but no archetype chosen. Joining is
@@ -207,21 +207,21 @@ var HINT_DATA = {
             // sectIsRevealed() && !sectJoined()) carries the "revealed but unjoined" state.
             key: "joinSect",
             when: { sectUnjoined: true },
-            text: "A sect has taken notice of your progress — visit the Sect tab and choose your path. The choice shapes your techniques and your Dao."
+            text: "A sect has taken notice of your progress. Visit the Sect tab and choose your path; the choice shapes your techniques and your Dao."
         },
         {
             // Row 10: Qi Condensation is unlocked but player hasn't hit 4th Level yet
             // (and no higher-priority hint matched).
             key: "climbQi",
             when: { layerUnlocked: "q" },
-            text: "Climb the Qi Condensation levels and open your meridians — they never reset."
+            text: "Climb the Qi Condensation levels and open your meridians. They never reset."
         },
         {
             // Catch-all — mandatory unconditional last row (§1.5 lint-enforced).
             // Reached only when no prior row matches (fresh save, Qi layer not yet unlocked).
             key: "gatherQi",
             always: true,
-            text: "Gather Qi until you can condense it — the first step on the cultivator's road."
+            text: "Gather Qi until you can condense it. This is the first step on the cultivator's road."
         }
     ]
 };

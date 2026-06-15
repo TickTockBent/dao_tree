@@ -28,7 +28,7 @@
 
 var TREE_DATA = {
     trees: [
-        { id: "act1", name: "Act I — Mortal Road" }
+        { id: "act1", name: "Act I: The Mortal Road" }
     ],
     // EVERY layer the factory registers MUST appear here (linter-enforced).
     layers: {

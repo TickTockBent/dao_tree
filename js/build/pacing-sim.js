@@ -721,7 +721,7 @@ function joinSectIfReady(profile) {
     if (!profile.joinsSect) return false;
     if (sectJoined()) return false;
     if (!sectIsRevealed()) return false;
-    boot("clickClickable('sect', 0);");  // archetype index 0 (Azure Sword), via the engine clickable
+    boot("clickClickable('sect', clickableGridId(0));");  // archetype index 0 (Azure Sword), via the engine clickable (row-1 grid id)
     refreshTemp();
     return sectJoined();
 }
@@ -808,7 +808,7 @@ function applyTechniqueBuys(profile) {
             "(function(){" +
             "  var bestIndex=-1; var bestCost=Infinity; var bal=player.sect.points;" +
             "  TECHNIQUE_DATA.forEach(function(t,i){" +
-            "    if(hasUpgrade('sect',i)) return;" +
+            "    if(hasUpgrade('sect',clickableGridId(i))) return;" +
             "    if(!techniqueVisible(t)) return;" +
             "    var c=new Decimal(t.cost);" +
             "    if(bal.gte(c) && t.cost<bestCost){bestCost=t.cost;bestIndex=i;}" +
@@ -816,7 +816,7 @@ function applyTechniqueBuys(profile) {
             "  return bestIndex;" +
             "})()");
         if (pick < 0) break;
-        boot("buyUpg('sect', " + pick + ");");
+        boot("buyUpg('sect', clickableGridId(" + pick + "));");
         refreshTemp();
         acted = true;
     }
@@ -849,7 +849,7 @@ function manageStance(profile, banking) {
 // to the engine's aspect clickables + meets() gate; never a hand-set key.
 function pickAspectIfReady() {
     if (aspectChosen()) return false;
-    if (!valOf("tmp.n.clickables[0].unlocked")) return false; // aspect clickables not yet shown
+    if (!valOf("tmp.n.clickables[clickableGridId(0)].unlocked")) return false; // aspect clickables not yet shown
     // Find the highest-credit pickable aspect: an element aspect (element != null) whose gate
     // meets() passes is depth-2 (best); Formless is depth-1; pick the deepest available.
     var chosenIndex = valOf(
@@ -864,7 +864,7 @@ function pickAspectIfReady() {
         "  return pick;" +
         "})()");
     if (chosenIndex < 0) return false;
-    boot("clickClickable('n', " + chosenIndex + ");");
+    boot("clickClickable('n', clickableGridId(" + chosenIndex + "));");
     refreshTemp();
     return aspectChosen();
 }

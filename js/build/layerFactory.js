@@ -20,6 +20,14 @@ var FACTORY_HUNDRED = FACTORY_NUMERICS.hundred;
 function factoryDecimalOne() { return new Decimal(FACTORY_ONE); }
 function factoryDecimalZero() { return new Decimal(FACTORY_ZERO); }
 
+// TMT renders clickables/upgrades as a grid keyed by row*10+col (setRowCol in
+// layerSupport.js derives rows/cols from the keys). A generated set must therefore key
+// from the row-1 base (11, 12, 13, ...) rather than a bare 0-based index, or setRowCol
+// derives rows=0 and the grid renders nothing. clickableGridId maps a 0-based position to
+// its row-1 grid id; it is the SINGLE source of that id, so a generated clickable/upgrade
+// key and any ownership lookup (hasUpgrade) stay in lockstep.
+function clickableGridId(gridPosition) { return FACTORY_NUMERICS.firstGridClickableId + gridPosition; }
+
 // The "tree" persistence scope token (design §8.1). Only tree-scoped layers reset
 // via the compiled doReset; life/eternal layers get no doReset (their immunity is
 // topological). A string token, not a number — the §11 scan is for numeric literals.
@@ -76,7 +84,7 @@ function describeUnlockCondition(condition) {
         requirementParts.push("open all primary meridians");
     }
     if (condition.temperTier !== undefined) {
-        requirementParts.push("temper your body to " + condition.temperTier);
+        requirementParts.push("temper your body to the " + condition.temperTier + " tier");
     }
     if (condition.qi !== undefined) {
         requirementParts.push("gather " + condition.qi + " Qi");
@@ -1558,7 +1566,7 @@ function makeTemperMilestones() {
     BODY_DATA.temperTiers.forEach(function (tier, index) {
         var bonusPercent = new Decimal(tier.qiBonus).times(percentGain).sub(percentGain);
         milestones[index] = {
-            requirementDescription: "Temper Body to " + tier.label + " (level " + tier.fromLevel + ")",
+            requirementDescription: tier.label + " Tempered (level " + tier.fromLevel + ")",
             effectDescription: function () { return "+" + format(bonusPercent) + "% Qi/sec and a step toward Foundation Grade"; },
             done: function () {
                 return getBuyableAmount(BODY_DATA.id, BODY_DATA.temperBuyableId).gte(tier.fromLevel);
@@ -1604,7 +1612,7 @@ function makeBodyLayer() {
                 scarHealedDepth: BODY_DATA.scar.startHealedDepth
             };
         },
-        tooltip: function () { return BODY_DATA.name + " — permanent cultivation (never resets)"; },
+        tooltip: function () { return BODY_DATA.name + ": permanent cultivation (never resets)"; },
         buyables: buyablesObject,
         milestones: makeTemperMilestones(),
         // Automation tick hook (design §1.7/§7.5): game.js calls layers[b].automate()
@@ -1666,10 +1674,10 @@ function makeMilestones(realmData) {
 // All numbers come from REALM_DATA(c).forge — no literals here (§11).
 // ---------------------------------------------------------------------------
 
-// Human label for a stored core-grade index ("—" before forging).
+// Human label for a stored core-grade index ("?" before forging).
 function coreGradeLabelForIndex(storedIndex) {
     var row = coreGradeRowForIndex(storedIndex);
-    return row ? row.label : "—";
+    return row ? row.label : "?";
 }
 
 // Build one push-option clickable. id is the option's order in pushOptions.
@@ -1710,7 +1718,7 @@ function makeForgePushClickable(pushOption) {
 function makeForgeClickables() {
     var clickablesObject = {};
     coreForgeData().pushOptions.forEach(function (pushOption, index) {
-        clickablesObject[index] = makeForgePushClickable(pushOption);
+        clickablesObject[clickableGridId(index)] = makeForgePushClickable(pushOption);
     });
     return clickablesObject;
 }
@@ -1837,7 +1845,7 @@ function makeSoulAspectClickable(realmData, aspect) {
             // clickable into storing an aspect whose requirement no longer holds.
             if (!meets(aspect.requires)) return;
             var prompt = "Bind your nascent soul to the " + aspect.label
-                + "? This is permanent for this life — the soul takes one form and keeps it.";
+                + "? This is permanent for this life. The soul takes one form and keeps it.";
             if (!confirm(prompt)) return;
             setSoulAspectKey(aspect.key);
             if (typeof doPopup === "function") {
@@ -1852,7 +1860,7 @@ function makeSoulAspectClickable(realmData, aspect) {
 function makeSoulAspectClickables(realmData) {
     var clickablesObject = {};
     realmData.soulAspect.aspects.forEach(function (aspect, index) {
-        clickablesObject[index] = makeSoulAspectClickable(realmData, aspect);
+        clickablesObject[clickableGridId(index)] = makeSoulAspectClickable(realmData, aspect);
     });
     return clickablesObject;
 }
@@ -1886,7 +1894,7 @@ function makeTribulationBeginClickable(realmData) {
                 return "The tribulation is behind you (" + (passedRow ? passedRow.label : "passed") + ").";
             }
             if (tribulationIsActive()) {
-                return "The heavens descend — endure.";
+                return "The heavens descend. Endure.";
             }
             if (!tribulationCooldownElapsed()) {
                 return "The heavens recede. Re-prepare before you call them again ("
@@ -1894,7 +1902,7 @@ function makeTribulationBeginClickable(realmData) {
             }
             var line = tribulationPoolSummary() + "<br>";
             line += "Banked Qi is consumed as fuel when you begin. Failure marks you with a Scar "
-                + "but destroys nothing else — re-prepare and try again.<br>";
+                + "but destroys nothing else. Re-prepare and try again.<br>";
             line += "<i>No actions mid-run in this life; endure what you prepared for.</i>";
             return line;
         },
@@ -1925,7 +1933,7 @@ function makeTribulationBeginClickable(realmData) {
 
 function makeTribulationClickables(realmData) {
     var clickablesObject = {};
-    clickablesObject[FACTORY_ZERO] = makeTribulationBeginClickable(realmData);
+    clickablesObject[clickableGridId(FACTORY_ZERO)] = makeTribulationBeginClickable(realmData);
     return clickablesObject;
 }
 
@@ -1954,7 +1962,7 @@ function makeTribulationBars() {
                 var pct = tribulationPoolFraction().times(FACTORY_HUNDRED);
                 var wavesDone = player[realmData.id].tribWaveIndex;
                 var waveTotal = tribulationConfig().waves.length;
-                return "Pool: " + format(pct) + "% — wave " + formatWhole(new Decimal(wavesDone))
+                return "Pool: " + format(pct) + "%, wave " + formatWhole(new Decimal(wavesDone))
                     + " / " + formatWhole(new Decimal(waveTotal));
             }
         }
@@ -2030,7 +2038,7 @@ function makeRealmLayer(realmData) {
         // Tooltip on the revealed-but-locked node: state exactly what the breakthrough
         // still needs (the feedback a bare reveal would otherwise omit).
         tooltipLocked: function () {
-            return "Locked — " + describeUnlockCondition(realmData.unlock)
+            return "Locked: " + describeUnlockCondition(realmData.unlock)
                 + ", then gather " + format(new Decimal(realmData.reqBase)) + " " + modInfo.pointsName + ".";
         },
         // Automation (design §1.7/§7.5): a realm auto-prestiges once an AUTOMATION_DATA
@@ -2072,7 +2080,7 @@ function makeRealmLayer(realmData) {
     // Keyed on realmData.setpiece === "forge" (the migration, slice 6) — once it keyed on
     // the inline realmData.forge; the skeleton is identical, the config moved to one table.
     if (realmData.setpiece === "forge") {
-        var warmToggleId = coreForgeData().pushOptions.length;
+        var warmToggleId = clickableGridId(coreForgeData().pushOptions.length);
         var forgeClickables = makeForgeClickables();
         forgeClickables[warmToggleId] = makeWarmToggleClickable();
 
@@ -2106,9 +2114,9 @@ function makeRealmLayer(realmData) {
             ["display-text", function () {
                 if (!coreIsForged()) {
                     var band = storedFoundationBand();
-                    var baseLabel = band ? coreGradeLabelForIndex(coreBaseGradeIndex()) : "—";
-                    var ceilingLabel = band ? coreGradeLabelForIndex(coreCeilingGradeIndex()) : "—";
-                    return "Forge your Golden Core. Your " + (band ? band.tier : "—")
+                    var baseLabel = band ? coreGradeLabelForIndex(coreBaseGradeIndex()) : "?";
+                    var ceilingLabel = band ? coreGradeLabelForIndex(coreCeilingGradeIndex()) : "?";
+                    return "Forge your Golden Core. Your " + (band ? band.tier : "?")
                         + " Foundation yields a base " + baseLabel
                         + " core (ceiling: " + ceilingLabel
                         + "). Push harder for a higher grade at the risk of a crack.";
@@ -2142,14 +2150,14 @@ function makeRealmLayer(realmData) {
             ["display-text", function () {
                 if (!nascentSoulBrokenThrough(realmData)) {
                     return "Break through to Nascent Soul. On your first breakthrough the "
-                        + "soul takes a form — choose an aspect to shape its run-long identity.";
+                        + "soul takes a form. Choose an aspect to shape its run-long identity.";
                 }
                 if (!soulAspectChosen()) {
-                    return "Your nascent soul awaits a form. Choose its aspect — Formless is "
+                    return "Your nascent soul awaits a form. Choose its aspect. Formless is "
                         + "always open; an elemental aspect needs a held Seed of that element.";
                 }
                 var chosen = soulAspectRow();
-                return "Your soul has taken form: <b>" + (chosen ? chosen.label : "—")
+                return "Your soul has taken form: <b>" + (chosen ? chosen.label : "?")
                     + "</b>. This identity holds for the rest of this life.";
             }],
             "blank",
@@ -2205,15 +2213,15 @@ function makeRealmLayer(realmData) {
                         + "</b>)." + legacyText + " The mortal road is complete.";
                 }
                 if (tribulationIsActive()) {
-                    return "The heavens have descended. Endure the waves — what remains of your "
+                    return "The heavens have descended. Endure the waves. What remains of your "
                         + "prepared pool when the last wave breaks decides your grade.";
                 }
                 if (!tribulationIsReady() && !meets(tribulationConfig().trigger)) {
                     return "Climb Soul Formation to its Great Circle, then call down the First "
-                        + "Tribulation when you are prepared — the capstone of the mortal road.";
+                        + "Tribulation when you are prepared. It is the capstone of the mortal road.";
                 }
-                return "You stand at the edge of the mortal road. Prepare your pool — temper, "
-                    + "meridians, your core grade, techniques, and banked Qi as fuel — then face "
+                return "You stand at the edge of the mortal road. Prepare your pool: temper, "
+                    + "meridians, your core grade, techniques, and banked Qi as fuel, then face "
                     + "the First Tribulation when ready. Failure marks you, but never walls you.";
             }],
             "blank",
@@ -2253,13 +2261,13 @@ function makeGateLayer() {
         row: "side",
         type: "none", // story-gate achievements only; no prestige resource line
         startData: function () { return { unlocked: true }; },
-        tooltip: function () { return GATE_DATA.name + " — milestones grant permanent boons"; },
+        tooltip: function () { return GATE_DATA.name + ": milestones grant permanent boons"; },
         achievements: achievementsObject,
         layerShown: function () { return true; },
         tabFormat: [
             ["display-text", function () {
                 return "The record of your deeds. Milestones recognised here grant permanent "
-                    + "boons and never reset — your sect, and its standing, live on the Sect tab.";
+                    + "boons and never reset. Your sect, and its standing, live on the Sect tab.";
             }],
             "blank",
             "achievements"
@@ -2323,7 +2331,7 @@ function makeDaoNodeBuyable(node) {
             var nextTierIndex = ownedWhole;
             var ownedTierLabel = ownedWhole > FACTORY_ZERO
                 ? LATTICE_DATA.tiers[ownedWhole - FACTORY_ONE].label
-                : "—";
+                : "?";
             var line = node.name + "<br>Owned: " + ownedTierLabel
                 + " (" + formatWhole(owned) + " / " + formatWhole(new Decimal(tierCount)) + ")";
             if (nextTierIndex < tierCount) {
@@ -2331,7 +2339,7 @@ function makeDaoNodeBuyable(node) {
                 var nextEffect = node.effects[nextTierIndex];
                 var effectWord = nextEffect.qiMult !== undefined ? "Qi/sec" : "Insight/sec";
                 var effectValue = nextEffect.qiMult !== undefined ? nextEffect.qiMult : nextEffect.insightMult;
-                line += "<br>Next: " + nextTier.label + " — x" + format(new Decimal(effectValue))
+                line += "<br>Next: " + nextTier.label + ", x" + format(new Decimal(effectValue))
                     + " " + effectWord;
                 // Show the DISCOUNTED price (the sect fold), so the display matches what cost()
                 // actually charges (§4.3). Identity when unjoined / off the discount region.
@@ -2377,7 +2385,7 @@ function makeStanceClickable(stance) {
         title: stance.name,
         display: function () {
             var isActive = player[this.layer].activeStance === stance.key;
-            var line = stance.name + (isActive ? " — ACTIVE" : "") + "<br>" + modifierLine();
+            var line = stance.name + (isActive ? " (ACTIVE)" : "") + "<br>" + modifierLine();
             line += isActive ? "<br>Click to release." : "<br>Click to enter this stance.";
             return line;
         },
@@ -2419,7 +2427,7 @@ function makeDaoLayer() {
             };
         },
         tooltip: function () {
-            return LATTICE_DATA.name + " — comprehension (never resets this life)";
+            return LATTICE_DATA.name + ": comprehension (never resets this life)";
         },
         buyables: makeDaoNodeBuyables(),
         clickables: makeStanceClickables(),
@@ -2587,7 +2595,9 @@ function sectLatticeDiscount(element) {
 // is its index in TECHNIQUE_DATA (positional). A technique is OWNED iff hasUpgrade(sect, index).
 function techniqueIsOwned(techniqueIndex) {
     if (!sectExists()) return false;
-    return hasUpgrade(sectLayerId(), techniqueIndex);
+    // The upgrade is keyed by its row-1 grid id (makeSectTechniqueUpgrades), so the
+    // ownership lookup must convert the positional index the same way.
+    return hasUpgrade(sectLayerId(), clickableGridId(techniqueIndex));
 }
 
 // A technique's school is available iff: school "universal" (always, once joined), or the
@@ -2653,7 +2663,7 @@ function makeSectArchetypeClickable(archetype) {
     function archetypeSummary() {
         var percentBase = new Decimal(FACTORY_HUNDRED);
         var discountPercent = percentBase.sub(new Decimal(archetype.latticeDiscount).times(percentBase));
-        return archetype.name + " — " + archetype.element + " school; "
+        return archetype.name + ": " + archetype.element + " school; "
             + format(discountPercent) + "% off " + archetype.element + " Dao nodes.";
     }
     return {
@@ -2668,7 +2678,7 @@ function makeSectArchetypeClickable(archetype) {
         onClick: function () {
             if (sectJoined()) return; // once per life (defensive against double-fire)
             var prompt = "Join the " + archetype.name
-                + "? This is permanent for this life — you take one sect's path and keep it.";
+                + "? This is permanent for this life. You take one sect's path and keep it.";
             if (!confirm(prompt)) return;
             player[sectLayerId()].archetype = archetype.key;
             if (typeof doPopup === "function") {
@@ -2682,7 +2692,7 @@ function makeSectArchetypeClickable(archetype) {
 function makeSectArchetypeClickables() {
     var clickablesObject = {};
     SECT_DATA.archetypes.forEach(function (archetype, index) {
-        clickablesObject[index] = makeSectArchetypeClickable(archetype);
+        clickablesObject[clickableGridId(index)] = makeSectArchetypeClickable(archetype);
     });
     return clickablesObject;
 }
@@ -2715,7 +2725,7 @@ function makeSectTechniqueUpgrade(technique) {
         unlocked: function () { return techniqueVisible(technique); },
         // description is a FUNCTION (lazy): effectLine() calls format(), which is an engine
         // global not yet defined at layer-build time — evaluate it per-render, not at build.
-        description: function () { return technique.name + " — " + effectLine() + ". " + technique.flavor; },
+        description: function () { return technique.name + ": " + effectLine() + ". " + technique.flavor; },
         effect: function () { return technique.effect; }
     };
 }
@@ -2723,7 +2733,7 @@ function makeSectTechniqueUpgrade(technique) {
 function makeSectTechniqueUpgrades() {
     var upgradesObject = {};
     TECHNIQUE_DATA.forEach(function (technique, index) {
-        upgradesObject[index] = makeSectTechniqueUpgrade(technique);
+        upgradesObject[clickableGridId(index)] = makeSectTechniqueUpgrade(technique);
     });
     return upgradesObject;
 }
@@ -2792,7 +2802,7 @@ function makeSectLayer() {
         tooltip: function () {
             var archetypeRow = sectArchetypeRow();
             return (archetypeRow ? archetypeRow.name : SECT_DATA.name)
-                + " — sect standing (never resets this life)";
+                + ": sect standing (never resets this life)";
         },
         // The display name becomes the joined sect's name after the pick (pinned §4.3).
         getName: function () {
@@ -2826,7 +2836,7 @@ function makeSectLayer() {
                 var archetypeRow = sectArchetypeRow();
                 if (!sectJoined()) {
                     return "A sect has taken notice of your progress. Choose an archetype below to "
-                        + "JOIN — the choice shapes your technique library and discounts your "
+                        + "JOIN. The choice shapes your technique library and discounts your "
                         + "sect's Dao element. The pick is permanent for this life.";
                 }
                 var perSecond = contributionPerSecond();
@@ -2962,7 +2972,7 @@ function makeJournalReflectClickable() {
             var unread = journalUnreadCount();
             if (unread > FACTORY_ZERO) {
                 return "Reflect on " + format(new Decimal(unread)) + " new entr"
-                    + (unread === FACTORY_ONE ? "y" : "ies") + " — mark all read.";
+                    + (unread === FACTORY_ONE ? "y" : "ies") + ": mark all read.";
             }
             return "Nothing new to reflect on.";
         },
@@ -2982,7 +2992,7 @@ function makeJournalReflectClickable() {
 // (no numeric-literal key, §11).
 function makeJournalClickables() {
     var clickablesObject = {};
-    clickablesObject[FACTORY_ZERO] = makeJournalReflectClickable();
+    clickablesObject[clickableGridId(FACTORY_ZERO)] = makeJournalReflectClickable();
     return clickablesObject;
 }
 
@@ -3002,7 +3012,7 @@ function makeJournalLayer() {
                 read: []                        // viewed entry keys (the new-entry glow clears these)
             };
         },
-        tooltip: function () { return JOURNAL_DATA.name + " — your record of the road (never resets)"; },
+        tooltip: function () { return JOURNAL_DATA.name + ": your record of the road (never resets)"; },
         // One clickable: Reflect (marks all read). The id is FACTORY_ZERO (no numeric literal §11).
         clickables: makeJournalClickables(),
         // Latch newly-met entries into player.journal.unlocked each tick; once in, an entry is
@@ -3025,7 +3035,7 @@ function makeJournalLayer() {
         layerShown: function () { return true; },
         tabFormat: [
             ["display-text", function () {
-                return "Your journal — the quiet record of the road so far. New entries unlock as "
+                return "Your journal, the quiet record of the road so far. New entries unlock as "
                     + "you progress; reflect on them to clear the mark.";
             }],
             "blank",
@@ -3073,7 +3083,7 @@ function makeLegacyLayer() {
                 actOneGrade: FACTORY_ZERO - FACTORY_ONE
             };
         },
-        tooltip: function () { return LEGACY_DATA.name + " — the eternal record of your lives"; },
+        tooltip: function () { return LEGACY_DATA.name + ": the eternal record of your lives"; },
         // Shown once any act grade exists (Act I for now; future acts add their own grades).
         layerShown: function () { return actOneLegacyIndex() >= FACTORY_ZERO; },
         tabFormat: [
@@ -3081,15 +3091,15 @@ function makeLegacyLayer() {
                 var band = actOneLegacyBand();
                 if (!band) {
                     return "Your legacy is unwritten. Endure the First Tribulation to inscribe the "
-                        + "Act I Legacy Grade — the eternal measure of the life you led.";
+                        + "Act I Legacy Grade, the eternal measure of the life you led.";
                 }
                 var percentBase = new Decimal(FACTORY_HUNDRED);
                 var qiPercent = new Decimal(band.qiMult).times(percentBase).sub(percentBase);
-                var line = "<h3>Act I — Mortal Road</h3>";
+                var line = "<h3>Act I: The Mortal Road</h3>";
                 line += "Legacy Grade: <b>" + band.label + "</b><br>";
                 line += "This life echoes: +" + format(qiPercent) + "% Qi/sec, forever.<br><br>";
                 line += "<i>Your core grade, the soul's chosen aspect, the Daos you comprehended, "
-                    + "your sect standing, and the tribulation you endured — all weighed into this "
+                    + "your sect standing, and the tribulation you endured, all weighed into this "
                     + "one measure. It survives even death.</i>";
                 return line;
             }]

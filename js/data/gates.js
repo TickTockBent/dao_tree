@@ -46,10 +46,12 @@ var GATE_DATA = {
             key: "outerDisciple",
             kind: "checkpoint",
             name: "Outer Disciple",
-            // done = reached Foundation (any grade) AND meridians >= 6 AND temper tier >= Flesh (§8).
-            // "Early Foundation" (at:1) is the any-grade reached marker — string label,
-            // not numeric, so all realm gates standardize on named stages (§5a).
-            done: { realm: ["f", "Early Foundation"], meridians: 6, temperTier: "Flesh" },
+            // done = JOINED a sect AND reached Foundation (any grade) AND meridians >= 6 AND
+            // temper tier >= Flesh (§8). Outer Disciple is a SECT RANK: you cannot hold it
+            // without a sect, so it gates on sectJoined (the Inner Disciple precedent, id 12).
+            // A no-sect (spineOnly) cultivator never earns this rank or its stipend. "Early
+            // Foundation" (at:1) is the any-grade reached marker (named stage label, §5a).
+            done: { sectJoined: true, realm: ["f", "Early Foundation"], meridians: 6, temperTier: "Flesh" },
             // +25% Qi/sec sect stipend (§8). Reads nothing it suppresses.
             effect: { qiMult: 1.25 },
             gates: null

@@ -368,20 +368,20 @@ boot("updateMilestones('n'); updateTemp(); updateTemp();");
 // clickClickable() guards on unlocked; a hidden clickable cannot be activated regardless
 // of canClick. Verify the Formless clickable (index 0) is NOT unlocked = not actionable.
 check("slice-4 aspect: clickable 0 (Formless) NOT unlocked before first n prestige",
-    "tmp.n.clickables[0].unlocked === false");
+    "tmp.n.clickables[11].unlocked === false");
 // Clicking a not-unlocked clickable must not store the aspect (verify no side-effect).
 // clickClickable checks unlocked before calling onClick; so player.b.soulAspect stays "".
-boot("clickClickable('n', 0);");
+boot("clickClickable('n', 11);");
 check("slice-4 aspect: clicking Formless while not-unlocked does NOT store the aspect",
     "player.b.soulAspect === ''");
 //     (b) After first breakthrough: Formless unlocked+clickable; metalSoul needs a metal Seed.
 boot("player.n.unlocked = true; player.n.best = new Decimal(1); updateMilestones('n'); updateTemp(); updateTemp();");
 check("slice-4 aspect: clickable 0 (Formless) unlocked after first n prestige",
-    "tmp.n.clickables[0].unlocked === true");
+    "tmp.n.clickables[11].unlocked === true");
 check("slice-4 aspect: clickable 0 (Formless) always clickable (requires {} met)",
-    "tmp.n.clickables[0].canClick === true");
+    "tmp.n.clickables[11].canClick === true");
 check("slice-4 aspect: clickable 1 (metalSoul) unlocked but NOT clickable (no metal Seed yet)",
-    "tmp.n.clickables[1].unlocked === true && tmp.n.clickables[1].canClick === false");
+    "tmp.n.clickables[12].unlocked === true && tmp.n.clickables[12].canClick === false");
 //     (c) After buying the metal root SEED (tier 2): the metalSoul clickable becomes clickable.
 //         dao.points is sufficient for one more buy (Seed cost = 300; current balance from block 10
 //         after the Glimpse buy was ~1650; subsequent blocks didn't spend much from dao).
@@ -393,9 +393,9 @@ check("slice-4 aspect: metal root at tier 2 (Seed) after second buy",
 check("slice-4 aspect: meets daoElementTier metal 2 after Seed purchase",
     "meets({daoElementTier: ['metal', 2]}) === true");
 check("slice-4 aspect: clickable 1 (metalSoul) NOW clickable (metal Seed held)",
-    "tmp.n.clickables[1].canClick === true");
+    "tmp.n.clickables[12].canClick === true");
 //     (d) Pick Formless (clickable 0): stores key, multipliers move off identity.
-boot("clickClickable('n', 0); updateTemp(); updateTemp();");
+boot("clickClickable('n', 11); updateTemp(); updateTemp();");
 check("slice-4 aspect: picking Formless stores 'formless' in player.b.soulAspect",
     "player.b.soulAspect === 'formless'");
 check("slice-4 aspect: soulAspectRow() resolves to the formless row",
@@ -410,9 +410,9 @@ check("slice-4 aspect: insightPerSecond() includes the aspect insight multiplier
     "insightPerSecond().gte(new Decimal(LATTICE_DATA.insight.baseRate).times(soulAspectInsightMult()))");
 //     (e) Once chosen, all aspect clickables vanish (unlocked = false) — no respec.
 check("slice-4 aspect: clickable 0 unlocked = false once aspect chosen (once per life)",
-    "tmp.n.clickables[0].unlocked === false");
+    "tmp.n.clickables[11].unlocked === false");
 check("slice-4 aspect: clickable 1 unlocked = false once aspect chosen",
-    "tmp.n.clickables[1].unlocked === false");
+    "tmp.n.clickables[12].unlocked === false");
 //     (f) Aspect SURVIVES an n/c/f/q prestige (life-scoped on b, never reset).
 boot("player.c.best = new Decimal(2); player.c.points = new Decimal(2);");
 boot("player.f.best = new Decimal(22); player.f.points = new Decimal(22);");
@@ -607,15 +607,15 @@ check("slice-5 reveal: revealed flag latches after the first update() tick",
 // Both archetype clickables must be pickable (unlocked = true, canClick = true) while unjoined.
 // Clickable 0 = azureSword, clickable 1 = stoneFormation.
 check("slice-5 reveal: archetype clickable 0 (azureSword) unlocked while unjoined",
-    "tmp.sect.clickables[0].unlocked === true");
+    "tmp.sect.clickables[11].unlocked === true");
 check("slice-5 reveal: archetype clickable 0 (azureSword) canClick while unjoined",
-    "tmp.sect.clickables[0].canClick === true");
+    "tmp.sect.clickables[11].canClick === true");
 check("slice-5 reveal: archetype clickable 1 (stoneFormation) unlocked while unjoined",
-    "tmp.sect.clickables[1].unlocked === true");
+    "tmp.sect.clickables[12].unlocked === true");
 check("slice-5 reveal: archetype clickable 1 (stoneFormation) canClick while unjoined",
-    "tmp.sect.clickables[1].canClick === true");
+    "tmp.sect.clickables[12].canClick === true");
 //     Sub-block (b): pick azureSword (clickable 0).
-boot("clickClickable('sect', 0); updateTemp(); updateTemp();");
+boot("clickClickable('sect', 11); updateTemp(); updateTemp();");
 check("slice-5 pick: archetype stored as azureSword after clicking clickable 0",
     "player.sect.archetype === SECT_DATA.archetypes[0].key");
 check("slice-5 pick: sectJoined() true after pick",
@@ -624,13 +624,13 @@ check("slice-5 pick: sectArchetypeRow() resolves to azureSword",
     "sectArchetypeRow() !== null && sectArchetypeRow().key === 'azureSword'");
 //     Once joined, both clickables must vanish (unlocked = false — the once-per-life gate).
 check("slice-5 pick: clickable 0 unlocked = false once joined (once per life)",
-    "tmp.sect.clickables[0].unlocked === false");
+    "tmp.sect.clickables[11].unlocked === false");
 check("slice-5 pick: clickable 1 unlocked = false once joined (once per life)",
-    "tmp.sect.clickables[1].unlocked === false");
+    "tmp.sect.clickables[12].unlocked === false");
 //     Sub-block (c): second pick attempt must have no effect (canClick false = pick rejected).
 //     Direct state approach: try to set archetype to stoneFormation via clickClickable; engine
 //     checks canClick (which is false when joined), so the onClick guard returns early.
-boot("clickClickable('sect', 1); updateTemp(); updateTemp();");
+boot("clickClickable('sect', 12); updateTemp(); updateTemp();");
 check("slice-5 pick: clicking stoneFormation after joining leaves azureSword unchanged",
     "player.sect.archetype === SECT_DATA.archetypes[0].key");
 //     Sub-block (d): contribution/sec zero before joining (set archetype = '' momentarily).
@@ -658,17 +658,17 @@ check("slice-5 accrual: player.sect.points > 0 after one update() tick while joi
 boot("player.sect.points = new Decimal(TECHNIQUE_DATA[0].cost + 100); player.sect.best = player.sect.points; updateTemp(); updateTemp();");
 // Verify azureForm (index 0) is visible/unlocked for the azureSword archetype.
 check("slice-5 tech: azureForm upgrade (index 0) is unlocked for azureSword archetype",
-    "tmp.sect.upgrades[0].unlocked === true");
+    "tmp.sect.upgrades[11].unlocked === true");
 // Verify stoneSkin (index 3, formation school) is NOT unlocked for azureSword.
 check("slice-5 tech: stoneSkin upgrade (index 3) NOT unlocked for azureSword (wrong school)",
-    "tmp.sect.upgrades[3].unlocked === false");
+    "tmp.sect.upgrades[14].unlocked === false");
 // Verify swordHeart (index 2, tier 2) is NOT unlocked yet (no library milestone).
 check("slice-5 tech: swordHeart upgrade (index 2, tier-2) NOT unlocked before library milestone",
-    "tmp.sect.upgrades[2].unlocked === false");
+    "tmp.sect.upgrades[13].unlocked === false");
 // Buy azureForm (index 0) via buyUpgrade.
-boot("var preBuyPoints = player.sect.points.toNumber(); buyUpgrade('sect', 0); updateTemp(); updateTemp();");
+boot("var preBuyPoints = player.sect.points.toNumber(); buyUpgrade('sect', 11); updateTemp(); updateTemp();");
 check("slice-5 tech: azureForm (index 0) purchased (hasUpgrade returns true)",
-    "hasUpgrade('sect', 0) === true");
+    "hasUpgrade('sect', 11) === true");
 check("slice-5 tech: Contribution deducted by azureForm cost after purchase",
     "player.sect.points.lt(preBuyPoints)");
 check("slice-5 tech: techniqueQiMult() > 1 after buying azureForm (qiMult effect)",
@@ -680,26 +680,26 @@ check("slice-5 tech: techniqueInsightMult() identity after buying azureForm (no 
 // Ensure enough contribution.
 boot("player.sect.points = new Decimal(TECHNIQUE_DATA[1].cost + 100); player.sect.best = player.sect.points; updateTemp(); updateTemp();");
 check("slice-5 tech: severingArc upgrade (index 1) is unlocked for azureSword",
-    "tmp.sect.upgrades[1].unlocked === true");
-boot("buyUpgrade('sect', 1); updateTemp(); updateTemp();");
+    "tmp.sect.upgrades[12].unlocked === true");
+boot("buyUpgrade('sect', 12); updateTemp(); updateTemp();");
 check("slice-5 tech: techniqueInsightMult() > 1 after buying severingArc (insightMult 1.20)",
     "techniqueInsightMult().gt(1)");
 // Tier-2 gating: earn the library milestone (drive contribution best to SECT_DATA.milestones[1].at).
 // Before: swordHeart (index 2) must remain locked.
 boot("player.sect.best = new Decimal(SECT_DATA.milestones[1].at - 1); updateMilestones('sect'); updateTemp(); updateTemp();");
 check("slice-5 tech: swordHeart (tier-2) still NOT unlocked below library milestone",
-    "tmp.sect.upgrades[2].unlocked === false");
+    "tmp.sect.upgrades[13].unlocked === false");
 // Now earn the library milestone by pushing best to the threshold.
 boot("player.sect.best = new Decimal(SECT_DATA.milestones[1].at); updateMilestones('sect'); updateTemp(); updateTemp();");
 check("slice-5 tech: library milestone earned (hasMilestone sect 1)",
     "hasMilestone('sect', 1) === true");
 check("slice-5 tech: swordHeart (tier-2) NOW unlocked after library milestone",
-    "tmp.sect.upgrades[2].unlocked === true");
+    "tmp.sect.upgrades[13].unlocked === true");
 // Buy swordHeart (index 2) with sufficient points.
 boot("player.sect.points = new Decimal(TECHNIQUE_DATA[2].cost + 100); updateTemp(); updateTemp();");
-boot("buyUpgrade('sect', 2); updateTemp(); updateTemp();");
+boot("buyUpgrade('sect', 13); updateTemp(); updateTemp();");
 check("slice-5 tech: swordHeart (index 2) purchased after library milestone",
-    "hasUpgrade('sect', 2) === true");
+    "hasUpgrade('sect', 13) === true");
 
 // 24. Discount: a metal lattice node's tmp cost drops by the azureSword latticeDiscount after
 //     joining (compare before/after), a non-metal node's cost unchanged.
@@ -778,14 +778,14 @@ boot("player.q.best = new Decimal(substageThreshold('q', '6th Level')); player.q
 boot("player.points = new Decimal(REALM_DATA.find(function(r){return r.id==='n';}).reqBase); updateTemp(); updateTemp();");
 // Snapshot sect state before n prestige.
 boot("var sectArchBefore = player.sect.archetype; var sectBestBefore = player.sect.best.toNumber();");
-boot("var sectHasAzureForm = hasUpgrade('sect', 0); var journalUnlockedBefore = player.journal.unlocked.slice();");
+boot("var sectHasAzureForm = hasUpgrade('sect', 11); var journalUnlockedBefore = player.journal.unlocked.slice();");
 boot("doReset('n'); updateTemp(); updateTemp();");
 check("slice-5 persist: sect archetype SURVIVES n prestige (life-scoped)",
     "player.sect.archetype === sectArchBefore");
 check("slice-5 persist: sect best SURVIVES n prestige (never falls)",
     "player.sect.best.toNumber() === sectBestBefore");
 check("slice-5 persist: techniques owned SURVIVE n prestige (life-scoped upgrades)",
-    "hasUpgrade('sect', 0) === true");
+    "hasUpgrade('sect', 11) === true");
 check("slice-5 persist: journal.unlocked SURVIVES n prestige (eternal-scoped)",
     "JSON.stringify(player.journal.unlocked) === JSON.stringify(journalUnlockedBefore)");
 // Now force a resetRow of the entire tree (doReset('c', true) cascades c/f/q).
@@ -796,7 +796,7 @@ check("slice-5 persist: sect archetype SURVIVES forced c cascade (life-scoped)",
 check("slice-5 persist: journal.unlocked SURVIVES forced c cascade (eternal-scoped)",
     "JSON.stringify(player.journal.unlocked) === JSON.stringify(journalAfterReset)");
 check("slice-5 persist: sect techniques SURVIVE forced c cascade (life-scoped upgrades)",
-    "hasUpgrade('sect', 0) === true");
+    "hasUpgrade('sect', 11) === true");
 
 // 27. Journal: entry latches when its condition first holds and STAYS unlocked after the
 //     condition's inputs reset; shouldNotify true while unread, false after mark-read;
@@ -822,7 +822,7 @@ boot("player.q.unlocked = false; layers.journal.update.call({layer:'journal'}); 
 check("slice-5 journal: firstBreath STAYS latched after q.unlocked is reset (latch is permanent)",
     "player.journal.unlocked.indexOf('firstBreath') !== -1");
 //     (d) Reflect clickable (id 0) marks all read; shouldNotify drops to false.
-boot("clickClickable('journal', 0); updateTemp();");
+boot("clickClickable('journal', 11); updateTemp();");
 check("slice-5 journal: Reflect clickable marks firstBreath read (read array contains it)",
     "player.journal.read.indexOf('firstBreath') !== -1");
 check("slice-5 journal: shouldNotify() false after Reflect (all unlocked entries are read)",

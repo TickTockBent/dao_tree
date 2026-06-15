@@ -11,9 +11,15 @@
 //   zero        0   additive identity / sentinel
 //   one         1   multiplicative identity, single-step increment
 //   hundred     100 percentage base (for "+N%" effect text)
+//   firstGridClickableId 11  TMT renders clickables and upgrades as a row*10+col grid
+//                       (see setRowCol in layerSupport.js). A generated set keyed from this
+//                       base lands in row 1 (11, 12, 13, ...), so the grid derives rows >= 1
+//                       and actually renders. Index-based keys (0, 1, ...) derive rows = 0
+//                       and silently render nothing.
 
 var FACTORY_NUMERICS = {
     zero: 0,
     one: 1,
-    hundred: 100
+    hundred: 100,
+    firstGridClickableId: 11
 };
