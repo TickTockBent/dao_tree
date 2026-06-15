@@ -1582,6 +1582,12 @@ function makeBuyable(row) {
                 line += "<br>" + nextTemperTierDescription(amount);
             } else {
                 line += "<br>Effect: x" + format(data.effect) + " " + row.resourceWord;
+                // Show the per-level step so the payoff reads even at amount 0
+                // (where the cumulative effect is an unhelpful x1.00).
+                if (row.effectStepNoun) {
+                    var effectStepPercent = new Decimal(row.effectBase).times(FACTORY_HUNDRED).sub(FACTORY_HUNDRED);
+                    line += " (+" + format(effectStepPercent) + "% per " + row.effectStepNoun + ")";
+                }
             }
             return line;
         }

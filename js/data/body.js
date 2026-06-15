@@ -29,6 +29,10 @@
 //   costRatio     number  cost ratio: cost(x) = costBase * costRatio^x
 //   effectBase    number  per-level multiplicative effect: effect(x) = effectBase^x
 //                         (a meridian at ×1.15 each, temper handled via tiers)
+//   effectStepNoun string OPTIONAL. When present, the buyable's effect line appends
+//                         the per-level step "(+N% per <noun>)" (N derived from
+//                         effectBase) so the payoff is legible even at amount 0.
+//                         Omitted for temper (it shows next-tier progress instead).
 //   limit         number  purchaseLimit (caps purchasability — §4a/§4b)
 //   unlock        object|null  unlock condition (meets()-style); null = always
 //                         For Extraordinary Meridians: all primary open AND q 10th Level.
@@ -64,6 +68,7 @@ var BODY_DATA = {
             key: "primaryMeridian",
             title: "Primary Meridian",
             resourceWord: "Qi/sec",
+            effectStepNoun: "meridian",
             costBase: 10,
             // costRatio pass-3 tune (Act I gate, pacing sim): 3 -> 2. At 3, meridians 7-12
             // cost 3x more for a 1.15x rate step, so the back half of the track was effectively
@@ -81,6 +86,7 @@ var BODY_DATA = {
             key: "extraordinaryMeridian",
             title: "Extraordinary Meridian",
             resourceWord: "Qi/sec",
+            effectStepNoun: "meridian",
             costBase: 5000,
             costRatio: 5,
             effectBase: 1.25,
