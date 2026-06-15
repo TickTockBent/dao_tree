@@ -14,7 +14,7 @@ let modInfo = {
 // Set your version in num and name
 let VERSION = {
 	num: "0.2.1",
-	name: "The Mortal Road",
+	name: "Dao Tree",
 }
 
 let changelog = `<h1>Changelog:</h1><br>
@@ -24,7 +24,7 @@ let changelog = `<h1>Changelog:</h1><br>
 		- Outer Disciple now requires joining a sect, matching the rank.<br>
 		- Reworded the body tempering milestones (for example, "Skin Tempered").<br>
 		- Various text and wording polish.<br>
-	<h3>v0.2: The Mortal Road</h3><br>
+	<h3>v0.2</h3><br>
 		- Comprehend the Dao Lattice: spend Insight on Glimpses and Seeds across the five elemental roots.<br>
 		- Adopt a Stance. Breathing Trance trades Qi speed for Insight; Sword Trance runs deeper into the blade.<br>
 		- Reach Nascent Soul and choose a Soul Aspect: Formless, or an elemental path earned through the lattice.<br>
@@ -33,7 +33,7 @@ let changelog = `<h1>Changelog:</h1><br>
 		- Ascend to Soul Formation and face the First Tribulation. Your temper, meridians, core grade, techniques, and banked Qi all stand between you and the storm.<br>
 		- Survive a Scarred result and carry the wound. The scar dims your Qi while it heals, and a fully healed depth becomes a permanent Tempered by Ruin buff.<br>
 		- Pass the tribulation and the Act I Legacy Grade is written: the measure of the road you walked.<br>
-	<h3>v0.1: Mortal to Golden Core</h3><br>
+	<h3>v0.1</h3><br>
 		- Gather Qi and walk the cultivator's road from mortal to Golden Core.<br>
 		- Open your meridians and temper your body. These are permanent attributes that never reset.<br>
 		- Break through Qi Condensation, Foundation Establishment, and Core Formation.<br>
