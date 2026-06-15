@@ -16,10 +16,14 @@
 //                       base lands in row 1 (11, 12, 13, ...), so the grid derives rows >= 1
 //                       and actually renders. Index-based keys (0, 1, ...) derive rows = 0
 //                       and silently render nothing.
+//   maturityBarSegments 20  number of cells in the text maturity bar drawn on an auto-prestige
+//                       realm (the auto-cultivation readout). A display dimension, like the
+//                       forge bar's barWidth in SETPIECE_DATA.
 
 var FACTORY_NUMERICS = {
     zero: 0,
     one: 1,
     hundred: 100,
-    firstGridClickableId: 11
+    firstGridClickableId: 11,
+    maturityBarSegments: 20
 };

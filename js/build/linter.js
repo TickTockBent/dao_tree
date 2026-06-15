@@ -1451,18 +1451,36 @@
                 errors.push("Automation '" + rowId + "': a '" + automates.action
                     + "' action must NOT declare a buyableKey (§1.7).");
             }
-            // "Auto-prestige AT THRESHOLD" (design §5): a prestige automation without a
-            // positive gainFraction fires at bare canReset every tick, zeroing the base
-            // currency and starving every sink below it (the gameLoop tree loop runs
-            // before the side loop). The threshold is mandatory, not optional tuning.
+            // MATURITY MODEL (design §5 "auto-prestige at threshold", reworked): a prestige
+            // automation must declare a maturity config. baseFraction is the worth-it floor
+            // (the old gainFraction role) WITHOUT which the bell fires at bare canReset every
+            // tick, zeroing the base currency and starving every sink below it (the gameLoop
+            // tree loop runs before the side loop). costExponent/restEpsilon shape the falloff
+            // and the rest point; both must be present and positive so the curve is well-defined
+            // and the bell can actually reach "rest" (restEpsilon dodges the 1/(1-1) asymptote).
             if (automates.action === "prestige") {
-                if (!(automates.gainFraction > ZERO)) {
-                    errors.push("Automation '" + rowId + "': a prestige action must declare "
-                        + "gainFraction > 0 — thresholdless auto-prestige starves every "
-                        + "sink of the base currency (§5 'at threshold', §1.7).");
+                var maturity = automates.maturity;
+                if (!maturity || typeof maturity !== "object") {
+                    errors.push("Automation '" + rowId + "': a prestige action must declare a "
+                        + "maturity config (baseFraction/costExponent/restEpsilon) — without it "
+                        + "the bell never rests and starves every sink (§5 'at threshold', §1.7).");
+                } else {
+                    if (!(maturity.baseFraction > ZERO)) {
+                        errors.push("Automation '" + rowId + "': maturity.baseFraction must be > 0 "
+                            + "— it is the worth-it floor that keeps the bell from zeroing the "
+                            + "base currency (§5, §1.7).");
+                    }
+                    if (!(maturity.costExponent > ZERO)) {
+                        errors.push("Automation '" + rowId + "': maturity.costExponent must be > 0 "
+                            + "— the falloff curve needs a positive exponent (§1.7).");
+                    }
+                    if (!(maturity.restEpsilon > ZERO)) {
+                        errors.push("Automation '" + rowId + "': maturity.restEpsilon must be > 0 "
+                            + "— the bell must be able to reach rest at full maturity (§1.7).");
+                    }
                 }
-            } else if (automates.gainFraction !== undefined) {
-                errors.push("Automation '" + rowId + "': gainFraction only applies to "
+            } else if (automates.maturity !== undefined) {
+                errors.push("Automation '" + rowId + "': maturity only applies to "
                     + "prestige actions (§1.7).");
             }
         });
@@ -1697,6 +1715,12 @@
             if (reward.qiMult !== undefined && !(reward.qiMult >= ONE)) {
                 errors.push("Sect: milestone '" + milestone.key + "' reward.qiMult " + reward.qiMult
                     + " must be >= 1 — a stipend is a bonus, never a penalty (§4.3).");
+            }
+            // An optional cultivation-stage gate (§4.3): a meets()-style condition that both gates
+            // earning the milestone and caps contribution accrual. Validate it through the shared
+            // oracle so a typo'd realm/stage is caught rather than silently never satisfied.
+            if (milestone.requires !== undefined) {
+                checkCondition(errors, "Sect milestone '" + milestone.key + "' requires", milestone.requires);
             }
         });
     }

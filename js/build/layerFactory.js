@@ -1482,9 +1482,10 @@ function automationGranted(automationRow) {
     return hasMilestone(grant.layer, grant.milestone);
 }
 
-// Is the prestige of `layerId` automated? True iff any granted "prestige" row
-// targets it. Read as the layer's tmp.autoPrestige (game.js gameLoop consumes it:
-// `if (autoPrestige && canReset) doReset(layer)` — the engine's own prestige path).
+// Is the prestige of `layerId` automated AND firing right now? True iff any granted
+// "prestige" row targets it AND that row's maturity model says fire (not resting).
+// Read as the layer's tmp.autoPrestige (game.js gameLoop consumes it: `if (autoPrestige
+// && canReset) doReset(layer)` — the engine's own prestige path).
 function layerPrestigeAutomated(layerId) {
     if (typeof AUTOMATION_DATA === "undefined" || !AUTOMATION_DATA) return false;
     var automated = false;
@@ -1492,24 +1493,132 @@ function layerPrestigeAutomated(layerId) {
         var auto = automationRow.automates;
         if (auto.action !== "prestige" || auto.layer !== layerId) return;
         if (!automationGranted(automationRow)) return;
-        if (!prestigeGainWorthwhile(layerId, auto.gainFraction)) return;
+        if (!autoPrestigeFires(layerId, auto.maturity)) return;
         automated = true;
     });
     return automated;
 }
 
-// "Auto-prestige AT THRESHOLD" (design §5): the automated breakthrough fires only
-// when the pending gain is at least gainFraction of the layer's current currency.
-// gameLoop runs the tree loop (where auto-prestige zeroes Qi) BEFORE the side loop
-// (where meridian autobuy spends it); without this gate, a granted q auto-prestige
-// would reset at bare canReset every tick and starve every Qi sink in the game.
-// The fraction is data (the automation row); the gain reads the engine's own
-// getResetGain so the automated decision matches what a manual click would earn.
-function prestigeGainWorthwhile(layerId, gainFraction) {
+// The maturity config of the granted prestige automation targeting `layerId`, or null
+// if none is granted. Used by the auto-prestige decision and the maturity display.
+function prestigeMaturityConfig(layerId) {
+    if (typeof AUTOMATION_DATA === "undefined" || !AUTOMATION_DATA) return null;
+    var found = null;
+    AUTOMATION_DATA.forEach(function (automationRow) {
+        var auto = automationRow.automates;
+        if (auto.action !== "prestige" || auto.layer !== layerId) return;
+        if (!automationGranted(automationRow)) return;
+        if (auto.maturity) found = auto.maturity;
+    });
+    return found;
+}
+
+// ---- Maturity model (AUTOMATION_DATA prestige rows; the auto-prestige falloff) ----
+// A realm's auto-prestige drives it toward "fully formed", then RESTS. Completeness in
+// [0,1] measures how formed it is; targets are DATA-DERIVED so future upgrades that add
+// sub-stages or cut forge fuel move the ceiling without touching this code (§1.7 content).
+
+// Top sub-stage `at` for a realm — the fully-climbed mark. Defensive (>=1) so the ratio
+// never divides by zero.
+function realmTopSubstageAt(realmId) {
+    var realmData = findRealmData(realmId);
+    if (!realmData || !realmData.substages.length) return factoryDecimalOne();
+    var lastSubstage = realmData.substages[realmData.substages.length - FACTORY_ONE];
+    var top = new Decimal(lastSubstage.at);
+    return top.lte(FACTORY_ZERO) ? factoryDecimalOne() : top;
+}
+
+// The heaviest Foundation fuel a single forge push can spend (the Reckless push), read
+// from SETPIECE_DATA.forge. The fuel-funding realm banks at least this before it rests,
+// so ANY push is affordable. A future fuel-cost cut lowers this and pulls the ceiling in.
+function forgeMaxPushFuel() {
+    var forge = (typeof SETPIECE_DATA !== "undefined" && SETPIECE_DATA) ? SETPIECE_DATA.forge : null;
+    if (!forge) return factoryDecimalOne();
+    var maxFuel = new Decimal(forge.fuelBase);
+    forge.pushOptions.forEach(function (pushOption) {
+        var fuelCost = new Decimal(forge.fuelBase).times(pushOption.fuelMult);
+        if (fuelCost.gt(maxFuel)) maxFuel = fuelCost;
+    });
+    return maxFuel.lte(FACTORY_ZERO) ? factoryDecimalOne() : maxFuel;
+}
+
+// How fully formed `layerId` is for auto-prestige, in [0,1] (1 = rest). The MIN of its
+// dimensions, so the bell keeps working while EITHER the sub-stage climb OR (for the
+// fuel-funding realm) the fuel reserve is unfinished.
+function realmAutoCompleteness(layerId, maturityCfg) {
+    var substageRatio = clampUnitInterval(realmBest(layerId).div(realmTopSubstageAt(layerId)));
+    var completeness = substageRatio;
+    if (maturityCfg && maturityCfg.fuelFromForge && player[layerId]) {
+        var fuelRatio = clampUnitInterval(player[layerId].points.div(forgeMaxPushFuel()));
+        if (fuelRatio.lt(completeness)) completeness = fuelRatio;
+    }
+    return completeness;
+}
+
+// The per-prestige cost multiplier on the worth-it fraction, rising on a curve as the
+// realm matures: 1 / (1 - completeness)^costExponent. Returns null once completeness is
+// within restEpsilon of fully formed — the signal to REST (also dodges the asymptote).
+function autoPrestigeCostMultiplier(completeness, maturityCfg) {
+    var headroom = factoryDecimalOne().sub(completeness);
+    if (headroom.lte(new Decimal(maturityCfg.restEpsilon))) return null;
+    return Decimal.pow(factoryDecimalOne().div(headroom), maturityCfg.costExponent);
+}
+
+// Should the auto-prestige fire this tick? Rests when the realm is fully formed; otherwise
+// fires only when the pending gain clears baseFraction x costMultiplier of current currency
+// (the worth-it floor that keeps it from zeroing the pool, scaled up as the realm matures so
+// the bell tapers off and the player's banking headroom grows). The gain reads the engine's
+// own getResetGain so the automated decision matches a manual click.
+function autoPrestigeFires(layerId, maturityCfg) {
+    if (!maturityCfg) return false;
     if (typeof getResetGain !== "function") return true; // engine absent (lint sandbox)
+    var completeness = realmAutoCompleteness(layerId, maturityCfg);
+    var costMultiplier = autoPrestigeCostMultiplier(completeness, maturityCfg);
+    if (costMultiplier === null) return false; // fully formed -> resting
+    var effectiveFraction = new Decimal(maturityCfg.baseFraction).times(costMultiplier);
     var currentPoints = player[layerId].points;
     var pendingGain = getResetGain(layerId);
-    return pendingGain.gte(currentPoints.times(gainFraction));
+    return pendingGain.gte(currentPoints.times(effectiveFraction));
+}
+
+// A text progress bar (filled/empty cells) for a [0,1] fraction — the auto-cultivation
+// maturity readout. Cell count is a display dimension (FACTORY_NUMERICS).
+function maturityBar(completeness) {
+    var segmentCount = FACTORY_NUMERICS.maturityBarSegments;
+    var filledCount = completeness.times(segmentCount).floor().toNumber();
+    if (filledCount > segmentCount) filledCount = segmentCount;
+    if (filledCount < FACTORY_ZERO) filledCount = FACTORY_ZERO;
+    var bar = "";
+    var cellIndex = FACTORY_ZERO;
+    while (cellIndex < segmentCount) {
+        bar += (cellIndex < filledCount) ? "█" : "░"; // full block / light shade
+        cellIndex += FACTORY_ONE;
+    }
+    return bar;
+}
+
+// Player-facing auto-cultivation readout for a realm whose prestige is automated (the
+// arsenal / Nascent Soul bell). Surfaces how formed the realm is and whether the bell is
+// still working or has rested — so the falloff is VISIBLE, never a silent "it stopped".
+// Returns "" when no prestige automation is granted for this realm (nothing to show).
+function maturityReadout(realmId) {
+    var maturityCfg = prestigeMaturityConfig(realmId);
+    if (!maturityCfg) return "";
+    var realmData = findRealmData(realmId);
+    var realmName = realmData ? realmData.name : realmId;
+    var completeness = realmAutoCompleteness(realmId, maturityCfg);
+    var percent = completeness.times(FACTORY_HUNDRED);
+    var line = "<b>" + realmName + " maturity</b><br>"
+        + "<span style=\"font-family:monospace\">" + maturityBar(completeness) + "</span> "
+        + format(percent) + "%<br>";
+    var costMultiplier = autoPrestigeCostMultiplier(completeness, maturityCfg);
+    if (costMultiplier === null) {
+        line += "<i>Fully formed. Auto-cultivation is resting; your Qi now banks freely.</i>";
+    } else {
+        line += "<i>Auto-cultivation is building your foundation (prestige cost &times;"
+            + format(costMultiplier) + ", rising as it matures).</i>";
+    }
+    return line;
 }
 
 // Run every granted "buyable" autobuy targeting `layerId`. Called from that layer's
@@ -2110,6 +2219,14 @@ function makeRealmLayer(realmData) {
         // manual one (same canReset gate, same gain). Identity (false) until granted,
         // so a pre-Nascent-Soul save behaves exactly as before (no auto-prestige).
         autoPrestige: function () { return layerPrestigeAutomated(realmData.id); },
+        // Auto-cultivation maturity readout (the default-layout midsection renders between
+        // milestones and clickables). Shows the bell's progress + rest state ONLY when this
+        // realm's prestige is automated (maturityReadout returns "" otherwise — invisible).
+        // Realms with a custom tabFormat (forge c / aspect n / tribulation s) ignore this,
+        // and none of them are auto-prestiged, so it surfaces exactly on q and f.
+        midsection: [
+            ["display-text", function () { return maturityReadout(realmData.id); }]
+        ],
         // effect() exposes the realm's reached-substage Qi multiplier so it is
         // observable in tmp[id].effect (no dead multiplier §9.2).
         effect: function () {
@@ -2611,6 +2728,31 @@ function sectMilestoneEarned(milestoneKey) {
     return hasMilestone(sectLayerId(), milestoneIndex);
 }
 
+// Short cultivation-stage label for a sect milestone's `requires` gate (the realm it
+// demands), for the milestone requirement line. "" when the milestone has no stage gate.
+function sectMilestoneStageText(milestone) {
+    if (!milestone.requires || !milestone.requires.realm) return "";
+    var realmData = findRealmData(milestone.requires.realm[FACTORY_ZERO]);
+    return realmData ? realmData.name : milestone.requires.realm[FACTORY_ZERO];
+}
+
+// The contribution ceiling imposed by stage-gated milestones (§4.3): a sect will not let
+// standing run past a rank the cultivator has not yet earned by cultivation. Returns the
+// `at` of the FIRST (lowest) milestone whose stage gate is unmet, or null for no cap (all
+// gates satisfied). Monotonic in practice — realm gates read realmBest (never falls) — so
+// the cap only ever LIFTS as the player advances. Drives both the accrual clamp and the
+// "standing capped" display note.
+function contributionStageCap() {
+    var cap = null;
+    SECT_DATA.milestones.forEach(function (milestone) {
+        if (cap !== null) return;
+        if (milestone.requires && !meets(milestone.requires)) {
+            cap = new Decimal(milestone.at);
+        }
+    });
+    return cap;
+}
+
 // The sect milestone row carrying the stipend reward (the qiMult-bearing milestone).
 function sectStipendMilestoneRow() {
     return SECT_DATA.milestones.find(function (milestone) {
@@ -2822,14 +2964,22 @@ function sectMilestoneRewardDescription(milestone) {
 function makeSectMilestones() {
     var milestones = {};
     SECT_DATA.milestones.forEach(function (milestone, index) {
+        // Stage-gated milestones append their required cultivation stage to the requirement
+        // line, so the player sees WHY a maxed-out contribution bar is not earning the rank.
+        var stageText = sectMilestoneStageText(milestone);
+        var requirementText = milestone.at + " " + SECT_DATA.contribution.resource
+            + (stageText ? " + " + stageText : "");
         milestones[index] = {
             // requirementDescription is rendered raw from tmp (NOT run() as a function, unlike
             // effectDescription), so it must be a plain string — built at make-time from the
             // data value (milestone.at), the temper-milestone precedent (no format() call).
-            requirementDescription: milestone.at + " " + SECT_DATA.contribution.resource,
+            requirementDescription: requirementText,
             // effectDescription IS run() per-render, so it may call format() lazily.
             effectDescription: function () { return sectMilestoneRewardDescription(milestone); },
+            // Earned when the contribution high-water clears `at` AND the cultivation-stage gate
+            // (if any) is met — a sect rewards standing, but not above your cultivation (§4.3).
             done: function () {
+                if (milestone.requires && !meets(milestone.requires)) return false;
                 return contributionBest().gte(milestone.at);
             }
         };
@@ -2888,6 +3038,12 @@ function makeSectLayer() {
             }
             if (!sectJoined()) return;
             player[this.layer].points = player[this.layer].points.add(contributionPerSecond().times(diff));
+            // Stage cap (§4.3): standing cannot run past a rank the cultivator has not yet earned.
+            // Clamp to the first unmet-stage milestone's `at`; the cap only lifts as you advance.
+            var stageCap = contributionStageCap();
+            if (stageCap !== null && player[this.layer].points.gt(stageCap)) {
+                player[this.layer].points = stageCap;
+            }
             if (player[this.layer].points.gt(player[this.layer].best)) {
                 player[this.layer].best = player[this.layer].points;
             }
@@ -2910,6 +3066,16 @@ function makeSectLayer() {
                 line += SECT_DATA.contribution.resource + "/sec: <b>" + format(perSecond)
                     + "</b> (" + format(new Decimal(SECT_DATA.contribution.rate))
                     + " x (Qi/sec)^" + format(new Decimal(SECT_DATA.contribution.exponent)) + ")";
+                // When standing is capped by an unmet rank gate, say so and name the stage to reach.
+                var stageCap = contributionStageCap();
+                if (stageCap !== null && player[this.layer].points.gte(stageCap)) {
+                    var gatedMilestone = SECT_DATA.milestones.find(function (milestone) {
+                        return milestone.requires && !meets(milestone.requires);
+                    });
+                    var gateStage = gatedMilestone ? sectMilestoneStageText(gatedMilestone) : "";
+                    line += "<br><i>Standing capped at " + format(stageCap)
+                        + (gateStage ? " — reach " + gateStage + " to rise further." : ".") + "</i>";
+                }
                 return line;
             }],
             "blank",

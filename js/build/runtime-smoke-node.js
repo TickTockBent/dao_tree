@@ -688,14 +688,19 @@ check("slice-5 tech: severingArc upgrade (index 1) is unlocked for azureSword",
 boot("buyUpgrade('sect', 12); updateTemp(); updateTemp();");
 check("slice-5 tech: techniqueInsightMult() > 1 after buying severingArc (insightMult 1.20)",
     "techniqueInsightMult().gt(1)");
-// Tier-2 gating: earn the library milestone (drive contribution best to SECT_DATA.milestones[1].at).
-// Before: swordHeart (index 2) must remain locked.
+// Tier-2 gating: the library milestone now needs the contribution threshold AND a Foundation
+// (the §4.3 stage gate). Below threshold: locked.
 boot("player.sect.best = new Decimal(SECT_DATA.milestones[1].at - 1); updateMilestones('sect'); updateTemp(); updateTemp();");
 check("slice-5 tech: swordHeart (tier-2) still NOT unlocked below library milestone",
     "tmp.sect.upgrades[13].unlocked === false");
-// Now earn the library milestone by pushing best to the threshold.
+// At threshold but WITHOUT a Foundation: the stage gate holds the inner library closed.
+boot("player.f.unlocked = false; player.f.best = new Decimal(0);");
 boot("player.sect.best = new Decimal(SECT_DATA.milestones[1].at); updateMilestones('sect'); updateTemp(); updateTemp();");
-check("slice-5 tech: library milestone earned (hasMilestone sect 1)",
+check("slice-5 tech: library NOT earned at threshold without Foundation (stage gate)",
+    "hasMilestone('sect', 1) === false");
+// Establish a Foundation -> the library opens.
+boot("player.f.unlocked = true; player.f.best = new Decimal(substageThreshold('f', 'Early Foundation')); updateMilestones('sect'); updateTemp(); updateTemp();");
+check("slice-5 tech: library milestone earned after reaching Foundation",
     "hasMilestone('sect', 1) === true");
 check("slice-5 tech: swordHeart (tier-2) NOW unlocked after library milestone",
     "tmp.sect.upgrades[13].unlocked === true");
@@ -734,6 +739,19 @@ check("slice-5 discount: sectLatticeDiscount('metal') equals azureSword.latticeD
 check("slice-5 discount: sectLatticeDiscount('earth') equals 1 (identity for non-archetype element)",
     "sectLatticeDiscount('earth').eq(1)");
 
+// 24b. Contribution stage cap (§4.3): standing clamps at the first unearned rank's threshold.
+//      Accrual is driven via the sect layer's own update(). No Foundation -> capped at library.
+boot("player.sect.points = new Decimal(0); player.points = new Decimal(1e6); updateTemp();");
+boot("player.f.unlocked = false; player.f.best = new Decimal(0);");
+boot("layers.sect.update.call({layer:'sect'}, 100000);");
+check("slice-5 cap: standing capped at library threshold without a Foundation",
+    "player.sect.points.eq(SECT_DATA.milestones[1].at)");
+// Reach Foundation (still no core) -> the cap lifts to the arsenal threshold.
+boot("player.f.unlocked = true; player.f.best = new Decimal(substageThreshold('f', 'Early Foundation'));");
+boot("layers.sect.update.call({layer:'sect'}, 100000);");
+check("slice-5 cap: cap lifts to arsenal threshold after reaching Foundation (pre-core)",
+    "player.sect.points.eq(SECT_DATA.milestones[2].at)");
+
 // 25. Arsenal: the sectFoundationBell automation (AUTOMATION_DATA[3], grantedBy sect milestone 2).
 //     (a) Before the arsenal milestone: f has no auto-prestige.
 boot("player.sect.best = new Decimal(SECT_DATA.milestones[2].at - 1); updateMilestones('sect'); updateTemp(); updateTemp();");
@@ -743,28 +761,32 @@ check("slice-5 arsenal: before arsenal milestone, automationGranted(AUTOMATION_D
 boot("player.f.unlocked = true; player.f.best = new Decimal(22); player.points = new Decimal(0); updateTemp(); updateTemp();");
 check("slice-5 arsenal: tmp.f.autoPrestige false before arsenal milestone",
     "tmp.f.autoPrestige === false");
-//     (b) Earn the arsenal milestone. Then check automationGranted and the threshold semantics.
+//     (b) Earn the arsenal milestone. It now needs the contribution threshold AND a FORGED CORE
+//         (the §4.3 stage gate). At threshold but with no core: the gate holds it.
+boot("player.c.unlocked = true; player.c.best = new Decimal(0);");
 boot("player.sect.best = new Decimal(SECT_DATA.milestones[2].at); updateMilestones('sect'); updateTemp(); updateTemp();");
-check("slice-5 arsenal: arsenal milestone earned (hasMilestone sect 2)",
+check("slice-5 arsenal: NOT earned at threshold without a forged core (stage gate)",
+    "hasMilestone('sect', 2) === false");
+// Forge a core (Core Forged sub-stage) -> the arsenal opens.
+boot("player.c.best = new Decimal(substageThreshold('c', 'Core Forged')); updateMilestones('sect'); updateTemp(); updateTemp();");
+check("slice-5 arsenal: arsenal milestone earned (contribution threshold + forged core)",
     "hasMilestone('sect', 2) === true");
 check("slice-5 arsenal: automationGranted(AUTOMATION_DATA[3]) true after arsenal milestone",
     "automationGranted(AUTOMATION_DATA[3]) === true");
-//     Threshold semantics (gainFraction): f.points = 0 (the pending gain trivially >= 0 x fraction),
-//     so autoPrestige fires. Then f.points = HUGE so the gain is tiny relative to current -> holds off.
-//     f.canReset requires player.points >= f.requires(); grant enough Qi for both sub-cases.
+//     MATURITY model: a FRESH/unformed Foundation (no sub-stage climb, no fuel) -> the bell FIRES
+//     to rebuild it. f.canReset requires player.points >= f.requires(); grant enough Qi.
 boot("player.q.best = new Decimal(substageThreshold('q', '6th Level')); player.q.points = new Decimal(substageThreshold('q', '6th Level')); updateMilestones('q');");
-boot("player.points = new Decimal(layers.f.requires().times(4)); player.f.points = new Decimal(0); updateTemp(); updateTemp();");
-check("slice-5 arsenal: tmp.f.autoPrestige true when f.points is zero (gain >= fraction * 0)",
+boot("player.f.unlocked = true; player.f.best = new Decimal(0); player.f.points = new Decimal(0); player.points = new Decimal(layers.f.requires().times(4)); updateTemp(); updateTemp();");
+check("slice-5 arsenal: bell FIRES while Foundation is unformed (rebuilding)",
     "tmp.f.autoPrestige === true && tmp.f.canReset === true");
-// Set f.points huge so pending gain is tiny relative to current: holds off.
-// Keep Qi (player.points) sufficient for canReset.
-boot("player.f.points = new Decimal(1e12); player.points = new Decimal(layers.f.requires().times(4)); updateTemp(); updateTemp();");
-check("slice-5 arsenal: tmp.f.autoPrestige false when f.points huge (gain < gainFraction * 1e12)",
+//     A FULLY FORMED Foundation (top sub-stage climbed + fuel banked) -> the bell RESTS, so the
+//     player's Qi banks freely toward the next realm (this is the softlock fix).
+boot("player.f.best = new Decimal(substageThreshold('f', 'Great Circle')); player.f.points = new Decimal(1e6); player.points = new Decimal(layers.f.requires().times(4)); updateTemp(); updateTemp();");
+check("slice-5 arsenal: bell RESTS when Foundation is fully formed (Qi banks freely)",
     "tmp.f.autoPrestige === false && tmp.f.canReset === true");
-//     (c) End-to-end: drive a gameLoop tick while f.canReset and autoPrestige would fire.
-//         Set f.points back to zero so the threshold is met, give enough Qi for f canReset.
-boot("player.f.points = new Decimal(0); player.points = new Decimal(layers.f.requires().times(4)); updateTemp(); updateTemp();");
-check("slice-5 arsenal: pre-gameLoop: tmp.f.autoPrestige true and canReset true",
+//     (c) End-to-end: an unformed Foundation auto-prestiges through a real gameLoop tick.
+boot("player.f.best = new Decimal(0); player.f.points = new Decimal(0); player.points = new Decimal(layers.f.requires().times(4)); updateTemp(); updateTemp();");
+check("slice-5 arsenal: pre-gameLoop: bell fires + canReset",
     "tmp.f.autoPrestige === true && tmp.f.canReset === true");
 boot("gameLoop(0.001); updateTemp(); updateTemp();");
 check("slice-5 arsenal: f auto-prestiges through gameLoop (f.points > 0 after tick)",

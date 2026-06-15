@@ -44,6 +44,15 @@
 //                         key    string  semantic key.
 //                         at     number  Contribution high-water that earns it.
 //                         reward object  { qiMult } stipend | { libraryTier } | { arsenal }.
+//                         requires object OPTIONAL meets()-style CULTIVATION-STAGE gate. A sect
+//                                       rewards STANDING, but it will not promote a cultivator
+//                                       above their cultivation: the inner library opens only to
+//                                       a Foundation cultivator, the arsenal only to one who has
+//                                       forged a core. Until the stage is met the milestone cannot
+//                                       earn AND contribution accrual is CAPPED at this milestone's
+//                                       `at` (the factory's contributionStageCap) — you reach the
+//                                       rank's ceiling and then must advance your cultivation to
+//                                       rise further. Stipend has no gate (any disciple draws it).
 //
 // PACING INTENT (§4.3 / §11 slice 5, stated here because the numbers live here):
 //   - reveal at q 2nd Level (best>=3): the sect node appears a few minutes into a fresh run
@@ -107,10 +116,16 @@ var SECT_DATA = {
         // in the sect. Folds into cultivationQiPerSecond via sectStipendQiMult(). ⟨tune⟩
         { key: "stipend",  at: 250,   reward: { qiMult: 1.15 } },
         // Library access (§4.3): unlocks the tier-2 technique rows (the deeper arts). The
-        // technique upgrades gate their tier-2 rows on this milestone (libraryTier 2). ⟨tune⟩
-        { key: "library",  at: 4000,  reward: { libraryTier: 2 } },
+        // technique upgrades gate their tier-2 rows on this milestone (libraryTier 2). Gated on
+        // Foundation Establishment — the inner library is not opened to a Qi-Condensation novice;
+        // contribution caps here until you establish a Foundation. ⟨tune⟩
+        { key: "library",  at: 4000,  reward: { libraryTier: 2 },
+          requires: { realm: ["f", "Early Foundation"] } },
         // Arsenal (§4.3 "arsenal automations"): grants the sectFoundationBell automation row
-        // (automation.js) — auto-prestige Foundation at threshold. Lands ~the Nascent Soul push. ⟨tune⟩
-        { key: "arsenal",  at: 30000, reward: { arsenal: true } }
+        // (automation.js) — auto-rebuild Foundation, then rest. Gated on a FORGED CORE so it
+        // lands post-core (its design-intended window) and can never be earned by an idle pre-core
+        // member; contribution caps here until you forge your core. ⟨tune⟩
+        { key: "arsenal",  at: 30000, reward: { arsenal: true },
+          requires: { realm: ["c", "Core Forged"] } }
     ]
 };

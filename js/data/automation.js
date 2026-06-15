@@ -35,6 +35,33 @@
 //                         the buyable's unlocked flag + purchaseLimit (a manual click's
 //                         exact guards), driven from the layer's automate() tick hook.
 //     buyableKey  string  (action "buyable" only) the BODY_DATA buyable key to auto-buy.
+//     maturity    object  (action "prestige" only) the MATURITY model that decides WHEN the
+//                         bell fires and WHEN it rests (the design's "auto-prestige at
+//                         threshold", reworked from a flat gainFraction into a falloff curve).
+//                         A realm has a natural "fully formed" point — its top sub-stage
+//                         climbed (and, for the forge-funding realm, enough fuel banked). The
+//                         bell drives the realm toward that point, then RESTS, so it never
+//                         keeps wiping Qi the player is banking for the next breakthrough. As
+//                         the realm matures the per-prestige Qi cost rises on a curve, so the
+//                         bell tapers off visibly instead of stopping dead. Fields:
+//                           baseFraction number  the "worth it" floor (the old gainFraction):
+//                                               at zero maturity the bell fires when the pending
+//                                               gain is at least this fraction of current
+//                                               currency. Prevents zeroing the pool / starving
+//                                               Qi sinks early.
+//                           costExponent number  shapes the falloff: effective fraction =
+//                                               baseFraction x (1 / (1 - completeness))^costExponent.
+//                                               Higher = sharper rise near "fully formed".
+//                           restEpsilon  number  completeness within this of 1.0 counts as
+//                                               fully formed -> the bell rests (and avoids the
+//                                               divide-by-zero at the curve's asymptote).
+//                           fuelFromForge bool   (optional) also require the forge fuel reserve
+//                                               (this layer's currency vs the heaviest forge
+//                                               push) before resting — so Foundation banks
+//                                               enough fuel to forge, not just climbs sub-stages.
+//                         All targets are DATA-DERIVED (top sub-stage from REALM_DATA, fuel from
+//                         SETPIECE_DATA.forge), so future upgrades that add sub-stages or cut
+//                         fuel cost move the ceiling automatically — content hooks, not rewrites.
 
 var AUTOMATION_DATA = [
     {
@@ -42,16 +69,15 @@ var AUTOMATION_DATA = [
         // root realm — re-condensing Qi is the most repetitive, decisionless action
         // in the game, exactly what frontier-minus-two automation should erase.
         //
-        // gainFraction is the design's "auto-q-prestige AT THRESHOLD" (§5): the auto-
-        // prestige fires only when the pending gain is worth at least this fraction
-        // of the realm's current currency. Without it, gameLoop's tree-loop-before-
-        // side-loop order would prestige q at bare canReset every tick, zeroing the
-        // Qi pool and STARVING every Qi sink (meridian autobuy, manual temper, the
-        // player's own banking). The fraction self-scales: as q grows, the implied
-        // Qi threshold grows quadratically, leaving ever more headroom below it. ⟨tune⟩
+        // MATURITY model (§5 "auto-prestige at threshold", reworked): the bell re-condenses
+        // Qi to climb q toward its top sub-stage, then RESTS. baseFraction keeps the early
+        // behavior (fire only when the gain is worth >=5% of current q) so it never zeroes the
+        // Qi pool and starves the meridian autobuy; costExponent makes the per-prestige cost
+        // rise as q matures so it tapers off; restEpsilon parks it once q is fully climbed, so
+        // a player banking Qi for Soul Formation is never fought by the q bell. ⟨tune⟩
         key: "nascentQiPrestige",
         grantedBy: { layer: "n", milestone: 0 },      // first NS sub-stage (Early Nascent Soul)
-        automates: { layer: "q", action: "prestige", gainFraction: 0.05 }
+        automates: { layer: "q", action: "prestige", maturity: { baseFraction: 0.05, costExponent: 2, restEpsilon: 0.001 } }
     },
     {
         // Auto-open Primary Meridians once Nascent Soul is reached (§5). Buying
@@ -72,16 +98,18 @@ var AUTOMATION_DATA = [
     {
         // The ARSENAL (design §4.3 "arsenal automations", slice 5): the sect's arsenal grants
         // an auto-Foundation-prestige bell once the player reaches the arsenal contribution
-        // milestone (SECT_DATA milestone 2). By then the player is post-core pushing toward
-        // Nascent Soul, so re-prestiging Foundation is the decisionless grind the arsenal
-        // should erase. gainFraction is the design's "auto-prestige AT THRESHOLD" (§5): the
-        // automated f breakthrough fires only when the pending f gain is at least this fraction
-        // of f's current currency, so the bell does not zero the Foundation pool every tick and
-        // starve the forge fuel / Nascent Soul sink below it (the same starvation guard the q
-        // auto-prestige carries). The grant resolves through the sect layer's milestone source
-        // (SECT_DATA.milestones), which the linter's milestone-source check now knows. ⟨tune⟩
+        // milestone (SECT_DATA milestone 2, now itself gated on a forged core). Its job is to
+        // REBUILD the Foundation after a Nascent Soul breakthrough cascades it away — drive f
+        // back to its Great Circle (and bank forge fuel), then REST. The MATURITY model is what
+        // makes "rest" work: once the Foundation is fully formed there is nothing left to build,
+        // so the bell stops and the player's Qi banks freely toward the next realm. This is the
+        // fix for the old softlock where the flat-gainFraction bell wiped Qi below the 250k core
+        // gate forever (worse at higher Foundation grades, which only sped the wipe). fuelFromForge
+        // also holds the bell until enough Foundation fuel is banked for any forge push, not just
+        // until the sub-stages are climbed. The grant resolves through the sect layer's milestone
+        // source (SECT_DATA.milestones), which the linter's milestone-source check knows. ⟨tune⟩
         key: "sectFoundationBell",
         grantedBy: { layer: "sect", milestone: 2 },   // arsenal milestone (SECT_DATA.milestones[2])
-        automates: { layer: "f", action: "prestige", gainFraction: 0.05 }
+        automates: { layer: "f", action: "prestige", maturity: { baseFraction: 0.05, costExponent: 2, restEpsilon: 0.001, fuelFromForge: true } }
     }
 ];
