@@ -3,6 +3,45 @@
 All notable changes to **Dao Tree**. Versions track the itch.io releases;
 **0.2** was the first public release, so earlier development is folded into it.
 
+## 0.2.2 — unreleased
+
+### Fixed
+- **Auto-cultivation no longer soft-locks Core Formation.** The sect arsenal's
+  auto-Foundation-prestige used to wipe your Qi forever (worse the better your
+  Foundation grade), so you could never bank the 250,000 Qi to forge a core. It now
+  follows a Foundation maturity model: it rebuilds your Foundation, then *rests* once
+  it is fully formed, so your Qi banks freely toward the next breakthrough.
+- **No more unlock-message spam on Foundation reset.** Once your Qi Condensation
+  progress is kept through a Foundation breakthrough, its sub-stage unlocks stay
+  earned instead of re-announcing all of them every reset.
+
+### Added
+- **Journal reflection rewards (groundwork).** Every journal entry now records the
+  cultivation stage you were at when it unlocked, shown in the entry. Reflecting on
+  an entry can also grant a one-time reward; the first two entries (First Breath, A
+  Channel Opens) now give +100 Qi.
+- **Foundation maturity readout.** Realms with auto-cultivation show a maturity bar,
+  a rising prestige-cost multiplier as the Foundation matures, and a clear "fully
+  formed — resting; your Qi now banks freely" state. No more invisible behavior.
+- **Sect ranks now require cultivation.** The inner library opens only to a
+  Foundation cultivator and the arsenal only to one who has forged a core; your
+  contribution caps at each rank's ceiling until you advance, with the gate shown.
+- Milestones that keep your progress through a breakthrough (e.g. Peak Foundation)
+  now say so in their effect text, so the permanence is visible where it's earned.
+
+### Changed
+- Body tempering now shows the next tier you are working toward, and the +5% Qi/sec
+  it grants, instead of a meaningless "x1.0" line. Past Marrow it reads "All tiers
+  tempered."
+- Pluralized the Tendons and Bones tempering tiers.
+- Extraordinary and primary meridian effect lines now show the per-meridian bonus
+  (+25% / +15%) so the payoff reads even before the first purchase.
+
+### Notes
+- Behind the scenes: the experimental GitHub Pages build now warns players it is the
+  bleeding edge and points them at the stable itch.io release, and the deployment
+  workflows were updated to current GitHub Actions.
+
 ## 0.2.1 — 2026-06-15
 
 ### Fixed
