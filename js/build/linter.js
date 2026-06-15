@@ -1823,6 +1823,12 @@
                     + "unregistered layer '" + entry.when.layerUnlocked + "' (§1.6).");
             }
 
+            // Optional reflection bonus (scaffold §1.6): validate the shape so a future reward
+            // can never latch a malformed or no-op bonus. No entry carries one yet.
+            if (entry.bonus !== undefined) {
+                checkJournalBonus(errors, entryId, entry.bonus);
+            }
+
             // Fresh-save reachability: a qi-only condition, OR layerUnlocked of the ROOT realm
             // (which unlocks from Qi alone — the §9.3 bootstrap), is reachable from a brand-new
             // save. At least one entry must qualify so the journal is never permanently empty.
@@ -1838,6 +1844,38 @@
         if (!sawFreshReachable) {
             errors.push("Journal: no entry is reachable from a fresh save (a qi-only or root-realm "
                 + "layerUnlocked condition) — the journal would be permanently empty (§1.6).");
+        }
+    }
+
+    // Validate a journal entry's optional bonus (scaffold §1.6). The supported types must match
+    // grantJournalBonus in layerFactory.js; an unrecognized key is a typo or an unregistered type
+    // (which would silently no-op at delivery), so it is rejected here. Register new types in BOTH.
+    function checkJournalBonus(errors, entryId, bonus) {
+        if (typeof bonus !== "object" || bonus === null || Array.isArray(bonus)) {
+            errors.push("Journal: entry '" + entryId + "' bonus must be an object (§1.6).");
+            return;
+        }
+        var supportedKeys = ["qi", "achievement"];
+        Object.keys(bonus).forEach(function (bonusKey) {
+            if (supportedKeys.indexOf(bonusKey) === ZERO - ONE) {
+                errors.push("Journal: entry '" + entryId + "' bonus has unsupported key '" + bonusKey
+                    + "' (supported: " + supportedKeys.join(", ")
+                    + "; register new types in grantJournalBonus + checkJournalBonus) (§1.6).");
+            }
+        });
+        if (bonus.qi !== undefined && !(typeof bonus.qi === "number" && bonus.qi > ZERO)) {
+            errors.push("Journal: entry '" + entryId + "' bonus.qi must be a positive number (§1.6).");
+        }
+        if (bonus.achievement !== undefined) {
+            var achievementRef = bonus.achievement;
+            if (!Array.isArray(achievementRef) || achievementRef.length !== ONE + ONE) {
+                errors.push("Journal: entry '" + entryId
+                    + "' bonus.achievement must be [layerId, achievementId] (§1.6).");
+            } else if (registeredLayerIds().indexOf(achievementRef[ZERO]) === ZERO - ONE) {
+                errors.push("Journal: entry '" + entryId
+                    + "' bonus.achievement references unregistered layer '" + achievementRef[ZERO]
+                    + "' (§1.6).");
+            }
         }
     }
 

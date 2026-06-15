@@ -23,6 +23,19 @@
 //     title  string       short title shown in the journal tab
 //     text   string       1-3 sentences. Second person, restrained, genre-honest.
 //                         No purple overload. The journal is quiet witness, not narrator.
+//     bonus  object       OPTIONAL reflection reward (SCAFFOLD; none defined yet). grantJournalBonus
+//                         (layerFactory.js) delivers it ONCE, the first time the entry is reflected
+//                         on (the Reflect clickable). Supported shape:
+//                           { qi: N }                 grant N Qi
+//                           { achievement: [id, n] }  grant achievement n on layer id; this is also
+//                                                     how an entry "unlocks a gate" (gates are
+//                                                     achievements on the "gate" layer)
+//                         New bonus types register in BOTH grantJournalBonus (layerFactory.js) AND
+//                         checkJournalBonus (linter.js).
+//
+// STAGE STAMP (scaffold): when an entry latches, the factory records the cultivation stage at that
+// moment in player.journal.stage[key] = { realm, substage } (the journal tab shows it, and future
+// stage-relative mechanics read it). This is automatic; no per-entry data field.
 //
 // Ordering: chronological by when a player would unlock them, earliest first.
 // The linter (§8.5) validates `when` keys via the shared checkCondition oracle;
@@ -48,7 +61,8 @@ var JOURNAL_DATA = {
             when: { layerUnlocked: "q" },
             title: "First Breath",
             text: "You draw in the ambient qi and feel it, for the first time, listen. "
-                + "It is thin and reluctant, but it moves. That is enough."
+                + "It is thin and reluctant, but it moves. That is enough.",
+            bonus: { qi: 100 }
         },
         {
             // Entry 2: first meridian opened. A concrete physical milestone.
@@ -57,7 +71,8 @@ var JOURNAL_DATA = {
             title: "A Channel Opens",
             text: "The first meridian yields after long persistence. "
                 + "A cold brightness runs the length of your arm, then settles. "
-                + "The body remembers what the mind barely grasps."
+                + "The body remembers what the mind barely grasps.",
+            bonus: { qi: 100 }
         },
         {
             // Entry 3: foundation is reached (any grade). The player has broken

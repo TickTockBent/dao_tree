@@ -2964,6 +2964,80 @@ function journalUnreadCount() {
     return unreadCount;
 }
 
+// ---------------------------------------------------------------------------
+// Journal SCAFFOLD (design §1.6 extension): stage-stamping + entry bonuses. The plumbing
+// the planned journal mechanics build on (reflecting on old entries from the standpoint of
+// later stages, stage-gated secret paths, reflection rewards):
+//   1. STAGE STAMP. When an entry latches, the cultivation stage at that moment is stored in
+//      player.journal.stage[key] = { realm, substage }. Stable keys only (realm id + a
+//      sub-stage label snapshot), so later code can order/compare stages from REALM_DATA
+//      without a persisted numeric rank.
+//   2. ENTRY BONUS. An entry may carry an optional `bonus` (journal.js). grantJournalBonus
+//      delivers it ONCE, the first time the entry is reflected on (the Reflect clickable). No
+//      entry carries a bonus yet; this is the delivery path only.
+// ---------------------------------------------------------------------------
+
+// The player's current cultivation stage: the highest realm entered and the deepest sub-stage
+// reached within it. REALM_DATA is row-ordered (q,f,c,n,s), so the LAST realm with a reached
+// sub-stage is the highest. { realm:"", substage:"" } before the first breakthrough (still
+// mortal). Zero literals (§11): every threshold comes from the data rows.
+function currentCultivationStage() {
+    var stage = { realm: "", substage: "" };
+    REALM_DATA.forEach(function (realmData) {
+        var best = realmBest(realmData.id);
+        var deepestLabel = "";
+        realmData.substages.forEach(function (substage) {
+            if (best.gte(substage.at)) deepestLabel = substage.label;
+        });
+        if (deepestLabel !== "") {
+            stage = { realm: realmData.id, substage: deepestLabel };
+        }
+    });
+    return stage;
+}
+
+// The stage recorded for an entry when it latched, or null if none was stored (e.g. an entry
+// latched on a save from before stage-stamping existed).
+function journalEntryStage(entryKey) {
+    if (!journalExists()) return null;
+    var stageMap = player[journalLayerId()].stage;
+    if (!stageMap || typeof stageMap !== "object") return null;
+    var recorded = stageMap[entryKey];
+    return recorded ? recorded : null;
+}
+
+// Human-readable label for a recorded stage descriptor (display only).
+function journalStageLabel(stage) {
+    if (!stage || !stage.realm) return "the mortal road";
+    var realmData = findRealmData(stage.realm);
+    var realmName = realmData ? realmData.name : stage.realm;
+    if (stage.substage) return realmName + " (" + stage.substage + ")";
+    return realmName;
+}
+
+// Deliver a journal entry's bonus (design §1.6 extension). Dispatches on the bonus shape; a
+// missing/empty bonus is a no-op. Defensive on every engine global. SUPPORTED TYPES (extend
+// here AND in linter.js checkJournalBonus together, so a new type is both delivered and
+// validated):
+//   { qi: N }                  add N Qi (player.points)
+//   { achievement: [id, n] }   grant achievement n on layer id; this is also how an entry
+//                              "unlocks a gate", since gates are achievements on the "gate" layer
+// Future types (a condensed key, etc.) add a branch here.
+function grantJournalBonus(bonus) {
+    if (!bonus) return;
+    if (bonus.qi !== undefined && player.points) {
+        player.points = player.points.add(new Decimal(bonus.qi));
+    }
+    if (bonus.achievement !== undefined && typeof hasAchievement === "function") {
+        var bonusLayerId = bonus.achievement[FACTORY_ZERO];
+        var bonusAchievementId = bonus.achievement[FACTORY_ONE];
+        if (player[bonusLayerId] && Array.isArray(player[bonusLayerId].achievements)
+            && !hasAchievement(bonusLayerId, bonusAchievementId)) {
+            player[bonusLayerId].achievements.push(bonusAchievementId);
+        }
+    }
+}
+
 // The "Reflect" clickable: marks every unlocked entry read (clears the glow, §1.6).
 function makeJournalReflectClickable() {
     return {
@@ -2982,6 +3056,9 @@ function makeJournalReflectClickable() {
             JOURNAL_DATA.entries.forEach(function (entry) {
                 if (journalEntryUnlocked(entry.key) && !journalEntryRead(entry.key)) {
                     player[journalLayerId()].read.push(entry.key);
+                    // Reflection reward (scaffold §1.6): deliver the entry's bonus once, the
+                    // first time it is read. No entry carries a bonus yet.
+                    grantJournalBonus(entry.bonus);
                 }
             });
         }
@@ -3009,7 +3086,8 @@ function makeJournalLayer() {
                 // empty array is truthy, so it also satisfies the engine's layer-unlocked
                 // truthiness test — no separate boolean flag needed.
                 unlocked: [],
-                read: []                        // viewed entry keys (the new-entry glow clears these)
+                read: [],                       // viewed entry keys (the new-entry glow clears these)
+                stage: {}                       // entryKey -> { realm, substage } stamped when it latched (scaffold §1.6)
             };
         },
         tooltip: function () { return JOURNAL_DATA.name + ": your record of the road (never resets)"; },
@@ -3021,12 +3099,16 @@ function makeJournalLayer() {
             var journalState = player[this.layer];
             if (!Array.isArray(journalState.unlocked)) journalState.unlocked = [];
             if (!Array.isArray(journalState.read)) journalState.read = [];
+            if (!journalState.stage || typeof journalState.stage !== "object"
+                || Array.isArray(journalState.stage)) journalState.stage = {};
             JOURNAL_DATA.entries.forEach(function (entry) {
                 if (journalState.unlocked.indexOf(entry.key) !== (FACTORY_ZERO - FACTORY_ONE)) {
                     return; // already latched — never re-evaluate
                 }
                 if (journalEntryConditionMet(entry.when)) {
                     journalState.unlocked.push(entry.key);
+                    // Stamp the cultivation stage at the moment of latching (scaffold §1.6).
+                    journalState.stage[entry.key] = currentCultivationStage();
                 }
             });
         },
@@ -3051,7 +3133,11 @@ function makeJournalLayer() {
                     var unread = !journalEntryRead(entry.key);
                     var title = unread ? "<b>" + entry.title + "</b>" : entry.title;
                     var body = unread ? "<b>" + entry.text + "</b>" : entry.text;
-                    lines.push(title + "<br>" + body);
+                    var recordedStage = journalEntryStage(entry.key);
+                    var stageNote = recordedStage
+                        ? "<br><i>Recorded during " + journalStageLabel(recordedStage) + ".</i>"
+                        : "";
+                    lines.push(title + "<br>" + body + stageNote);
                 });
                 return lines.join("<br><br>");
             }]
