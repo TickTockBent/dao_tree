@@ -1,0 +1,10 @@
+<!-- Experimental-branch warning. Injected into the GitHub Pages build ONLY (see the
+     "Inject experimental-branch banner" step in .github/workflows/deploy-pages.yml).
+     It is never shipped to itch.io, which serves the stable release. Dismiss is
+     remembered per-browser via localStorage so it does not nag on every reload. -->
+<div id="exp-banner" style="position:fixed;left:0;right:0;bottom:0;z-index:2147483647;background:#2a1a1a;color:#f0e6d2;border-top:2px solid #c0392b;padding:8px 14px;font-family:Inconsolata,monospace;font-size:14px;line-height:1.4;text-align:center;box-shadow:0 -2px 8px rgba(0,0,0,0.45);">
+  &#9888; You are playing the <b>experimental branch</b> of Dao Tree. The stable version lives at
+  <a href="https://ticktockbent.itch.io/dao-tree" target="_blank" rel="noopener" style="color:#5fc9e0;text-decoration:underline;">ticktockbent.itch.io/dao-tree</a>.
+  <button type="button" onclick="(function(){var b=document.getElementById('exp-banner');if(b)b.remove();try{localStorage.setItem('daoTreeExpBannerDismissed','1');}catch(e){}})();" style="margin-left:12px;background:#c0392b;color:#fff;border:none;border-radius:3px;padding:3px 10px;cursor:pointer;font-family:inherit;font-size:13px;">Dismiss</button>
+</div>
+<script>(function(){try{if(localStorage.getItem('daoTreeExpBannerDismissed')==='1'){var b=document.getElementById('exp-banner');if(b)b.remove();}}catch(e){}})();</script>

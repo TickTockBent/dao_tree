@@ -36,6 +36,13 @@ jobs:
       - name: Stage minimal game files
         run: ./scripts/build-site.sh _site
 
+      # Pages tracks the bleeding edge, so warn players this is the experimental build
+      # and point them at the stable itch.io release. Injected into the staged _site copy
+      # ONLY here (the itch release workflow never runs this step), after the build guard.
+      - name: Inject experimental-branch banner (Pages only)
+        run: |
+          node -e "const fs=require('fs');const banner=fs.readFileSync('.github/pages-banner.html','utf8');const page=fs.readFileSync('_site/index.html','utf8');if(!page.includes('</body>')){console.error('::error::missing </body> in staged index.html');process.exit(1);}fs.writeFileSync('_site/index.html',page.replace('</body>',banner+'</body>'));console.log('Injected experimental-branch banner into _site/index.html');"
+
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
         with:
