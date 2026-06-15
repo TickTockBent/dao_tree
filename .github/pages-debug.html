@@ -1,0 +1,61 @@
+<!-- pages-debug.html — DEBUG-ONLY helper injected into the GitHub Pages build (see the
+     "Inject debug keys (Pages only)" step in .github/workflows/deploy-pages.yml). It is
+     NEVER staged by scripts/build-site.sh and NEVER injected by the itch release workflow,
+     so it cannot reach the stable itch.io build or a future private runtime.
+
+     Keys 1-5 set Qi production to 10^(n-1): 1 = x1 (normal), 2 = x10, 3 = x100,
+     4 = x1000, 5 = x10000. Implemented by wrapping the global getPointGen at runtime, so
+     there is ZERO debug footprint in the shipped game source. -->
+<style>
+  #dao-debug-badge {
+    position: fixed; top: 6px; left: 6px; z-index: 2147483646;
+    font-family: Inconsolata, monospace; font-size: 12px;
+    background: rgba(20,20,30,0.78); color: #9fe0a0;
+    border: 1px solid #3a8a4a; border-radius: 3px; padding: 2px 7px;
+    pointer-events: none; opacity: 0.55;
+  }
+</style>
+<div id="dao-debug-badge">Qi debug: keys 1-5 (&times;1)</div>
+<script>
+(function () {
+  // 10^debugExponent is the Qi-production multiplier. Key n sets it to 10^(n-1).
+  var debugExponent = 0;
+  function multiplierLabel() { return "×" + Math.pow(10, debugExponent); }
+  function refreshBadge() {
+    var badge = document.getElementById("dao-debug-badge");
+    if (!badge) return;
+    badge.textContent = "Qi debug: keys 1-5 (" + multiplierLabel() + ")";
+    badge.style.opacity = debugExponent === 0 ? "0.55" : "1";
+    badge.style.color = debugExponent === 0 ? "#9fe0a0" : "#ffd24d";
+  }
+  // Wrap the global Qi/sec generator once the engine has defined it (and Decimal exists).
+  // The engine reads getPointGen() into tmp.pointGen each tick, so the wrap takes effect live.
+  function installHook() {
+    if (typeof window.getPointGen !== "function" || typeof Decimal === "undefined") {
+      setTimeout(installHook, 200);
+      return;
+    }
+    if (window.__daoDebugQiHooked) return;
+    window.__daoDebugQiHooked = true;
+    var originalGetPointGen = window.getPointGen;
+    window.getPointGen = function () {
+      var base = originalGetPointGen.apply(this, arguments);
+      if (debugExponent === 0) return base;
+      return base.times(Decimal.pow(10, debugExponent));
+    };
+    console.log("[dao-debug] Qi debug keys ready (1-5 = x1/x10/x100/x1000/x10000)");
+  }
+  installHook();
+  window.addEventListener("keydown", function (keyEvent) {
+    var targetTag = keyEvent.target && keyEvent.target.tagName;
+    if (targetTag === "INPUT" || targetTag === "TEXTAREA" || targetTag === "SELECT") return;
+    if (keyEvent.ctrlKey || keyEvent.metaKey || keyEvent.altKey) return;
+    var pressedDigit = parseInt(keyEvent.key, 10);
+    if (pressedDigit >= 1 && pressedDigit <= 5) {
+      debugExponent = pressedDigit - 1;
+      refreshBadge();
+      console.log("[dao-debug] Qi production " + multiplierLabel());
+    }
+  });
+})();
+</script>

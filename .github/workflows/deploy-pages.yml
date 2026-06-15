@@ -43,6 +43,13 @@ jobs:
         run: |
           node -e "const fs=require('fs');const banner=fs.readFileSync('.github/pages-banner.html','utf8');const page=fs.readFileSync('_site/index.html','utf8');if(!page.includes('</body>')){console.error('::error::missing </body> in staged index.html');process.exit(1);}fs.writeFileSync('_site/index.html',page.replace('</body>',banner+'</body>'));console.log('Injected experimental-branch banner into _site/index.html');"
 
+      # Debug helper (Pages ONLY): keys 1-5 multiply Qi production by 10^(n-1). Like the banner,
+      # injected only here — the itch release workflow never runs this, and build-site.sh never
+      # stages .github/, so debug keys cannot reach the stable build or a future private runtime.
+      - name: Inject debug keys (Pages only)
+        run: |
+          node -e "const fs=require('fs');const debug=fs.readFileSync('.github/pages-debug.html','utf8');const page=fs.readFileSync('_site/index.html','utf8');if(!page.includes('</body>')){console.error('::error::missing </body> in staged index.html');process.exit(1);}fs.writeFileSync('_site/index.html',page.replace('</body>',debug+'</body>'));console.log('Injected debug keys into _site/index.html');"
+
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v5
         with:
