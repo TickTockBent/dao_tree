@@ -18,6 +18,9 @@ import { useForgeStore } from '@/stores/forge'
 import { useTribulationStore } from '@/stores/tribulation'
 import { useScarStore } from '@/stores/scar'
 import { useLegacyStore } from '@/stores/legacy'
+import { useJournalStore } from '@/stores/journal'
+import { useHintsStore } from '@/stores/hints'
+import { useAutomationStore } from '@/stores/automation'
 import { usePipelinesStore } from '@/stores/pipelines'
 
 const app = createApp(App)
@@ -35,6 +38,9 @@ const forge = useForgeStore()
 const trib = useTribulationStore()
 const scar = useScarStore()
 const legacy = useLegacyStore()
+const journal = useJournalStore()
+const hints = useHintsStore()
+const automation = useAutomationStore()
 const pipelines = usePipelinesStore()
 const nav = useNavStore()
 
@@ -47,6 +53,7 @@ game.registerSliceProvider({ id: 'gate', save: gate.save, load: gate.load, fresh
 game.registerSliceProvider({ id: 'forge', save: forge.save, load: forge.load, fresh: forge.fresh })
 game.registerSliceProvider({ id: 'trib', save: trib.save, load: trib.load, fresh: trib.fresh })
 game.registerSliceProvider({ id: 'legacy', save: legacy.save, load: legacy.load, fresh: legacy.fresh })
+game.registerSliceProvider({ id: 'journal', save: journal.save, load: journal.load, fresh: journal.fresh })
 
 // System updaters (forward pass, in dependency order: body before realm, etc.).
 game.registerUpdater({ id: 'body', update: body.update })
@@ -58,11 +65,17 @@ game.registerUpdater({ id: 'forge', update: forge.update })
 game.registerUpdater({ id: 'trib', update: trib.update })
 game.registerUpdater({ id: 'scar', update: scar.update })
 game.registerUpdater({ id: 'legacy', update: legacy.update })
+game.registerUpdater({ id: 'journal', update: journal.update })
+game.registerUpdater({ id: 'hints', update: hints.update })
+game.registerUpdater({ id: 'automation', update: automation.update })
+
+// Automation reverse-pass hook.
+game.registerAutomation({ id: 'automation', automate: automation.automate })
 
 // Qi/sec pipeline: game store reads from pipelines store.
 game.setQiPerSecondFn(() => pipelines.qiPerSecond)
 
-// Decimal paths for save hydration (per-realm points/best/total + body + dao + sect + forge + trib).
+// Decimal paths for save hydration.
 registerDecimalPaths([
   'realms.q.points', 'realms.q.best', 'realms.q.total',
   'realms.f.points', 'realms.f.best', 'realms.f.total',

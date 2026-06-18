@@ -211,3 +211,67 @@ export function tierOrdinal(key: LatticeTierKey): number {
   if (key === 'seed') return 2
   return 0
 }
+
+// ---- Hint condition evaluation (shadow keys + delegation) -------------------
+
+/**
+ * Extended state for hint/journal evaluation. Adds the shadow-key values that
+ * `evaluateHintCondition` consumes locally before delegating to `meets()`.
+ */
+export interface HintState extends GameState {
+  /** Set of unlocked layer ids. */
+  unlockedLayers: Set<LayerId>
+  /** True if the soul aspect is unchosen (NS unlocked but no aspect picked). */
+  aspectUnchosen: boolean
+  /** True if the sect is revealed but not yet joined. */
+  sectUnjoined: boolean
+  /** True if the tribulation is ready to begin. */
+  tribulationReady: boolean
+  /** True if an unhealed scar is active. */
+  scarActive: boolean
+  /** True if the tribulation has been passed. */
+  tribulationPassed: boolean
+  /** True if at least one scar depth has been healed. */
+  scarHealed: boolean
+}
+
+/**
+ * Evaluate a `HintCondition` (which may include shadow keys) against a
+ * `HintState`. Shadow keys are consumed here; the remaining clauses are
+ * delegated to `meets()`.
+ */
+export function evaluateHintCondition(condition: HintCondition, state: HintState): boolean {
+  const remaining: Condition = {}
+  for (const key of Object.keys(condition) as (keyof HintClauses)[]) {
+    const value = condition[key]
+    if (value === undefined) continue
+    switch (key) {
+      case 'layerUnlocked':
+        if (!state.unlockedLayers.has(value as LayerId)) return false
+        break
+      case 'aspectUnchosen':
+        if (!state.aspectUnchosen) return false
+        break
+      case 'sectUnjoined':
+        if (!state.sectUnjoined) return false
+        break
+      case 'tribulationReady':
+        if (!state.tribulationReady) return false
+        break
+      case 'scarActive':
+        if (!state.scarActive) return false
+        break
+      case 'tribulationPassed':
+        if (!state.tribulationPassed) return false
+        break
+      case 'scarHealed':
+        if (!state.scarHealed) return false
+        break
+      default:
+        // Core grammar key — delegate to meets().
+        Object.assign(remaining, { [key]: value })
+        break
+    }
+  }
+  return meets(remaining, state)
+}
