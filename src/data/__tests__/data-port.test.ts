@@ -95,7 +95,7 @@ describe('SETPIECE_DATA', () => {
   it('forge has 3 push options and 5 grades', () => {
     expect(SETPIECE_DATA.forge.pushOptions.map((p) => p.key)).toEqual(['steady', 'forceful', 'reckless'])
     expect(SETPIECE_DATA.forge.grades.map((g) => g.key)).toEqual(['cracked', 'lower', 'middle', 'upper', 'perfect'])
-    expect(SETPIECE_DATA.forge.grades[4].globalMult).toBe(8)
+    expect(SETPIECE_DATA.forge.grades[4]!.globalMult).toBe(8)
     expect(SETPIECE_DATA.forge.forgeReq).toBe(25)
     expect(SETPIECE_DATA.forge.fuelBase).toBe(25)
   })
@@ -103,7 +103,7 @@ describe('SETPIECE_DATA', () => {
   it('tribulation has 5 waves and 4 grades with the scar pattern', () => {
     const t = SETPIECE_DATA.firstTribulation
     expect(t.waves).toHaveLength(5)
-    expect(t.waves[4].damage).toBe(36)
+    expect(t.waves[4]!.damage).toBe(36)
     expect(t.grades.map((g) => g.key)).toEqual(['failed', 'shaken', 'scarred', 'flawless'])
     expect(t.grades[0]).toMatchObject({ passes: false, scars: true })
     expect(t.grades[2]).toMatchObject({ passes: true, scars: true, floor: 0.35 })

@@ -51,6 +51,11 @@ export interface SaveSliceProvider {
 }
 
 const MAX_TICK_LENGTH = 3600
+const OFFLINE_CAP_SECONDS = 3600
+const OFFLINE_CATCHUP_DIVISOR = 10
+const TICK_INTERVAL_MS = 50
+const AUTOSAVE_INTERVAL_MS = 5000
+const MS_PER_SECOND = 1000
 
 export const useGameStore = defineStore('game', () => {
   // ---- Core player state (top-level save fields) --------------------------
@@ -149,14 +154,14 @@ export const useGameStore = defineStore('game', () => {
     ticking.value = true
     try {
       const now = Date.now()
-      let diff = (now - time.value) / 1000
+      let diff = (now - time.value) / MS_PER_SECOND
       const trueDiff = diff
       // Offline catch-up
       if (offTime.value !== null) {
-        const limit = 3600 // 1 hour offline cap
+        const limit = OFFLINE_CAP_SECONDS // 1 hour offline cap
         if (offTime.value.remain > limit) offTime.value.remain = limit
         if (offTime.value.remain > 0) {
-          const offlineDiff = Math.max(offTime.value.remain / 10, diff)
+          const offlineDiff = Math.max(offTime.value.remain / OFFLINE_CATCHUP_DIVISOR, diff)
           offTime.value.remain -= offlineDiff
           diff += offlineDiff
         }
@@ -208,7 +213,7 @@ export const useGameStore = defineStore('game', () => {
   // ---- Loop control -------------------------------------------------------
   function startLoop(): void {
     if (intervalId !== null) return
-    intervalId = setInterval(tick, 50)
+    intervalId = setInterval(tick, TICK_INTERVAL_MS)
     if (options.value.autosave) startAutosave()
   }
 
@@ -224,7 +229,7 @@ export const useGameStore = defineStore('game', () => {
     if (autosaveId !== null) return
     autosaveId = setInterval(() => {
       if (options.value.autosave) writeSave(buildSave())
-    }, 5000)
+    }, AUTOSAVE_INTERVAL_MS)
   }
 
   function stopAutosave(): void {
@@ -240,7 +245,7 @@ export const useGameStore = defineStore('game', () => {
     const save = loadSave()
     applySave(save)
     if (options.value.offlineProd && save.time) {
-      const elapsed = (Date.now() - save.time) / 1000
+      const elapsed = (Date.now() - save.time) / MS_PER_SECOND
       if (elapsed > 0) offTime.value = { remain: elapsed }
     }
     time.value = Date.now()

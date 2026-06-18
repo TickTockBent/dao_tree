@@ -11,17 +11,20 @@ import type { LayerId } from '@/engine/types'
 
 export type TabId = LayerId | 'tree-tab' | 'none'
 
+const SPLIT_SCREEN_MIN_WIDTH = 1024
+const DEFAULT_WINDOW_WIDTH = 1280
+
 export const useNavStore = defineStore('nav', () => {
   const currentTab = ref<TabId>('tree-tab')
   const currentNavTab = ref<TabId>('none')
   const subtabs = ref<Record<string, Record<string, string>>>({})
   const lastSafeTab = ref<TabId>('tree-tab')
   const forceOneTab = ref(false)
-  const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1280)
+  const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : DEFAULT_WINDOW_WIDTH)
 
   const splitScreen = computed(
     () =>
-      windowWidth.value >= 1024 &&
+      windowWidth.value >= SPLIT_SCREEN_MIN_WIDTH &&
       !forceOneTab.value &&
       currentNavTab.value !== 'none',
   )

@@ -2,8 +2,8 @@
 module.exports = {
   root: true,
   env: { browser: true, es2022: true, node: true },
-  parser: '@typescript-eslint/parser',
-  parserOptions: { ecmaVersion: 'latest', sourceType: 'module' },
+  parser: 'vue-eslint-parser',
+  parserOptions: { ecmaVersion: 'latest', sourceType: 'module', parser: '@typescript-eslint/parser' },
   extends: [
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',
@@ -27,6 +27,9 @@ module.exports = {
     '@typescript-eslint/no-explicit-any': 'warn',
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     'vue/multi-word-component-names': 'off',
+    'vue/max-attributes-per-line': 'off',
+    'vue/singleline-html-element-content-newline': 'off',
+    'vue/html-self-closing': 'off',
   },
   overrides: [
     {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useGameStore } from '@/stores/game'
 import { useBodyStore } from '@/stores/body'
@@ -7,6 +7,8 @@ import { useRealmStore } from '@/stores/realm'
 import { usePipelinesStore } from '@/stores/pipelines'
 import { format } from '@/engine/format'
 import { exportSave } from '@/engine/save'
+import type { RealmId } from '@/engine/types'
+import { REALM_DATA } from '@/data/realms'
 
 const game = useGameStore()
 const body = useBodyStore()
@@ -15,12 +17,12 @@ const pipelines = usePipelinesStore()
 
 const { points } = storeToRefs(game)
 const qiPerSec = computed(() => pipelines.qiPerSecond)
-const canPrestige = computed(() => realm.canResetQ())
-const prestigeGain = computed(() => realm.resetGainQ())
-const qBest = computed(() => realm.slice.q.best)
 
-function onPrestige() {
-  realm.prestigeQ()
+// Realm rows for the prestige panels (only unlocked realms shown).
+const visibleRealms = computed(() => REALM_DATA.filter((r) => realm.isUnlocked(r.id)))
+
+function onPrestige(id: RealmId) {
+  realm.prestige(id)
 }
 function onHardReset() {
   if (confirm('Hard reset? This wipes your save.')) game.hardReset()
@@ -31,10 +33,6 @@ function onExport() {
   navigator.clipboard?.writeText(encoded)
   alert('Save copied to clipboard.')
 }
-
-onMounted(() => {
-  // Loop already started in main.ts; nothing to do here.
-})
 </script>
 
 <template>
@@ -47,20 +45,30 @@ onMounted(() => {
     </header>
 
     <main class="content">
-      <section class="panel">
-        <h3>Qi Condensation</h3>
-        <p>Best: {{ format(qBest) }}</p>
-        <button :disabled="!canPrestige" @click="onPrestige">
-          {{ canPrestige ? `Break through (+${format(prestigeGain)})` : 'Need 20 Qi' }}
+      <section v-for="r in visibleRealms" :key="r.id" class="panel">
+        <h3>{{ r.name }}</h3>
+        <p>Best: {{ format(realm.realmBest(r.id)) }}</p>
+        <p v-if="realm.canReset(r.id)">
+          Gain: +{{ format(realm.resetGain(r.id)) }}
+        </p>
+        <button
+          :disabled="!realm.canReset(r.id)"
+          @click="onPrestige(r.id)"
+        >
+          {{ realm.canReset(r.id) ? `Break through (+${format(realm.resetGain(r.id))})` : `Need ${format(realm.nextAt(r.id))} Qi` }}
         </button>
       </section>
 
       <section class="panel">
         <h3>Body</h3>
-        <p>Primary meridians: {{ body.primaryMeridians }}/12 (×{{ format(body.meridianMult) }} Qi)</p>
-        <button @click="body.buyPrimaryMeridian()">Open meridian</button>
-        <p>Temper level: {{ body.temperLevel }}/24 (×{{ format(body.temperMult) }} Qi)</p>
-        <button @click="body.buyTemper()">Temper</button>
+        <p>Primary meridians: {{ body.primaryMeridians }} (×{{ format(body.meridianMult) }} Qi)</p>
+        <button :disabled="!body.canAffordBuyable('primaryMeridian')" @click="body.buyBuyable('primaryMeridian')">
+          Open meridian ({{ format(body.buyableCost('primaryMeridian', body.buyableAmount('primaryMeridian'))) }} Qi)
+        </button>
+        <p>Temper level: {{ body.temperLevel }} (×{{ format(body.temperMult) }} Qi)</p>
+        <button :disabled="!body.canAffordBuyable('temper')" @click="body.buyBuyable('temper')">
+          Temper ({{ format(body.buyableCost('temper', body.buyableAmount('temper'))) }} Qi)
+        </button>
       </section>
 
       <section class="panel dev">

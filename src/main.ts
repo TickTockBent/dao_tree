@@ -11,6 +11,12 @@ import { useGameStore } from '@/stores/game'
 import { useNavStore } from '@/stores/nav'
 import { useBodyStore } from '@/stores/body'
 import { useRealmStore } from '@/stores/realm'
+import { useDaoStore } from '@/stores/dao'
+import { useSectStore } from '@/stores/sect'
+import { useGateStore } from '@/stores/gate'
+import { useForgeStore } from '@/stores/forge'
+import { useTribulationStore } from '@/stores/tribulation'
+import { useScarStore } from '@/stores/scar'
 import { usePipelinesStore } from '@/stores/pipelines'
 
 const app = createApp(App)
@@ -21,37 +27,48 @@ app.use(pinia)
 const game = useGameStore()
 const body = useBodyStore()
 const realm = useRealmStore()
+const dao = useDaoStore()
+const sect = useSectStore()
+const gate = useGateStore()
+const forge = useForgeStore()
+const trib = useTribulationStore()
+const scar = useScarStore()
 const pipelines = usePipelinesStore()
 const nav = useNavStore()
 
 // Slice providers (each store owns its save slice; game store assembles).
 game.registerSliceProvider({ id: 'b', save: body.save, load: body.load, fresh: body.fresh })
 game.registerSliceProvider({ id: 'realms', save: realm.save, load: realm.load, fresh: realm.fresh })
+game.registerSliceProvider({ id: 'dao', save: dao.save, load: dao.load, fresh: dao.fresh })
+game.registerSliceProvider({ id: 'sect', save: sect.save, load: sect.load, fresh: sect.fresh })
+game.registerSliceProvider({ id: 'gate', save: gate.save, load: gate.load, fresh: gate.fresh })
+game.registerSliceProvider({ id: 'forge', save: forge.save, load: forge.load, fresh: forge.fresh })
+game.registerSliceProvider({ id: 'trib', save: trib.save, load: trib.load, fresh: trib.fresh })
 
-// System updaters (forward pass, in dependency order: body before realm).
+// System updaters (forward pass, in dependency order: body before realm, etc.).
 game.registerUpdater({ id: 'body', update: body.update })
+game.registerUpdater({ id: 'dao', update: dao.update })
+game.registerUpdater({ id: 'sect', update: sect.update })
+game.registerUpdater({ id: 'gate', update: gate.update })
 game.registerUpdater({ id: 'realm', update: realm.update })
+game.registerUpdater({ id: 'forge', update: forge.update })
+game.registerUpdater({ id: 'trib', update: trib.update })
+game.registerUpdater({ id: 'scar', update: scar.update })
 
 // Qi/sec pipeline: game store reads from pipelines store.
 game.setQiPerSecondFn(() => pipelines.qiPerSecond)
 
-// Decimal paths for save hydration (per-realm points/best/total).
+// Decimal paths for save hydration (per-realm points/best/total + body + dao + sect + forge + trib).
 registerDecimalPaths([
-  'realms.q.points',
-  'realms.q.best',
-  'realms.q.total',
-  'realms.f.points',
-  'realms.f.best',
-  'realms.f.total',
-  'realms.c.points',
-  'realms.c.best',
-  'realms.c.total',
-  'realms.n.points',
-  'realms.n.best',
-  'realms.n.total',
-  'realms.s.points',
-  'realms.s.best',
-  'realms.s.total',
+  'realms.q.points', 'realms.q.best', 'realms.q.total',
+  'realms.f.points', 'realms.f.best', 'realms.f.total',
+  'realms.c.points', 'realms.c.best', 'realms.c.total',
+  'realms.n.points', 'realms.n.best', 'realms.n.total',
+  'realms.s.points', 'realms.s.best', 'realms.s.total',
+  'dao.insight',
+  'sect.contribution', 'sect.best',
+  'forge.refinementProgress',
+  'trib.tribPool', 'trib.tribPoolMax',
 ])
 
 // --- Load save + start loop -----------------------------------------------

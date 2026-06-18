@@ -10,16 +10,42 @@
 import Decimal from 'break_eternity.js'
 import { decimalOne } from './decimal'
 
+// ---- Formatting thresholds (named per §11; ported verbatim from NumberFormating.js) ----
+const LOG10_TOWER_BREAKPOINT = 1e9
+const COMMA_EXPONENT_BREAKPOINT = 10000
+const SMALL_MAGNITUDE_LIMIT = 0.001
+const TINY_MAGNITUDE_LIMIT = 0.0001
+const DECIMAL_PRECISION_FLOOR = 0.1
+const SMALL_PRECISION_MIN = 4
+const SLOG_BREAKPOINT = 1e6
+const SLOG_FRACTION_PRECISION = 3
+const EEEE1000_BREAKPOINT = 'eeee1000'
+const HUGE_EXP_BREAKPOINT = '1e1000000'
+const LARGE_EXP_BREAKPOINT = '1e10000'
+const BILLION = 1e9
+const THOUSAND = 1e3
+const HUGE_SLOG_BREAKPOINT = '1e1000'
+const WHOLE_SMALL_LIMIT = 0.99
+const SECONDS_PER_MINUTE = 60
+const SECONDS_PER_HOUR = 3600
+const SECONDS_PER_DAY = 86400
+const SECONDS_PER_YEAR = 31536000
+const MINUTES_PER_HOUR = 60
+const HOURS_PER_DAY = 24
+const DAYS_PER_YEAR = 365
+const TENTH = 0.1
+const LOG_BASE = 10
+
 export function exponentialFormat(num: Decimal, precision: number, mantissa = true): string {
   let e = num.log10().floor()
-  let m = num.div(Decimal.pow(10, e))
+  let m = num.div(Decimal.pow(LOG_BASE, e))
   if (m.toStringWithDecimalPlaces(precision) === '10') {
     m = decimalOne()
     e = e.add(1)
   }
-  const eStr = e.gte(1e9)
-    ? format(e, 3)
-    : e.gte(10000)
+  const eStr = e.gte(LOG10_TOWER_BREAKPOINT)
+    ? format(e, SLOG_FRACTION_PRECISION)
+    : e.gte(COMMA_EXPONENT_BREAKPOINT)
       ? commaFormat(e, 0)
       : e.toStringWithDecimalPlaces(0)
   if (mantissa) return m.toStringWithDecimalPlaces(precision) + 'e' + eStr
@@ -28,7 +54,7 @@ export function exponentialFormat(num: Decimal, precision: number, mantissa = tr
 
 export function commaFormat(num: Decimal, precision: number): string {
   if (num === null || num === undefined) return 'NaN'
-  if (num.mag < 0.001) return (0).toFixed(precision)
+  if (num.mag < SMALL_MAGNITUDE_LIMIT) return (0).toFixed(precision)
   const init = num.toStringWithDecimalPlaces(precision)
   const portions = init.split('.')
   portions[0] = portions[0]!.replace(/(\d)(?=(\d\d\d)+(?!\d))/g, '$1,')
@@ -38,9 +64,9 @@ export function commaFormat(num: Decimal, precision: number): string {
 
 export function regularFormat(num: Decimal, precision: number): string {
   if (num === null || num === undefined) return 'NaN'
-  if (num.mag < 0.0001) return (0).toFixed(precision)
+  if (num.mag < TINY_MAGNITUDE_LIMIT) return (0).toFixed(precision)
   let p = precision
-  if (num.mag < 0.1 && precision !== 0) p = Math.max(precision, 4)
+  if (num.mag < DECIMAL_PRECISION_FLOOR && precision !== 0) p = Math.max(precision, SMALL_PRECISION_MIN)
   return num.toStringWithDecimalPlaces(p)
 }
 
@@ -68,23 +94,23 @@ export function format(
   if (isNaN(d.sign) || isNaN(d.layer) || isNaN(d.mag)) return 'NaN'
   if (d.sign < 0) return '-' + format(d.neg(), precision, allowSmall)
   if (d.mag === Number.POSITIVE_INFINITY) return 'Infinity'
-  if (d.gte('eeee1000')) {
+  if (d.gte(EEEE1000_BREAKPOINT)) {
     const slog = d.slog()
-    if (slog.gte(1e6)) return 'F' + format(slog.floor())
+    if (slog.gte(SLOG_BREAKPOINT)) return 'F' + format(slog.floor())
     return (
-      Decimal.pow(10, slog.sub(slog.floor())).toStringWithDecimalPlaces(3) +
+      Decimal.pow(LOG_BASE, slog.sub(slog.floor())).toStringWithDecimalPlaces(SLOG_FRACTION_PRECISION) +
       'F' +
       commaFormat(slog.floor(), 0)
     )
-  } else if (d.gte('1e1000000')) return exponentialFormat(d, 0, false)
-  else if (d.gte('1e10000')) return exponentialFormat(d, 0)
-  else if (d.gte(1e9)) return exponentialFormat(d, precision)
-  else if (d.gte(1e3)) return commaFormat(d, 0)
-  else if (d.gte(0.0001) || !allowSmall) return regularFormat(d, precision)
+  } else if (d.gte(HUGE_EXP_BREAKPOINT)) return exponentialFormat(d, 0, false)
+  else if (d.gte(LARGE_EXP_BREAKPOINT)) return exponentialFormat(d, 0)
+  else if (d.gte(BILLION)) return exponentialFormat(d, precision)
+  else if (d.gte(THOUSAND)) return commaFormat(d, 0)
+  else if (d.gte(TINY_MAGNITUDE_LIMIT) || !allowSmall) return regularFormat(d, precision)
   else if (d.eq(0)) return (0).toFixed(precision)
 
   d = invertOOM(d)
-  if (d.lt('1e1000')) {
+  if (d.lt(HUGE_SLOG_BREAKPOINT)) {
     const val = exponentialFormat(d, precision)
     return val.replace(/([^(?:e|F)]*)$/, '-$1')
   }
@@ -93,44 +119,44 @@ export function format(
 
 export function formatWhole(decimal: Decimal | number | string): string {
   const d = new Decimal(decimal)
-  if (d.gte(1e9)) return format(d, 2)
-  if (d.lte(0.99) && !d.eq(0)) return format(d, 2)
+  if (d.gte(BILLION)) return format(d, 2)
+  if (d.lte(WHOLE_SMALL_LIMIT) && !d.eq(0)) return format(d, 2)
   return format(d, 0)
 }
 
 export function formatTime(s: number): string {
-  if (s < 60) return format(s) + 's'
-  if (s < 3600) return formatWhole(Math.floor(s / 60)) + 'm ' + format(s % 60) + 's'
-  if (s < 86400)
+  if (s < SECONDS_PER_MINUTE) return format(s) + 's'
+  if (s < SECONDS_PER_HOUR) return formatWhole(Math.floor(s / SECONDS_PER_MINUTE)) + 'm ' + format(s % SECONDS_PER_MINUTE) + 's'
+  if (s < SECONDS_PER_DAY)
     return (
-      formatWhole(Math.floor(s / 3600)) +
+      formatWhole(Math.floor(s / SECONDS_PER_HOUR)) +
       'h ' +
-      formatWhole(Math.floor(s / 60) % 60) +
+      formatWhole(Math.floor(s / SECONDS_PER_MINUTE) % MINUTES_PER_HOUR) +
       'm ' +
-      format(s % 60) +
+      format(s % SECONDS_PER_MINUTE) +
       's'
     )
-  if (s < 31536000)
+  if (s < SECONDS_PER_YEAR)
     return (
-      formatWhole(Math.floor(s / 86400) % 365) +
+      formatWhole(Math.floor(s / SECONDS_PER_DAY) % DAYS_PER_YEAR) +
       'd ' +
-      formatWhole(Math.floor(s / 3600) % 24) +
+      formatWhole(Math.floor(s / SECONDS_PER_HOUR) % HOURS_PER_DAY) +
       'h ' +
-      formatWhole(Math.floor(s / 60) % 60) +
+      formatWhole(Math.floor(s / SECONDS_PER_MINUTE) % MINUTES_PER_HOUR) +
       'm ' +
-      format(s % 60) +
+      format(s % SECONDS_PER_MINUTE) +
       's'
     )
   return (
-    formatWhole(Math.floor(s / 31536000)) +
+    formatWhole(Math.floor(s / SECONDS_PER_YEAR)) +
     'y ' +
-    formatWhole(Math.floor(s / 86400) % 365) +
+    formatWhole(Math.floor(s / SECONDS_PER_DAY) % DAYS_PER_YEAR) +
     'd ' +
-    formatWhole(Math.floor(s / 3600) % 24) +
+    formatWhole(Math.floor(s / SECONDS_PER_HOUR) % HOURS_PER_DAY) +
     'h ' +
-    formatWhole(Math.floor(s / 60) % 60) +
+    formatWhole(Math.floor(s / SECONDS_PER_MINUTE) % MINUTES_PER_HOUR) +
     'm ' +
-    format(s % 60) +
+    format(s % SECONDS_PER_MINUTE) +
     's'
   )
 }
@@ -139,7 +165,7 @@ export function toPlaces(x: Decimal | number | string, precision: number, maxAcc
   const d = new Decimal(x)
   let result = d.toStringWithDecimalPlaces(precision)
   if (new Decimal(result).gte(maxAccepted)) {
-    result = new Decimal(maxAccepted - Math.pow(0.1, precision)).toStringWithDecimalPlaces(precision)
+    result = new Decimal(maxAccepted - Math.pow(TENTH, precision)).toStringWithDecimalPlaces(precision)
   }
   return result
 }
@@ -150,7 +176,7 @@ export function formatSmall(x: Decimal | number | string, precision = 2): string
 
 export function invertOOM(x: Decimal): Decimal {
   let e = x.log10().ceil()
-  const m = x.div(Decimal.pow(10, e))
+  const m = x.div(Decimal.pow(LOG_BASE, e))
   e = e.neg()
-  return new Decimal(10).pow(e).times(m)
+  return new Decimal(LOG_BASE).pow(e).times(m)
 }
