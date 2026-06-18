@@ -26,14 +26,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
       - name: Setup Pages
         uses: actions/configure-pages@v6
 
-      # Stage only the files the game loads at runtime (everything else — docs/,
-      # Old Things/, js/Demo/, Node build tooling, *.md, source images — is left
-      # out so a future private repo doesn't leak). The script also guards that
-      # every local file index.html references was actually staged.
-      - name: Stage minimal game files
+      - name: Build site
         run: ./scripts/build-site.sh _site
 
       # Pages tracks the bleeding edge, so warn players this is the experimental build

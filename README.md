@@ -1,11 +1,27 @@
-# The-Modding-Tree
+# Dao Tree
 
-An incremental game engine based on The Prestige Tree. It still requires programming knowledge, but it's mostly pretty easy things and copy/pasting.
+A xianxia cultivation incremental game. Built with Vite + TypeScript + Vue 3 + Pinia.
 
-[Look here for a tutorial on getting started with modding with TMT](docs/tutorials/getting-started.md)
+## Development
 
-You can look in the [documentation](docs/!general-info.md) for more information on how it all works, or look at the code in [layers.js](js/layers.js) to see what it all looks like.
+```bash
+npm install
+npm run dev      # start dev server
+npm run build    # typecheck + production build
+npm run test     # run all tests (166 tests)
+npm run lint     # typecheck + eslint
+npm run sim      # run pacing simulation
+```
+
+## Architecture
+
+- **Engine** (`src/engine/`): pure functions — `meets()` condition DSL, `format()`, save system, `buildGameState()`, `doReset` cascade.
+- **Data** (`src/data/`): 15 typed tables — single source of truth for all game numbers.
+- **Stores** (`src/stores/`): idiomatic Pinia stores per system — `game`, `realm`, `body`, `dao`, `sect`, `forge`, `tribulation`, `scar`, `legacy`, `journal`, `hints`, `automation`, `gate`, `pipelines`.
+- **Components** (`src/components/`): Vue 3 SFCs — `DaoLatticeGraph` (SVG), `BodyTab`, `SoulAspectPanel`, `ForgePanel`, `TribulationPanel`, `LegacyDisplay`, `SectTab`, `JournalView`, `HintBar`, `StancesPanel`.
+- **Lint** (`src/lint/`): semantic invariant checks (§9 no dead multipliers, completability, gradeScore scaling, etc.).
+- **Sim** (`src/sim/`): pacing simulation + behavioral smoke tests.
 
 ## Verification
 
-Run `npm test` (or `node js/build/check-all.js`; add `--quick` to skip the pacing sim for inner-loop use) to run the four harnesses: the data-invariant linter (18 rules over all data tables), the synthetic lint-fixture suite (two-tree topology cases), the real-engine runtime smoke test (reset cascade, keep rules, hint cascade), and the pacing sim (actor-model timing assertions for diligent/spine-only/max-scar profiles). **The suite must be run before any commit that touches `js/data/` or `js/build/`.**
+Run `npm test` to run 166 tests: data-port snapshots, engine unit tests, store integration tests, lint invariant checks, and behavioral smoke tests. Run `npm run lint` for typecheck + ESLint (no-magic-numbers scoped to stores/sim).

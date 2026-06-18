@@ -9,7 +9,7 @@ module.exports = {
     'plugin:@typescript-eslint/recommended',
     'plugin:vue/vue3-recommended',
   ],
-  ignorePatterns: ['dist', 'node_modules', 'js', 'css', 'legacy-index.html', '*.cjs'],
+  ignorePatterns: ['dist', 'node_modules', '*.cjs'],
   rules: {
     // §11 no-numeric-literals rule, scoped to engine code (data tables exempt)
     'no-magic-numbers': ['off'],

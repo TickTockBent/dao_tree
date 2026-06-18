@@ -1,7 +1,7 @@
 {
   "name": "dao-tree",
   "private": true,
-  "version": "0.3.0-dev",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,8 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "vue-tsc --noEmit && eslint src --max-warnings=0",
-    "sim": "tsx src/sim/pacing.ts",
-    "legacy:test": "node js/build/check-all.js"
+    "sim": "tsx src/sim/pacing.ts"
   },
   "dependencies": {
     "break_eternity.js": "^1.0.0",
