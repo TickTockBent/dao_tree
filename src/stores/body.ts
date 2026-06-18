@@ -9,7 +9,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import Decimal from 'break_eternity.js'
 import { decimalOne, decimalZero } from '@/engine/decimal'
-import { meets } from '@/engine/meets'
+import { meets, type Condition } from '@/engine/meets'
 import { buildGameState } from '@/engine/state'
 import { BODY_DATA, findBodyBuyable, temperTierForLevel } from '@/data/body'
 import { useGameStore } from './game'
@@ -126,6 +126,22 @@ export const useBodyStore = defineStore('body', () => {
   /** Current temper tier key, or null if level 0. */
   const temperTierKey = computed<TemperTierKey | null>(() => temperTierForLevel(temperLevel.value)?.key ?? null)
 
+  // ---- Soul Aspect pick (one-shot, meets-gated) --------------------------
+  /**
+   * Bind the soul to an aspect. One-shot per life: no-op if already chosen.
+   * The aspect's `requires` condition is re-verified at fire time (defensive
+   * against a cached UI racing a state change). Returns true on success.
+   */
+  function setSoulAspect(aspectKey: string, requiresCondition: Condition): boolean {
+    if (soulAspect.value !== '') return false
+    if (!meets(requiresCondition, buildGameState())) return false
+    soulAspect.value = aspectKey
+    return true
+  }
+
+  /** True once any aspect is chosen this life. */
+  const soulAspectChosen = computed(() => soulAspect.value !== '')
+
   // ---- Milestone helpers (for keep rules, automation grants) --------------
   function hasMilestone(index: number): boolean {
     return milestones.value.includes(index)
@@ -187,6 +203,8 @@ export const useBodyStore = defineStore('body', () => {
     buyableCost,
     canAffordBuyable,
     buyBuyable,
+    setSoulAspect,
+    soulAspectChosen,
     hasMilestone,
     update,
     save,

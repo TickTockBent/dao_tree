@@ -109,6 +109,8 @@ export interface GameState {
   realmBest: Record<RealmId, Decimal>
   /** Per-realm sub-stage label reached (the highest met sub-stage label). */
   realmSubstageLabel: Record<RealmId, string | null>
+  /** Per-realm substage label → `at` threshold (for resolving label-based realm conditions). */
+  realmSubstageThresholds: Record<RealmId, Record<string, number>>
   /** Per-node tier owned (0 = none, 1 = Glimpse, 2 = Seed). */
   daoNodeTier: Record<LatticeNodeKey, number>
   /** Highest tier owned for any node of each element. */
@@ -149,7 +151,10 @@ function clauseHolds<K extends keyof ConditionClauses>(
       const best = state.realmBest[realmId]
       if (best === undefined) return false
       if (typeof threshold === 'number') return best.gte(threshold)
-      return state.realmSubstageLabel[realmId] === threshold
+      // Resolve label → numeric `at` threshold, then check best >= at.
+      const at = state.realmSubstageThresholds[realmId]?.[threshold]
+      if (at === undefined) return false
+      return best.gte(at)
     }
     case 'daoNode': {
       const [nodeKey, tier] = value as [LatticeNodeKey, number]

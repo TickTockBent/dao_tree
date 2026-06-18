@@ -36,13 +36,17 @@ export function buildGameState(): GameState {
   const gate = useGateStore()
   const forge = useForgeStore()
 
-  // Realm bests + sub-stage labels.
+  // Realm bests + sub-stage labels + substage thresholds.
   const realmBest = {} as Record<RealmId, Decimal>
   const realmSubstageLabel = {} as Record<RealmId, string | null>
+  const realmSubstageThresholds = {} as Record<RealmId, Record<string, number>>
   for (const r of REALM_DATA) {
     const best = realm.realmBest(r.id)
     realmBest[r.id] = best
     realmSubstageLabel[r.id] = substageLabelAtBest(r, best.toNumber())
+    const labelMap: Record<string, number> = {}
+    for (const s of r.substages) labelMap[s.label] = s.at
+    realmSubstageThresholds[r.id] = labelMap
   }
 
   // Dao node tiers (0/1/2) per node key + element max tiers.
@@ -80,6 +84,7 @@ export function buildGameState(): GameState {
     temperTier,
     realmBest,
     realmSubstageLabel,
+    realmSubstageThresholds,
     daoNodeTier,
     daoElementMaxTier,
     daoAnyNodeMaxTier,

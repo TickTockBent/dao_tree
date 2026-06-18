@@ -47,6 +47,10 @@ describe('meets', () => {
     temperTier: null,
     realmBest: { q: decimalZero(), f: decimalZero(), c: decimalZero(), n: decimalZero(), s: decimalZero() },
     realmSubstageLabel: { q: null, f: null, c: null, n: null, s: null },
+    realmSubstageThresholds: {
+      q: { '1st Level': 1, '6th Level': 90, '7th Level': 170 },
+      f: {}, c: {}, n: {}, s: {},
+    },
     daoNodeTier: {} as Record<string, number>,
     daoElementMaxTier: {} as Record<string, number>,
     daoAnyNodeMaxTier: 0,
@@ -65,9 +69,11 @@ describe('meets', () => {
     expect(meets({ qi: 50 }, s)).toBe(true)
     expect(meets({ qi: 51 }, s)).toBe(false)
   })
-  it('realm clause with named label matches exactly', () => {
-    const s = { ...baseState, realmSubstageLabel: { ...baseState.realmSubstageLabel, q: '6th Level' } }
+  it('realm clause with named label checks best >= label threshold', () => {
+    // 6th Level at:90. best=100 → reached 6th Level (and beyond).
+    const s = { ...baseState, realmBest: { ...baseState.realmBest, q: new Decimal(100) } }
     expect(meets({ realm: ['q', '6th Level'] }, s)).toBe(true)
+    // 7th Level at:170. best=100 → not reached.
     expect(meets({ realm: ['q', '7th Level'] }, s)).toBe(false)
   })
   it('realm clause with numeric threshold compares best', () => {
