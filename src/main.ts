@@ -17,6 +17,7 @@ import { useGateStore } from '@/stores/gate'
 import { useForgeStore } from '@/stores/forge'
 import { useTribulationStore } from '@/stores/tribulation'
 import { useScarStore } from '@/stores/scar'
+import { useLegacyStore } from '@/stores/legacy'
 import { usePipelinesStore } from '@/stores/pipelines'
 
 const app = createApp(App)
@@ -33,6 +34,7 @@ const gate = useGateStore()
 const forge = useForgeStore()
 const trib = useTribulationStore()
 const scar = useScarStore()
+const legacy = useLegacyStore()
 const pipelines = usePipelinesStore()
 const nav = useNavStore()
 
@@ -44,6 +46,7 @@ game.registerSliceProvider({ id: 'sect', save: sect.save, load: sect.load, fresh
 game.registerSliceProvider({ id: 'gate', save: gate.save, load: gate.load, fresh: gate.fresh })
 game.registerSliceProvider({ id: 'forge', save: forge.save, load: forge.load, fresh: forge.fresh })
 game.registerSliceProvider({ id: 'trib', save: trib.save, load: trib.load, fresh: trib.fresh })
+game.registerSliceProvider({ id: 'legacy', save: legacy.save, load: legacy.load, fresh: legacy.fresh })
 
 // System updaters (forward pass, in dependency order: body before realm, etc.).
 game.registerUpdater({ id: 'body', update: body.update })
@@ -54,6 +57,7 @@ game.registerUpdater({ id: 'realm', update: realm.update })
 game.registerUpdater({ id: 'forge', update: forge.update })
 game.registerUpdater({ id: 'trib', update: trib.update })
 game.registerUpdater({ id: 'scar', update: scar.update })
+game.registerUpdater({ id: 'legacy', update: legacy.update })
 
 // Qi/sec pipeline: game store reads from pipelines store.
 game.setQiPerSecondFn(() => pipelines.qiPerSecond)
@@ -69,6 +73,7 @@ registerDecimalPaths([
   'sect.contribution', 'sect.best',
   'forge.refinementProgress',
   'trib.tribPool', 'trib.tribPoolMax',
+  'legacy.actOneGrade',
 ])
 
 // --- Load save + start loop -----------------------------------------------

@@ -13,6 +13,7 @@ import { meets, type Condition } from '@/engine/meets'
 import { buildGameState } from '@/engine/state'
 import { BODY_DATA, findBodyBuyable, temperTierForLevel } from '@/data/body'
 import { useGameStore } from './game'
+import { useScarStore } from './scar'
 import type { BodyBuyableKey, TemperTierKey } from '@/engine/types'
 
 export interface BodySlice {
@@ -148,8 +149,9 @@ export const useBodyStore = defineStore('body', () => {
   }
 
   // ---- Update hook --------------------------------------------------------
-  function update(_diff: number): void {
-    // M5: scarHealTick(diff) accrues heal progress, converts depth → healedDepth.
+  function update(diff: number): void {
+    // Scar heal tick (passive accrual; converts depth → healedDepth over time).
+    useScarStore().scarHealTick(diff)
   }
 
   // ---- Save slice ---------------------------------------------------------

@@ -29,6 +29,7 @@ import { useSectStore } from './sect'
 import { useGateStore } from './gate'
 import { useForgeStore } from './forge'
 import { useScarStore } from './scar'
+import { useLegacyStore } from './legacy'
 
 export const usePipelinesStore = defineStore('pipelines', () => {
   const body = useBodyStore()
@@ -38,6 +39,7 @@ export const usePipelinesStore = defineStore('pipelines', () => {
   const gate = useGateStore()
   const forge = useForgeStore()
   const scar = useScarStore()
+  const legacy = useLegacyStore()
 
   // ---- Dao/stance/aspect/technique/legacy factors (identity until their slice lands) ----
 
@@ -140,8 +142,8 @@ export const usePipelinesStore = defineStore('pipelines', () => {
     return product
   })
 
-  /** Legacy qiMult (1 if no Act I Legacy Grade stored). M5 wires the store. */
-  const legacyQiMult = computed<Decimal>(() => decimalOne()) // M5: read from legacy store.
+  /** Legacy qiMult (1 if no Act I Legacy Grade stored). */
+  const legacyQiMult = computed<Decimal>(() => legacy.legacyQiMult)
 
   // ---- The full Qi/sec pipeline ----
   const qiPerSecond = computed<Decimal>(() =>

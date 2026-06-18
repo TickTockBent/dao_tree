@@ -12,6 +12,9 @@ import { REALM_DATA } from '@/data/realms'
 import DaoLatticeGraph from '@/components/DaoLatticeGraph.vue'
 import StancesPanel from '@/components/StancesPanel.vue'
 import BodyTab from '@/components/BodyTab.vue'
+import ForgePanel from '@/components/ForgePanel.vue'
+import TribulationPanel from '@/components/TribulationPanel.vue'
+import LegacyDisplay from '@/components/LegacyDisplay.vue'
 
 type TabId = 'realms' | 'body' | 'dao' | 'save'
 
@@ -74,6 +77,9 @@ const daoTabAvailable = computed(() => dao.isRevealed())
           >
             {{ realm.canReset(r.id) ? `Break through (+${format(realm.resetGain(r.id))})` : `Need ${format(realm.nextAt(r.id))} Qi` }}
           </button>
+          <ForgePanel v-if="r.id === 'c'" />
+          <TribulationPanel v-if="r.id === 's'" />
+          <LegacyDisplay v-if="r.id === 's'" />
         </section>
       </div>
 
