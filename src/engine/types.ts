@@ -1,0 +1,163 @@
+// src/engine/types.ts — vocabularies and shared engine types
+//
+// The closed-set vocabularies referenced across the data tables. These replace
+// the implicit string-keyed lookups of the TMT factory with compile-checked
+// unions. Any data table that references a realm id, an element, a scope, etc.
+// is typed against these unions, so a typo fails at compile time rather than
+// being silently ignored at runtime (the §5a scale-bug class).
+
+// ---- Realm + layer registry ------------------------------------------------
+
+/** The five Act I realm layer ids, in climb order. */
+export type RealmId = 'q' | 'f' | 'c' | 'n' | 's'
+
+/** Every registered system/layer id (the TREE_DATA.layers registry vocabulary). */
+export type LayerId =
+  | RealmId
+  | 'b' // Body
+  | 'gate' // Deeds (story-gate achievements)
+  | 'dao' // Dao lattice
+  | 'sect' // Sect standing
+  | 'journal' // Narrative journal (eternal)
+  | 'legacy' // Act I Legacy Grade (eternal)
+
+/** All ids that carry a numeric prestige row in the tree (the climb spine). */
+export type RealmLayerId = RealmId
+
+// ---- Elements + lattice ----------------------------------------------------
+
+export type Element = 'metal' | 'wood' | 'water' | 'fire' | 'earth'
+
+/** The 15 Dao lattice node keys (5 roots + 5 ring-2 + 5 ring-2b). */
+export type LatticeNodeKey =
+  | 'metal'
+  | 'wood'
+  | 'water'
+  | 'fire'
+  | 'earth'
+  | 'sword'
+  | 'growth'
+  | 'flow'
+  | 'life'
+  | 'mountain'
+  | 'edge'
+  | 'vitality'
+  | 'stillness'
+  | 'death'
+  | 'endurance'
+
+/** Dao lattice tier keys. Slice 3 ships Glimpse + Seed; Manifestation/Law deferred. */
+export type LatticeTierKey = 'glimpse' | 'seed'
+
+// ---- Persistence scopes ----------------------------------------------------
+
+export type Scope = 'tree' | 'life' | 'eternal'
+
+/** Tree ids (acts). Currently only Act I. */
+export type TreeId = 'act1'
+
+// ---- Body / temper ---------------------------------------------------------
+
+export type TemperTierKey = 'skin' | 'flesh' | 'tendon' | 'bone' | 'marrow'
+
+/** Body buyable keys. */
+export type BodyBuyableKey = 'primaryMeridian' | 'extraordinaryMeridian' | 'temper'
+
+// ---- Grades ----------------------------------------------------------------
+
+export type CoreGradeKey = 'cracked' | 'lower' | 'middle' | 'upper' | 'perfect'
+export type TribGradeKey = 'failed' | 'shaken' | 'scarred' | 'flawless'
+export type FoundationBandTier = 'Flawed' | 'Stable' | 'Solid' | 'Heaven-grade'
+export type LegacyBandKey = 'faint' | 'steady' | 'radiant' | 'eternal'
+
+// ---- Soul aspect -----------------------------------------------------------
+
+export type SoulAspectKey =
+  | 'formless'
+  | 'metalSoul'
+  | 'woodSoul'
+  | 'waterSoul'
+  | 'fireSoul'
+  | 'earthSoul'
+
+// ---- Stances ---------------------------------------------------------------
+
+export type StanceKey = 'breathingTrance' | 'swordTrance'
+
+// ---- Sect ------------------------------------------------------------------
+
+export type SectArchetypeKey = 'azureSword' | 'stoneFormation'
+export type SectMilestoneKey = 'stipend' | 'library' | 'arsenal'
+export type TechniqueSchool = 'sword' | 'formation' | 'universal'
+export type TechniqueKey =
+  | 'azureForm'
+  | 'severingArc'
+  | 'swordHeart'
+  | 'stoneSkin'
+  | 'wardLattice'
+  | 'mountainHeart'
+  | 'breathCanon'
+  | 'stillMind'
+
+// ---- Gates / journal / keep / automation -----------------------------------
+
+export type GateAchievementKey = 'outerDisciple' | 'innerDisciple'
+export type KeepRuleKey =
+  | 'qiInsightSurvivesFoundation'
+  | 'foundationSurvivesNascentSoul'
+  | 'soulCarriesTheClimb'
+export type AutomationKey =
+  | 'nascentQiPrestige'
+  | 'nascentPrimaryMeridians'
+  | 'nascentExtraordinaryMeridians'
+  | 'sectFoundationBell'
+export type HintKey =
+  | 'actComplete'
+  | 'faceTribulation'
+  | 'healScar'
+  | 'climbSoulFormation'
+  | 'chooseAspect'
+  | 'climbNascent'
+  | 'warmCore'
+  | 'coreComplete'
+  | 'chooseForge'
+  | 'climbFoundation'
+  | 'breakToFoundation'
+  | 'openLattice'
+  | 'enterTrance'
+  | 'joinSect'
+  | 'climbQi'
+  | 'gatherQi'
+export type JournalEntryKey =
+  | 'firstBreath'
+  | 'firstMeridian'
+  | 'foundationReached'
+  | 'outerDisciple'
+  | 'firstGlimpse'
+  | 'coreForged'
+  | 'sectJoined'
+  | 'nascentSoul'
+  | 'aspectChosen'
+  | 'lateNascentSoul'
+  | 'allMeridians'
+  | 'soulFormationEntered'
+  | 'tribulationPassed'
+  | 'scarTaken'
+  | 'scarHealed'
+  | 'actOneLegacy'
+
+// ---- Set-pieces ------------------------------------------------------------
+
+export type SetpieceKey = 'forge' | 'firstTribulation' | 'scar'
+export type ForgePushKey = 'steady' | 'forceful' | 'reckless'
+export type TribWaveKey =
+  | 'gale'
+  | 'flame'
+  | 'frost'
+  | 'thunder'
+  | 'tribulationLightning'
+
+// ---- Misc ------------------------------------------------------------------
+
+/** A value that may be a Decimal, a number, or a numeric string. */
+export type DecimalSource = import('break_eternity.js').default | number | string

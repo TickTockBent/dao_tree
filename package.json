@@ -1,7 +1,34 @@
 {
   "name": "dao-tree",
   "private": true,
+  "version": "0.3.0-dev",
+  "type": "module",
   "scripts": {
-    "test": "node js/build/check-all.js"
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "vue-tsc --noEmit && eslint src --max-warnings=0",
+    "sim": "tsx src/sim/pacing.ts",
+    "legacy:test": "node js/build/check-all.js"
+  },
+  "dependencies": {
+    "break_eternity.js": "^1.0.0",
+    "pinia": "^2.2.6",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "@typescript-eslint/eslint-plugin": "^8.16.0",
+    "@typescript-eslint/parser": "^8.16.0",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "eslint": "^8.57.1",
+    "eslint-plugin-vue": "^9.32.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.1",
+    "vitest": "^3.2.6",
+    "vue-tsc": "^2.1.10"
   }
 }

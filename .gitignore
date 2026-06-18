@@ -5,3 +5,9 @@ docs/internal/immortal-tree-build.zip
 
 # Local tooling / session state.
 .claude/
+
+# Node / Vite
+node_modules/
+dist/
+*.tsbuildinfo
+.vite/
