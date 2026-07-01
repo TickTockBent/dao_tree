@@ -91,6 +91,13 @@ export interface HintClauses extends ConditionClauses {
   tribulationPassed: true
   /** At least one scar depth has been healed. */
   scarHealed: true
+  /**
+   * Secret realms revealed but never cleared (slice 7). NOTE: this is the 8th
+   * shadow key — the recorded deferral (0.2.x hints header) says shadow-grammar
+   * growth should trigger adding NEGATION to meets() instead; carried as debt,
+   * flagged for the next hint-grammar touch.
+   */
+  secretRealmUnexplored: true
 }
 
 export type HintCondition = Partial<HintClauses>
@@ -245,6 +252,8 @@ export interface HintState extends GameState {
   tribulationPassed: boolean
   /** True if at least one scar depth has been healed. */
   scarHealed: boolean
+  /** True if the secret realms are revealed but no expedition was ever cleared. */
+  secretRealmUnexplored: boolean
 }
 
 /**
@@ -278,6 +287,9 @@ export function evaluateHintCondition(condition: HintCondition, state: HintState
         break
       case 'scarHealed':
         if (!state.scarHealed) return false
+        break
+      case 'secretRealmUnexplored':
+        if (!state.secretRealmUnexplored) return false
         break
       default:
         // Core grammar key — delegate to meets().

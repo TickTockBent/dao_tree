@@ -17,6 +17,7 @@ import { useRealmStore } from '@/stores/realm'
 import { useSectStore } from '@/stores/sect'
 import { useTribulationStore } from '@/stores/tribulation'
 import { useScarStore } from '@/stores/scar'
+import { useSecretRealmStore } from '@/stores/secretRealm'
 import type { JournalEntryKey, LayerId } from '@/engine/types'
 
 export interface JournalSlice {
@@ -36,6 +37,7 @@ export const useJournalStore = defineStore('journal', () => {
   const sect = useSectStore()
   const trib = useTribulationStore()
   const scar = useScarStore()
+  const secretRealm = useSecretRealmStore()
 
   const latched = ref<Set<string>>(new Set())
   const reflected = ref<Set<string>>(new Set())
@@ -60,6 +62,7 @@ export const useJournalStore = defineStore('journal', () => {
       scarActive: scar.scarIsActive,
       tribulationPassed: trib.tribulationPassed,
       scarHealed: body.scarHealedDepth > 0,
+      secretRealmUnexplored: secretRealm.isRevealed() && secretRealm.totalClears === 0,
     }
   }
 

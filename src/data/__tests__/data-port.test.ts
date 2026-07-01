@@ -20,6 +20,8 @@ import {
   JOURNAL_DATA,
   LEGACY_DATA,
   FACTORY_NUMERICS,
+  SECRET_REALM_DATA,
+  ALCHEMY_DATA,
   findRealm,
   substageLabelAtBest,
 } from '@/data'
@@ -241,10 +243,17 @@ describe('TECHNIQUE_DATA', () => {
 })
 
 describe('JOURNAL_DATA', () => {
-  it('has 16 entries with firstBreath + actOneLegacy at the ends', () => {
-    expect(JOURNAL_DATA.entries).toHaveLength(16)
+  it('has 18 entries with firstBreath + actOneLegacy at the ends (slice 7 added 2)', () => {
+    expect(JOURNAL_DATA.entries).toHaveLength(18)
     expect(JOURNAL_DATA.entries[0]?.key).toBe('firstBreath')
-    expect(JOURNAL_DATA.entries[15]?.key).toBe('actOneLegacy')
+    expect(JOURNAL_DATA.entries[17]?.key).toBe('actOneLegacy')
+  })
+
+  it('slice 7 entries latch on first expedition clear and the profession pick', () => {
+    const firstExpedition = JOURNAL_DATA.entries.find((e) => e.key === 'firstExpedition')
+    const professionChosen = JOURNAL_DATA.entries.find((e) => e.key === 'professionChosen')
+    expect(firstExpedition?.when).toEqual({ secretRealmClears: 1 })
+    expect(professionChosen?.when).toEqual({ professionChosen: true })
   })
 
   it('first two entries grant qi 100 bonus', () => {
@@ -260,5 +269,102 @@ describe('LEGACY_DATA', () => {
     expect(Math.abs(sum - 1.0)).toBeLessThan(0.001)
     expect(LEGACY_DATA.actOne.bands.map((b) => b.key)).toEqual(['faint', 'steady', 'radiant', 'eternal'])
     expect(LEGACY_DATA.actOne.bands[3]?.qiMult).toBe(1.6)
+  })
+})
+
+describe('SECRET_REALM_DATA', () => {
+  it('reveals on coreForged, rotates every 1800s, essenceBase 1', () => {
+    expect(SECRET_REALM_DATA.reveal).toEqual({ coreForged: true })
+    expect(SECRET_REALM_DATA.rotation).toEqual({ periodSeconds: 1800 })
+    expect(SECRET_REALM_DATA.essenceBase).toBe(1)
+  })
+
+  it('has exactly the 3 tuned sites in order', () => {
+    expect(SECRET_REALM_DATA.sites.map((s) => s.key)).toEqual([
+      'verdantHollow',
+      'invertedSpiritLand',
+      'shatteredStarVault',
+    ])
+  })
+
+  it('verdantHollow: qiRate model, 120s run, 600s cooldown, spiritHerb drop', () => {
+    const s = SECRET_REALM_DATA.sites[0]!
+    expect(s.element).toBe('wood')
+    expect(s.durationSeconds).toBe(120)
+    expect(s.cooldownSeconds).toBe(600)
+    expect(s.unlock).toEqual({})
+    expect(s.modifier).toEqual({
+      key: 'richGrowth',
+      label: 'Rich Growth',
+      description:
+        'Spirit herbs flourish here. Essence gathers half again as fast, fed by your Qi flow.',
+      essenceModel: 'qiRate',
+      rateMult: 1.5,
+    })
+    expect(s.rewards).toEqual({ material: 'spiritHerb', materialPerEssence: 1, insightPerEssence: 0.2 })
+  })
+
+  it('invertedSpiritLand: insightRate model, 90s run, gated on Early Nascent Soul', () => {
+    const s = SECRET_REALM_DATA.sites[1]!
+    expect(s.element).toBe('water')
+    expect(s.durationSeconds).toBe(90)
+    expect(s.cooldownSeconds).toBe(600)
+    expect(s.unlock).toEqual({ realm: ['n', 'Early Nascent Soul'] })
+    expect(s.modifier.essenceModel).toBe('insightRate')
+    expect(s.modifier.rateMult).toBe(1)
+    expect(s.modifier.insightScale).toBe(4)
+    expect(s.rewards).toEqual({ material: 'essenceCrystal', materialPerEssence: 0.5, insightPerEssence: 0.4 })
+  })
+
+  it('shatteredStarVault: fixed model, 180s run, gated on Great Circle, carries the first-clear glimpse', () => {
+    const s = SECRET_REALM_DATA.sites[2]!
+    expect(s.element).toBe('metal')
+    expect(s.durationSeconds).toBe(180)
+    expect(s.cooldownSeconds).toBe(1200)
+    expect(s.unlock).toEqual({ realm: ['n', 'Great Circle'] })
+    expect(s.modifier.essenceModel).toBe('fixed')
+    expect(s.modifier.rateMult).toBe(0.6)
+    expect(s.rewards).toEqual({
+      material: 'beastCore',
+      materialPerEssence: 0.25,
+      insightPerEssence: 0.3,
+      firstClearGlimpseNode: 'edge',
+    })
+  })
+})
+
+describe('ALCHEMY_DATA', () => {
+  it('reveals on coreForged, with the 3 sourced materials', () => {
+    expect(ALCHEMY_DATA.reveal).toEqual({ coreForged: true })
+    expect(ALCHEMY_DATA.materials).toEqual([
+      { key: 'spiritHerb', name: 'Spirit Herb', sourceHint: 'Verdant Hollow' },
+      { key: 'essenceCrystal', name: 'Essence Crystal', sourceHint: 'Inverted Spirit Land' },
+      { key: 'beastCore', name: 'Beast Core', sourceHint: 'Shattered Star Vault' },
+    ])
+  })
+
+  it('has exactly the 3 tuned recipes in order', () => {
+    expect(ALCHEMY_DATA.recipes.map((r) => r.key)).toEqual(['gatheringPill', 'clarityPill', 'heavenWardingPill'])
+  })
+
+  it('gatheringPill: 10 spiritHerb → 2x Qi/sec for 600s, open recipe', () => {
+    const r = ALCHEMY_DATA.recipes[0]!
+    expect(r.cost).toEqual({ spiritHerb: 10 })
+    expect(r.effect).toEqual({ type: 'timedQiMult', mult: 2, durationSeconds: 600 })
+    expect(r.unlock).toEqual({})
+  })
+
+  it('clarityPill: 6 spiritHerb + 4 essenceCrystal → 1.5x breakthrough gain for n/s', () => {
+    const r = ALCHEMY_DATA.recipes[1]!
+    expect(r.cost).toEqual({ spiritHerb: 6, essenceCrystal: 4 })
+    expect(r.effect).toEqual({ type: 'breakthroughAid', gainMult: 1.5, appliesTo: ['n', 's'] })
+    expect(r.unlock).toEqual({ realm: ['n', 'Early Nascent Soul'] })
+  })
+
+  it('heavenWardingPill: 6 essenceCrystal + 3 beastCore → +40 pool bonus, gated on s milestone 1', () => {
+    const r = ALCHEMY_DATA.recipes[2]!
+    expect(r.cost).toEqual({ essenceCrystal: 6, beastCore: 3 })
+    expect(r.effect).toEqual({ type: 'tribulationPoolBonus', poolBonus: 40 })
+    expect(r.unlock).toEqual({ realm: ['s', 1] })
   })
 })

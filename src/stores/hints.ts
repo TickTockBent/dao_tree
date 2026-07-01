@@ -15,6 +15,7 @@ import { useRealmStore } from '@/stores/realm'
 import { useSectStore } from '@/stores/sect'
 import { useTribulationStore } from '@/stores/tribulation'
 import { useScarStore } from '@/stores/scar'
+import { useSecretRealmStore } from '@/stores/secretRealm'
 import type { LayerId } from '@/engine/types'
 
 export const useHintsStore = defineStore('hints', () => {
@@ -23,6 +24,7 @@ export const useHintsStore = defineStore('hints', () => {
   const sect = useSectStore()
   const trib = useTribulationStore()
   const scar = useScarStore()
+  const secretRealm = useSecretRealmStore()
 
   /** Build the HintState snapshot (shared with the journal store). */
   function buildHintState(): HintState {
@@ -43,6 +45,7 @@ export const useHintsStore = defineStore('hints', () => {
       scarActive: scar.scarIsActive,
       tribulationPassed: trib.tribulationPassed,
       scarHealed: body.scarHealedDepth > 0,
+      secretRealmUnexplored: secretRealm.isRevealed() && secretRealm.totalClears === 0,
     }
   }
 

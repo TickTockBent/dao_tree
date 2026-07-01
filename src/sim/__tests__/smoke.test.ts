@@ -15,6 +15,11 @@ import { useForgeStore } from '@/stores/forge'
 import { useScarStore } from '@/stores/scar'
 import { useJournalStore } from '@/stores/journal'
 import { useHintsStore } from '@/stores/hints'
+import { useSecretRealmStore } from '@/stores/secretRealm'
+import { useAlchemyStore } from '@/stores/alchemy'
+import { findSecretRealmSite } from '@/data/secret-realm'
+import { ALCHEMY_DATA } from '@/data/alchemy'
+import type { MaterialKey } from '@/engine/types'
 
 describe('smoke: Qi gathering + prestige', () => {
   beforeEach(() => { bootTestStores() })
@@ -199,5 +204,65 @@ describe('smoke: Qi/sec pipeline no dead multipliers', () => {
     const before = pipelines.qiPerSecond.toNumber()
     body.buyBuyable('primaryMeridian')
     expect(pipelines.qiPerSecond.toNumber()).toBeGreaterThan(before)
+  })
+})
+
+describe('smoke: Secret Realm + Alchemy (slice 7 full loop)', () => {
+  beforeEach(() => { bootTestStores() })
+
+  it('drives expedition → materials/insight → craft → activate → expire headlessly', () => {
+    const body = useBodyStore()
+    const dao = useDaoStore()
+    const pipelines = usePipelinesStore()
+    const secretRealm = useSecretRealmStore()
+    const alchemy = useAlchemyStore()
+
+    // Force the shared reveal gate (coreForged) both systems key off.
+    body.coreGrade = 0
+    secretRealm.update(0.1)
+    alchemy.update(0.1)
+    expect(secretRealm.isRevealed()).toBe(true)
+    expect(alchemy.isRevealed()).toBe(true)
+
+    // Run the active site to completion via repeated update() calls.
+    const activeSite = secretRealm.activeSiteKey!
+    expect(secretRealm.canEnter(activeSite)).toBe(true)
+    expect(secretRealm.enter(activeSite)).toBe(true)
+    const insightBefore = dao.insight.toNumber()
+    let iterations = 0
+    while (secretRealm.expedition.active && iterations < 10000) {
+      secretRealm.update(1)
+      iterations++
+    }
+    expect(secretRealm.expedition.active).toBe(false)
+    expect(secretRealm.totalClears).toBeGreaterThan(0)
+    expect(dao.insight.toNumber()).toBeGreaterThan(insightBefore)
+
+    const droppedMaterial = findSecretRealmSite(activeSite).rewards.material
+    expect(alchemy.materials[droppedMaterial] ?? 0).toBeGreaterThan(0)
+
+    // Choose the profession and craft the gathering pill. A single short run
+    // may not earn the full 10-herb cost, so top up via addMaterial — noted:
+    // this is the profession economy's own deposit API, exercised honestly.
+    expect(alchemy.chooseProfession('alchemy')).toBe(true)
+    const gatheringRecipe = ALCHEMY_DATA.recipes.find((r) => r.effect.type === 'timedQiMult')!
+    for (const [matKey, cost] of Object.entries(gatheringRecipe.cost) as [MaterialKey, number][]) {
+      const short = cost - alchemy.materialCount(matKey)
+      if (short > 0) alchemy.addMaterial(matKey, short)
+    }
+    expect(alchemy.canCraft(gatheringRecipe.key)).toBe(true)
+    expect(alchemy.craft(gatheringRecipe.key)).toBe(true)
+
+    // Activate: qiPerSecond exactly doubles (data-derived mult, not a copied literal).
+    const mult = gatheringRecipe.effect.type === 'timedQiMult' ? gatheringRecipe.effect.mult : 1
+    const duration = gatheringRecipe.effect.type === 'timedQiMult' ? gatheringRecipe.effect.durationSeconds : 0
+    const identityQiPerSecond = pipelines.qiPerSecond.toNumber()
+    expect(alchemy.activatePill(gatheringRecipe.key)).toBe(true)
+    expect(pipelines.qiPerSecond.toNumber()).toBeCloseTo(identityQiPerSecond * mult, 6)
+
+    // Expire: identity restored.
+    alchemy.update(duration + 1)
+    expect(alchemy.activePill).toBeNull()
+    expect(pipelines.qiPerSecond.toNumber()).toBeCloseTo(identityQiPerSecond, 6)
   })
 })

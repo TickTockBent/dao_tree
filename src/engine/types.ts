@@ -134,6 +134,7 @@ export type HintKey =
   | 'climbSoulFormation'
   | 'chooseAspect'
   | 'climbNascent'
+  | 'exploreSecretRealm' // slice 7: nudge toward the Secret Realms once revealed
   | 'warmCore'
   | 'coreComplete'
   | 'chooseForge'
@@ -151,6 +152,8 @@ export type JournalEntryKey =
   | 'outerDisciple'
   | 'firstGlimpse'
   | 'coreForged'
+  | 'firstExpedition' // slice 7: first Secret Realm expedition clear
+  | 'professionChosen' // slice 7: the Act I profession slot is picked
   | 'sectJoined'
   | 'nascentSoul'
   | 'aspectChosen'

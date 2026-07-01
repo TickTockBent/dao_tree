@@ -16,11 +16,20 @@
 //     first — no stacking, keeps the pipeline factor a single lookup).
 //   - Numbers only from ALCHEMY_DATA. Material/pill counts are plain numbers
 //     (small integers), not Decimals — no registerDecimalPaths needed.
+//
+// Fractional-material decision (contract point 3): each material stores its
+// EXACT accumulated float in `materials` (repeated fractional drops sum
+// honestly), and `materialCount` exposes Math.floor for display + affordability.
+// Crafting subtracts the integer cost from the raw float, so the sub-unit carry
+// (e.g. 0.7 of a herb) survives to the next deposit.
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type Decimal from 'break_eternity.js'
+import Decimal from 'break_eternity.js'
 import { decimalOne, decimalZero } from '@/engine/decimal'
+import { meets } from '@/engine/meets'
+import { buildGameState } from '@/engine/state'
+import { ALCHEMY_DATA, findRecipe } from '@/data/alchemy'
 import type { MaterialKey, PillKey, ProfessionKey, RealmId } from '@/engine/types'
 
 export interface ActivePill {
@@ -42,56 +51,128 @@ export function freshAlchemySlice(): AlchemySlice {
   return { profession: null, materials: {}, pills: {}, activePill: null }
 }
 
+/** The only profession pickable in v1 (design §7.6: one Act I slot). */
+const ALCHEMY_PROFESSION: ProfessionKey = 'alchemy'
+
 export const useAlchemyStore = defineStore('alchemy', () => {
   const profession = ref<ProfessionKey | null>(null)
   const materials = ref<Partial<Record<MaterialKey, number>>>({})
   const pills = ref<Partial<Record<PillKey, number>>>({})
   const activePill = ref<ActivePill | null>(null)
 
+  // Reveal is latched once the gate is met so the slot never re-seals (the
+  // sect.revealed idiom). The latch is derived state, not part of the saved
+  // slice — ALCHEMY_DATA.reveal ({ coreForged: true }) is monotone, so it
+  // re-derives faithfully on load.
+  const revealedLatch = ref(false)
+
   /** Profession slot revealed (ALCHEMY_DATA.reveal against live state). */
-  const revealed = computed<boolean>(() => false) // TODO(slice-7 alchemy agent)
+  const revealed = computed<boolean>(
+    () => revealedLatch.value || meets(ALCHEMY_DATA.reveal, buildGameState()),
+  )
 
   /** True once the profession is picked (meets() clause input). */
   const professionChosen = computed<boolean>(() => profession.value !== null)
 
+  /** The recipe key of the currently-active timed pill (null when none active). */
+  function activeTimedRecipe() {
+    if (!activePill.value) return null
+    if (activePill.value.remaining <= 0) return null
+    const recipe = findRecipe(activePill.value.key)
+    return recipe.effect.type === 'timedQiMult' ? recipe : null
+  }
+
   /** Qi/sec factor from the active timed pill (identity when none). */
-  const activePillQiMult = computed<Decimal>(() => decimalOne()) // TODO(slice-7 alchemy agent)
+  const activePillQiMult = computed<Decimal>(() => {
+    const recipe = activeTimedRecipe()
+    if (!recipe || recipe.effect.type !== 'timedQiMult') return decimalOne()
+    return new Decimal(recipe.effect.mult)
+  })
+
+  /** The held breakthrough-aid recipe eligible for a realm (null when none held/eligible). */
+  function heldBreakthroughAidFor(realmId: RealmId) {
+    for (const recipe of ALCHEMY_DATA.recipes) {
+      if (recipe.effect.type !== 'breakthroughAid') continue
+      if (pillCount(recipe.key) <= 0) continue
+      if (recipe.effect.appliesTo.includes(realmId)) return recipe
+    }
+    return null
+  }
+
+  /** The held warding recipe (null when none held). */
+  function heldWardingRecipe() {
+    for (const recipe of ALCHEMY_DATA.recipes) {
+      if (recipe.effect.type !== 'tribulationPoolBonus') continue
+      if (pillCount(recipe.key) > 0) return recipe
+    }
+    return null
+  }
 
   /** Flat preparedness-pool bonus from a held warding pill (zero when none). */
-  const tribulationPoolBonus = computed<Decimal>(() => decimalZero()) // TODO(slice-7 alchemy agent)
+  const tribulationPoolBonus = computed<Decimal>(() => {
+    const recipe = heldWardingRecipe()
+    if (!recipe || recipe.effect.type !== 'tribulationPoolBonus') return decimalZero()
+    return new Decimal(recipe.effect.poolBonus)
+  })
 
   function isRevealed(): boolean {
     return revealed.value
   }
 
   function materialCount(key: MaterialKey): number {
-    return materials.value[key] ?? 0
+    return Math.floor(materials.value[key] ?? 0)
   }
 
   function pillCount(key: PillKey): number {
     return pills.value[key] ?? 0
   }
 
+  /** True once profession chosen AND the recipe's meets() gate is satisfied. */
+  function recipeUnlocked(key: PillKey): boolean {
+    if (!professionChosen.value) return false
+    return meets(findRecipe(key).unlock, buildGameState())
+  }
+
   /** The secret-realm economy's deposit API (fractional amounts floor-accumulate). */
-  function addMaterial(_key: MaterialKey, _amount: number): void {
-    // TODO(slice-7 alchemy agent)
+  function addMaterial(key: MaterialKey, amount: number): void {
+    if (amount <= 0) return
+    materials.value[key] = (materials.value[key] ?? 0) + amount
   }
 
-  function chooseProfession(_key: ProfessionKey): boolean {
-    return false // TODO(slice-7 alchemy agent): v1 accepts only 'alchemy'
+  function chooseProfession(key: ProfessionKey): boolean {
+    if (profession.value !== null) return false // one-time life pick
+    if (key !== ALCHEMY_PROFESSION) return false // v1: only Alchemy
+    profession.value = key
+    return true
   }
 
-  function canCraft(_key: PillKey): boolean {
-    return false // TODO(slice-7 alchemy agent)
+  function canCraft(key: PillKey): boolean {
+    if (!recipeUnlocked(key)) return false
+    const recipe = findRecipe(key)
+    for (const [matKey, cost] of Object.entries(recipe.cost) as [MaterialKey, number][]) {
+      if (materialCount(matKey) < cost) return false
+    }
+    return true
   }
 
-  function craft(_key: PillKey): boolean {
-    return false // TODO(slice-7 alchemy agent)
+  function craft(key: PillKey): boolean {
+    if (!canCraft(key)) return false
+    const recipe = findRecipe(key)
+    for (const [matKey, cost] of Object.entries(recipe.cost) as [MaterialKey, number][]) {
+      materials.value[matKey] = (materials.value[matKey] ?? 0) - cost
+    }
+    pills.value[key] = pillCount(key) + 1
+    return true
   }
 
   /** Activate a timed pill (replaces any active one). Non-timed pills are held, not activated. */
-  function activatePill(_key: PillKey): boolean {
-    return false // TODO(slice-7 alchemy agent)
+  function activatePill(key: PillKey): boolean {
+    const recipe = findRecipe(key)
+    if (recipe.effect.type !== 'timedQiMult') return false
+    if (pillCount(key) <= 0) return false
+    pills.value[key] = pillCount(key) - 1
+    activePill.value = { key, remaining: recipe.effect.durationSeconds }
+    return true
   }
 
   /**
@@ -99,22 +180,35 @@ export const useAlchemyStore = defineStore('alchemy', () => {
    * clarity charge is held AND the realm is in the recipe's appliesTo list.
    * realm.resetGain folds this in so the SHOWN gain matches the landed gain.
    */
-  function breakthroughGainMult(_realmId: RealmId): Decimal {
-    return decimalOne() // TODO(slice-7 alchemy agent)
+  function breakthroughGainMult(realmId: RealmId): Decimal {
+    const recipe = heldBreakthroughAidFor(realmId)
+    if (!recipe || recipe.effect.type !== 'breakthroughAid') return decimalOne()
+    return new Decimal(recipe.effect.gainMult)
   }
 
   /** Consume one held clarity charge (called by realm.prestige when the mult applied). */
-  function consumeBreakthroughAid(_realmId: RealmId): void {
-    // TODO(slice-7 alchemy agent)
+  function consumeBreakthroughAid(realmId: RealmId): void {
+    const recipe = heldBreakthroughAidFor(realmId)
+    if (!recipe) return // guard: only decrement when a charge would apply
+    pills.value[recipe.key] = pillCount(recipe.key) - 1
   }
 
   /** Consume one held warding pill (called by tribulation.beginTribulation when bonus applied). */
   function consumeWardingPill(): void {
-    // TODO(slice-7 alchemy agent)
+    const recipe = heldWardingRecipe()
+    if (!recipe) return
+    pills.value[recipe.key] = pillCount(recipe.key) - 1
   }
 
-  function update(_diff: number): void {
-    // TODO(slice-7 alchemy agent): tick activePill.remaining; clear at zero.
+  function update(diff: number): void {
+    if (!revealedLatch.value && meets(ALCHEMY_DATA.reveal, buildGameState())) {
+      revealedLatch.value = true
+    }
+    if (activePill.value) {
+      const remaining = activePill.value.remaining - diff
+      if (remaining <= 0) activePill.value = null
+      else activePill.value = { ...activePill.value, remaining }
+    }
   }
 
   function save(): Record<string, unknown> {
@@ -131,6 +225,7 @@ export const useAlchemyStore = defineStore('alchemy', () => {
     materials.value = { ...(s.materials ?? {}) }
     pills.value = { ...(s.pills ?? {}) }
     activePill.value = s.activePill ? { ...s.activePill } : null
+    revealedLatch.value = false
   }
   function fresh(): Record<string, unknown> {
     return freshAlchemySlice() as unknown as Record<string, unknown>
@@ -148,6 +243,7 @@ export const useAlchemyStore = defineStore('alchemy', () => {
     isRevealed,
     materialCount,
     pillCount,
+    recipeUnlocked,
     addMaterial,
     chooseProfession,
     canCraft,

@@ -78,6 +78,18 @@ export const JOURNAL_DATA: JournalData = {
       text: 'The furnace-light fades. In your dantian, something crystalline and permanent settles into place. The Golden Core is yours alone, the weight of every meridian you opened and every impurity you burned away. This is the thing that will outlast the rest.',
     },
     {
+      key: 'firstExpedition',
+      when: { secretRealmClears: 1 },
+      title: 'Between the Folds',
+      text: 'The hidden site closed behind you the way a held breath closes, and what you carried out was real: herb, crystal, or something stranger, warm still with a world that should not exist. You will go back. It will not be there when you look for it the same way twice.',
+    },
+    {
+      key: 'professionChosen',
+      when: { professionChosen: true },
+      title: 'The Alchemist\'s Bench',
+      text: 'You choose the cauldron over the forge-hammer and the ward-brush, not because the others call less loudly, but because this is the one whose failures you can already taste. A profession is a second discipline grafted onto the first. It asks for its own patience.',
+    },
+    {
       key: 'sectJoined',
       when: { sectJoined: true },
       title: 'You Belong Somewhere Now',

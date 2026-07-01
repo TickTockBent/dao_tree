@@ -12,8 +12,11 @@
 //   §5   soul aspect           — completability floor (Formless always available).
 //   §4.3 sect data             — sub-linear exponent, ≥2 archetypes, ascending ats.
 //   §8.1 legacy data           — weight-sum, ascending floors, qiMult ≥ 1.
+//   §6.4 secret realm data     — closed rotation, positive essence inputs, closed rewards.
+//   §7.6 alchemy data          — closed economy, accelerant-only effects, §6.6 optionality.
 
 import { describe, it, expect } from 'vitest'
+import Decimal from 'break_eternity.js'
 import { REALM_DATA, findRealm } from '@/data/realms'
 import { BODY_DATA } from '@/data/body'
 import { GATE_DATA } from '@/data/gates'
@@ -26,6 +29,51 @@ import { HINT_DATA } from '@/data/hints'
 import { JOURNAL_DATA } from '@/data/journal'
 import { LEGACY_DATA } from '@/data/legacy'
 import { AUTOMATION_DATA } from '@/data/automation'
+import { SECRET_REALM_DATA } from '@/data/secret-realm'
+import { ALCHEMY_DATA } from '@/data/alchemy'
+import { meets } from '@/engine/meets'
+import type { GameState } from '@/engine/meets'
+import type { MaterialKey } from '@/engine/types'
+
+/**
+ * A synthetic, fully-empty GameState — built from real REALM_DATA/LATTICE_DATA
+ * shapes (so it satisfies the interface honestly) but at zero progress. Used
+ * only to check that a condition EVALUATES without throwing; it is not
+ * expected to be met.
+ */
+function syntheticEmptyState(): GameState {
+  const realmBest = {} as GameState['realmBest']
+  const realmSubstageLabel = {} as GameState['realmSubstageLabel']
+  const realmSubstageThresholds = {} as GameState['realmSubstageThresholds']
+  for (const r of REALM_DATA) {
+    realmBest[r.id] = new Decimal(0)
+    realmSubstageLabel[r.id] = null
+    const labelMap: Record<string, number> = {}
+    for (const s of r.substages) labelMap[s.label] = s.at
+    realmSubstageThresholds[r.id] = labelMap
+  }
+  const daoNodeTier = {} as GameState['daoNodeTier']
+  for (const node of LATTICE_DATA.nodes) daoNodeTier[node.key] = 0
+  return {
+    qi: new Decimal(0),
+    primaryMeridians: 0,
+    primaryMeridiansAll: false,
+    temperTier: null,
+    realmBest,
+    realmSubstageLabel,
+    realmSubstageThresholds,
+    daoNodeTier,
+    daoElementMaxTier: { metal: 0, wood: 0, water: 0, fire: 0, earth: 0 },
+    daoAnyNodeMaxTier: 0,
+    coreGradeIndex: -1,
+    coreCeilingIndex: 0,
+    sectJoined: false,
+    contributionBest: new Decimal(0),
+    achievements: {},
+    secretRealmClears: 0,
+    professionChosen: false,
+  }
+}
 
 // ---- §9.2 no dead multipliers -----------------------------------------------
 
@@ -263,6 +311,126 @@ describe('§9.3 completability', () => {
     // Every journal entry's `when` condition should use only known hint keys.
     for (const entry of JOURNAL_DATA.entries) {
       expect(Object.keys(entry.when).length).toBeGreaterThan(0)
+    }
+  })
+})
+
+// ---- §6.4 secret realm data --------------------------------------------------
+
+describe('§6.4 secret realm data', () => {
+  const realmOrder = ['q', 'f', 'c', 'n', 's']
+
+  it('rotation period is positive', () => {
+    expect(SECRET_REALM_DATA.rotation.periodSeconds).toBeGreaterThan(0)
+  })
+
+  it('essenceBase is positive', () => {
+    expect(SECRET_REALM_DATA.essenceBase).toBeGreaterThan(0)
+  })
+
+  it('every site unlock references only defined realms/labels', () => {
+    for (const site of SECRET_REALM_DATA.sites) {
+      if (!site.unlock.realm) continue
+      const [realmId, threshold] = site.unlock.realm
+      expect(realmOrder, `${site.key} unlock references unknown realm ${realmId}`).toContain(realmId)
+      if (typeof threshold === 'string') {
+        const labels = findRealm(realmId).substages.map((s) => s.label)
+        expect(labels, `${site.key} unlock references unknown label "${threshold}"`).toContain(threshold)
+      }
+    }
+  })
+
+  it('every essence model declares positive inputs', () => {
+    for (const site of SECRET_REALM_DATA.sites) {
+      const mod = site.modifier
+      expect(mod.rateMult, `${site.key} rateMult is not positive`).toBeGreaterThan(0)
+      if (mod.essenceModel === 'insightRate') {
+        expect(mod.insightScale, `${site.key} insightRate has no positive insightScale`).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  it('every site rewards a material the profession economy defines', () => {
+    const known = new Set(ALCHEMY_DATA.materials.map((m) => m.key))
+    for (const site of SECRET_REALM_DATA.sites) {
+      expect(known.has(site.rewards.material), `${site.key} rewards an undefined material`).toBe(true)
+    }
+  })
+
+  it('at most one site grants a firstClearGlimpseNode, and it names a real lattice node', () => {
+    const withGlimpse = SECRET_REALM_DATA.sites.filter((s) => s.rewards.firstClearGlimpseNode)
+    expect(withGlimpse.length).toBeLessThanOrEqual(1)
+    const knownNodes = LATTICE_DATA.nodes.map((n) => n.key)
+    for (const site of withGlimpse) {
+      expect(knownNodes, `${site.key} glimpse names an unknown lattice node`).toContain(
+        site.rewards.firstClearGlimpseNode,
+      )
+    }
+  })
+
+  it('every site declares positive durationSeconds and cooldownSeconds', () => {
+    for (const site of SECRET_REALM_DATA.sites) {
+      expect(site.durationSeconds, `${site.key} durationSeconds is not positive`).toBeGreaterThan(0)
+      expect(site.cooldownSeconds, `${site.key} cooldownSeconds is not positive`).toBeGreaterThan(0)
+    }
+  })
+
+  it('reveal + every site unlock parses under the meets() grammar without throwing', () => {
+    const state = syntheticEmptyState()
+    expect(() => meets(SECRET_REALM_DATA.reveal, state)).not.toThrow()
+    for (const site of SECRET_REALM_DATA.sites) {
+      expect(() => meets(site.unlock, state)).not.toThrow()
+    }
+  })
+})
+
+// ---- §7.6 alchemy data --------------------------------------------------------
+
+describe('§7.6 alchemy data', () => {
+  it('every recipe cost references materials that some site actually drops (closed economy)', () => {
+    const dropped = new Set(SECRET_REALM_DATA.sites.map((s) => s.rewards.material))
+    for (const recipe of ALCHEMY_DATA.recipes) {
+      for (const matKey of Object.keys(recipe.cost) as MaterialKey[]) {
+        expect(dropped.has(matKey), `${recipe.key} costs ${matKey}, which no site drops — dead content`).toBe(true)
+      }
+    }
+  })
+
+  it('every effect value is an accelerant (mult >= 1 / poolBonus > 0 / duration > 0)', () => {
+    for (const recipe of ALCHEMY_DATA.recipes) {
+      const effect = recipe.effect
+      if (effect.type === 'timedQiMult') {
+        expect(effect.mult, `${recipe.key} mult < 1`).toBeGreaterThanOrEqual(1)
+        expect(effect.durationSeconds, `${recipe.key} durationSeconds is not positive`).toBeGreaterThan(0)
+      } else if (effect.type === 'breakthroughAid') {
+        expect(effect.gainMult, `${recipe.key} gainMult < 1`).toBeGreaterThanOrEqual(1)
+        expect(effect.appliesTo.length, `${recipe.key} appliesTo is empty`).toBeGreaterThan(0)
+      } else if (effect.type === 'tribulationPoolBonus') {
+        expect(effect.poolBonus, `${recipe.key} poolBonus is not positive`).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  it('reveal + every recipe unlock parses under the meets() grammar without throwing', () => {
+    const state = syntheticEmptyState()
+    expect(() => meets(ALCHEMY_DATA.reveal, state)).not.toThrow()
+    for (const recipe of ALCHEMY_DATA.recipes) {
+      expect(() => meets(recipe.unlock, state)).not.toThrow()
+    }
+  })
+
+  it('§6.6: tribulation poolBonus stays well under a roughly-full preparedness pool', () => {
+    // "Roughly full" = the sum of the pool's own term weights (each term
+    // individually caps near its weight; summed, this is the practical
+    // ceiling a well-prepared cultivator can bank). Optional means optional:
+    // no purchasable bonus should approach a meaningful fraction of it.
+    const pool = SETPIECE_DATA.firstTribulation.pool
+    const fullPool =
+      pool.weightTemper + pool.weightMeridians + pool.weightCoreGrade + pool.weightTechniques + pool.qiFuelWeight
+    for (const recipe of ALCHEMY_DATA.recipes) {
+      if (recipe.effect.type !== 'tribulationPoolBonus') continue
+      const fraction = recipe.effect.poolBonus / fullPool
+      expect(fraction, `${recipe.key} poolBonus is >= 15% of a full pool`).toBeLessThan(0.15)
     }
   })
 })

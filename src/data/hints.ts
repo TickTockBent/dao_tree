@@ -69,9 +69,22 @@ export const HINT_DATA: HintData = {
     },
     {
       // Core forged but below its Foundation ceiling — warm it via refinement.
+      // Sits ABOVE the secret-realm nudge: critical-path core guidance keeps
+      // priority over optional accelerant content (§6.6 spirit).
       key: 'warmCore',
       when: { coreForged: true, coreBelowCeiling: true },
       text: 'Warm your core. Each full bar raises its grade one tier toward the Foundation ceiling.',
+    },
+    {
+      // Secret Realms revealed (slice 7, same beat as the forged core) but no
+      // expedition cleared yet. Uses the secretRealmUnexplored SHADOW key (the
+      // sectUnjoined idiom) so the nudge goes quiet after the first clear —
+      // the core `secretRealmClears` clause is >= only, which would pin this
+      // row forever (the review catch). Window: core at ceiling, first clear
+      // pending; coreComplete resumes below once a run has been cleared.
+      key: 'exploreSecretRealm',
+      when: { coreForged: true, secretRealmUnexplored: true },
+      text: 'A secret realm has revealed itself, its entrance shifting between hidden sites. Step into the one that is active; what you gather there feeds the alchemist\'s cauldron and deepens your Insight.',
     },
     {
       // Core forged and AT its ceiling — tease the next horizon.

@@ -17,7 +17,10 @@ import { useBodyStore } from '@/stores/body'
 import { useRealmStore } from '@/stores/realm'
 import { useForgeStore } from '@/stores/forge'
 import { usePipelinesStore } from '@/stores/pipelines'
+import { useSecretRealmStore } from '@/stores/secretRealm'
+import { useAlchemyStore } from '@/stores/alchemy'
 import { findRealm } from '@/data/realms'
+import { SETPIECE_DATA } from '@/data/setpieces'
 
 // ---- Pinned budgets (from the old pacing sim, pass-3 tune) ------------------
 // Pinned budgets from the old pacing sim (reference targets for future parity pins).
@@ -48,7 +51,30 @@ interface SimState {
   maxIterations: number
 }
 
+/**
+ * tsx runs this script under Node, which has no `localStorage`. `bootSim()`
+ * calls `game.load()` (the same boot path `main.ts` uses in the browser),
+ * which reads options/save through it. Shim a no-op in-memory store here —
+ * confined to this file — so the existing boot path works headlessly without
+ * touching `engine/save.ts` or `stores/game.ts`. This was never exercised
+ * before the harden pass: `runPacingSim` was exported but never invoked, so
+ * `npm run sim` silently did nothing (see the bottom of this file).
+ */
+function installLocalStorageShim(): void {
+  if (typeof globalThis.localStorage !== 'undefined') return
+  const memory = new Map<string, string>()
+  globalThis.localStorage = {
+    getItem: (key: string) => memory.get(key) ?? null,
+    setItem: (key: string, value: string) => { memory.set(key, value) },
+    removeItem: (key: string) => { memory.delete(key) },
+    clear: () => { memory.clear() },
+    key: (index: number) => Array.from(memory.keys())[index] ?? null,
+    get length() { return memory.size },
+  } as Storage
+}
+
 function bootSim(): void {
+  installLocalStorageShim()
   setActivePinia(createPinia())
   const game = useGameStore()
   game.load()
@@ -80,6 +106,25 @@ function prestigeRealm(realmId: 'q' | 'f' | 'c' | 'n' | 's', state: SimState): v
 }
 
 /**
+ * Repeatedly prestige a realm until `predicate` holds. Fails loudly past the
+ * iteration cap instead of hanging — a stalled unlock gate or a zero-gain
+ * loop is a policy bug worth surfacing, not an infinite `npm run sim`.
+ */
+function prestigeUntil(realmId: 'q' | 'f' | 'c' | 'n' | 's', predicate: () => boolean, state: SimState): void {
+  let iterations = 0
+  while (!predicate()) {
+    prestigeRealm(realmId, state)
+    iterations++
+    if (iterations > state.maxIterations) {
+      throw new Error(
+        `prestigeUntil('${realmId}') exceeded ${state.maxIterations} iterations — ` +
+          'an unlock gate is likely unmet or a prestige is yielding zero gain',
+      )
+    }
+  }
+}
+
+/**
  * Diligent policy: climb the spine, open meridians, temper, reveal+buy lattice,
  * join sect, forge steady, pick aspect, face tribulation.
  */
@@ -96,9 +141,7 @@ function runDiligent(state: SimState): void {
   }
 
   // Prestige q enough to reach 6th Level (at:90) for Foundation unlock.
-  while (realm.realmBest('q').toNumber() < 90) {
-    prestigeRealm('q', state)
-  }
+  prestigeUntil('q', () => realm.realmBest('q').toNumber() >= 90, state)
 
   // Phase 2: Foundation Establishment.
   // Open 4 meridians (already done), temper to tendon (level 10).
@@ -109,28 +152,24 @@ function runDiligent(state: SimState): void {
   }
 
   // Prestige f to build Foundation best.
-  while (realm.realmBest('f').toNumber() < 1) {
-    prestigeRealm('f', state)
-  }
+  prestigeUntil('f', () => realm.realmBest('f').toNumber() >= 1, state)
 
   // Phase 3: Core Formation (forge).
-  // Bank Foundation fuel then forge.
+  // Bank Foundation fuel THEN forge. `c` only unlocks once `f.best` reaches
+  // Great Circle (data-derived, not the lower forgeReq fuel minimum) — the
+  // fuel bank must clear whichever threshold is higher, or forge.performForge
+  // silently no-ops (forgeIsAvailable requires realm.isUnlocked('c')).
   const forge = useForgeStore()
-  const fState = realm.stateOf('f')
-  const fuelTarget = new Decimal(25) // forgeReq
-  while (new Decimal(fState.points).lt(fuelTarget)) {
-    prestigeRealm('f', state)
-  }
+  const fRealm = findRealm('f')
+  const greatCircleAt = fRealm.substages.find((s) => s.label === 'Great Circle')!.at
+  const fuelTarget = Math.max(SETPIECE_DATA.forge.forgeReq, greatCircleAt)
+  prestigeUntil('f', () => new Decimal(realm.stateOf('f').points).gte(fuelTarget), state)
   forge.performForge('steady')
 
   // Phase 4: Climb toward Nascent Soul.
   // Continue prestiging c + n to reach n.
-  while (realm.realmBest('c').toNumber() < 2) {
-    prestigeRealm('c', state)
-  }
-  while (realm.realmBest('n').toNumber() < 1) {
-    prestigeRealm('n', state)
-  }
+  prestigeUntil('c', () => realm.realmBest('c').toNumber() >= 2, state)
+  prestigeUntil('n', () => realm.realmBest('n').toNumber() >= 1, state)
 
   // Pick Formless aspect (always available).
   const soulAspectRealm = findRealm('n')
@@ -140,17 +179,11 @@ function runDiligent(state: SimState): void {
   }
 
   // Phase 5: Climb toward Soul Formation.
-  while (realm.realmBest('n').toNumber() < 175) {
-    prestigeRealm('n', state)
-  }
-  while (realm.realmBest('s').toNumber() < 1) {
-    prestigeRealm('s', state)
-  }
+  prestigeUntil('n', () => realm.realmBest('n').toNumber() >= 175, state)
+  prestigeUntil('s', () => realm.realmBest('s').toNumber() >= 1, state)
 
   // Continue climbing s toward tribulation trigger.
-  while (realm.realmBest('s').toNumber() < 320) {
-    prestigeRealm('s', state)
-  }
+  prestigeUntil('s', () => realm.realmBest('s').toNumber() >= 320, state)
 }
 
 // ---- Main -------------------------------------------------------------------
@@ -192,4 +225,27 @@ export function runPacingSim(): void {
   } else {
     console.log('\nPASS: Diligent profile reached Soul Formation')
   }
+
+  // §6.6 no-engagement proof (slice 7): the diligent policy never touches the
+  // Secret Realm or Alchemy systems (runDiligent calls neither store), so a
+  // player who ignores them entirely must still reach Soul Formation with
+  // zero expedition clears and zero pills crafted. These are ACCELERANTS,
+  // never requirements — this is the pacing sim's proof of that invariant.
+  const secretRealm = useSecretRealmStore()
+  const alchemy = useAlchemyStore()
+  const pillsHeld = Object.values(alchemy.pills).reduce((sum, n) => sum + (n ?? 0), 0)
+  console.log(`\nSecret Realm clears (diligent, zero-touch policy): ${secretRealm.totalClears}`)
+  console.log(`Alchemy pills held (diligent, zero-touch policy): ${pillsHeld}`)
+  if (secretRealm.totalClears !== 0 || pillsHeld !== 0) {
+    console.error('FAIL: diligent policy engaged optional slice-7 systems (should be zero-touch)')
+  } else {
+    console.log('PASS: diligent policy reached Soul Formation with zero expedition clears and zero pills')
+  }
 }
+
+// Executed via `npm run sim` (tsx src/sim/pacing.ts). Nothing else imports
+// this module, so the top-level call below is the sim's sole entry point —
+// the M7 scaffold exported `runPacingSim` but never wired an invocation,
+// leaving `npm run sim` a silent no-op; wiring it here so the harden pass's
+// optionality assertions (and every future addition to this sim) actually run.
+runPacingSim()

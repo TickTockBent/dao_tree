@@ -9,6 +9,8 @@ import { useJournalStore } from '@/stores/journal'
 import { useHintsStore } from '@/stores/hints'
 import { useAutomationStore } from '@/stores/automation'
 import { useBodyStore } from '@/stores/body'
+import { useForgeStore } from '@/stores/forge'
+import { useSecretRealmStore } from '@/stores/secretRealm'
 
 // ---- Sect ------------------------------------------------------------------
 
@@ -166,6 +168,30 @@ describe('hints store', () => {
     // At best=659, 6th Level (at:90) is reached, so "breakToFoundation" fires
     // (it's higher in the cascade than "openLattice" at 4th Level).
     expect(hints.hintText).toContain('break through')
+  })
+
+  it('slice-7 nudge never shadows core guidance (the review-catch ordering)', () => {
+    // The exploreSecretRealm row must yield to warmCore while the core is
+    // below ceiling, fire in the at-ceiling window while unexplored, and go
+    // quiet (coreComplete resumes) after the first expedition clear.
+    const body = useBodyStore()
+    const forge = useForgeStore()
+    const secretRealm = useSecretRealmStore()
+    const hints = useHintsStore()
+
+    // Core forged BELOW ceiling: a Solid foundation (band 2) has ceiling
+    // 'upper'; a core at its band's baseCore ('middle') is below it.
+    body.foundationGrade = 2
+    body.coreGrade = forge.coreCeilingGradeIndex - 1
+    expect(hints.hintText).toContain('Warm your core')
+
+    // Core AT ceiling, no clears yet → the secret-realm nudge fires.
+    body.coreGrade = forge.coreCeilingGradeIndex
+    expect(hints.hintText).toContain('secret realm')
+
+    // First clear recorded → the nudge goes quiet, coreComplete resumes.
+    secretRealm.clears.verdantHollow = 1
+    expect(hints.hintText).toContain('Golden Core is complete')
   })
 })
 
