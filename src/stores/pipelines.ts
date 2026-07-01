@@ -11,7 +11,7 @@
 //   baseRate × meridianMult × temperMult × realmMult × gateMult ×
 //   coreGradeMult × daoNodeQiMult × stanceQiMult × soulAspectQiMult ×
 //   sectStipendQiMult × techniqueQiMult × scarQiMult × temperedQiMult ×
-//   legacyQiMult × activePillQiMult
+//   legacyQiMult × activePillQiMult × trialQiMult × daoHeartQiMult
 
 import { defineStore } from 'pinia'
 import { computed } from 'vue'
@@ -31,6 +31,7 @@ import { useForgeStore } from './forge'
 import { useScarStore } from './scar'
 import { useLegacyStore } from './legacy'
 import { useAlchemyStore } from './alchemy'
+import { useHeartDemonsStore } from './heartDemons'
 
 export const usePipelinesStore = defineStore('pipelines', () => {
   const body = useBodyStore()
@@ -42,6 +43,7 @@ export const usePipelinesStore = defineStore('pipelines', () => {
   const scar = useScarStore()
   const legacy = useLegacyStore()
   const alchemy = useAlchemyStore()
+  const heartDemons = useHeartDemonsStore()
 
   // ---- Dao/stance/aspect/technique/legacy factors (identity until their slice lands) ----
 
@@ -163,7 +165,9 @@ export const usePipelinesStore = defineStore('pipelines', () => {
       .times(scar.scarQiMult)
       .times(scar.temperedQiMult)
       .times(legacyQiMult.value)
-      .times(alchemy.activePillQiMult),
+      .times(alchemy.activePillQiMult)
+      .times(heartDemons.trialQiMult)
+      .times(heartDemons.daoHeartQiMult),
   )
 
   // ---- Insight/sec pipeline (M4 wires the dao trickle; stances/techniques compound it) ----

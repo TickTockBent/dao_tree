@@ -14,6 +14,7 @@ import { SETPIECE_DATA, forgeGradeByKey } from '@/data/setpieces'
 import { findRealm } from '@/data/realms'
 import { useBodyStore } from '@/stores/body'
 import { useRealmStore } from '@/stores/realm'
+import { useHeartDemonsStore } from '@/stores/heartDemons'
 import type { ForgePushKey } from '@/engine/types'
 
 export interface ForgeSlice {
@@ -109,6 +110,10 @@ export const useForgeStore = defineStore('forge', () => {
     if (!forgeIsAvailable.value) return -1
     const option = SETPIECE_DATA.forge.pushOptions.find((p) => p.key === pushKey)!
     if (!canAffordForgePush(pushKey)) return -1
+
+    // Heart Demons (slice 8, §7.4 "reckless forge pushes"): the PUSH is the
+    // corruption source, win or crack — Steady adds nothing (data-driven).
+    useHeartDemonsStore().onForgePush(pushKey)
 
     // Spend the fuel (f.points).
     const fuelCost = forgeFuelCost(pushKey)

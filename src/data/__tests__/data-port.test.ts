@@ -151,7 +151,7 @@ describe('GATE_DATA', () => {
 })
 
 describe('TREE_DATA', () => {
-  it('has 5 tree-scoped realms + 6 life + 2 eternal', () => {
+  it('has 5 tree-scoped realms + 7 life + 2 eternal', () => {
     const scopes = Object.entries(TREE_DATA.layers).map(([id, e]) => `${id}:${e.scope}`)
     expect(scopes).toEqual([
       'q:tree', 'f:tree', 'c:tree', 'n:tree', 's:tree',
@@ -159,6 +159,8 @@ describe('TREE_DATA', () => {
       'journal:eternal', 'legacy:eternal',
       // Slice 7: expeditions + the profession are life-scoped (never cascade-reset).
       'secret:life', 'alchemy:life',
+      // Slice 8: corruption + Dao Heart stacks are life-scoped.
+      'demons:life',
     ])
   })
 })

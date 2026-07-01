@@ -62,6 +62,10 @@ export interface ConditionClauses {
   secretRealmClears: number
   /** The Act I profession slot has been picked (slice 7). */
   professionChosen: true
+  /** Heart-demon corruption >= N (slice 8). */
+  corruption: number
+  /** Dao Heart stacks (cleared Demon Trials) >= N (slice 8). */
+  daoHeartStacks: number
 }
 
 /** A condition object: any subset of clauses, AND-combined. Empty = always true. */
@@ -98,6 +102,8 @@ export interface HintClauses extends ConditionClauses {
    * flagged for the next hint-grammar touch.
    */
   secretRealmUnexplored: true
+  /** A Demon Trial currently holds the cultivator (slice 8; 9th shadow key — same debt). */
+  demonTrialActive: true
 }
 
 export type HintCondition = Partial<HintClauses>
@@ -142,6 +148,10 @@ export interface GameState {
   secretRealmClears: number
   /** Whether the Act I profession slot has been picked (slice 7). */
   professionChosen: boolean
+  /** Heart-demon corruption (slice 8). */
+  corruption: number
+  /** Dao Heart stacks earned from cleared Demon Trials (slice 8). */
+  daoHeartStacks: number
 }
 
 // ---- Evaluation ------------------------------------------------------------
@@ -197,6 +207,10 @@ function clauseHolds<K extends keyof ConditionClauses>(
       return state.secretRealmClears >= (value as number)
     case 'professionChosen':
       return state.professionChosen
+    case 'corruption':
+      return state.corruption >= (value as number)
+    case 'daoHeartStacks':
+      return state.daoHeartStacks >= (value as number)
     default:
       // Exhaustiveness check — unknown keys should never reach here because
       // the type system rejects them at the call site. This default is
@@ -254,6 +268,8 @@ export interface HintState extends GameState {
   scarHealed: boolean
   /** True if the secret realms are revealed but no expedition was ever cleared. */
   secretRealmUnexplored: boolean
+  /** True while a Demon Trial is active. */
+  demonTrialActive: boolean
 }
 
 /**
@@ -290,6 +306,9 @@ export function evaluateHintCondition(condition: HintCondition, state: HintState
         break
       case 'secretRealmUnexplored':
         if (!state.secretRealmUnexplored) return false
+        break
+      case 'demonTrialActive':
+        if (!state.demonTrialActive) return false
         break
       default:
         // Core grammar key — delegate to meets().

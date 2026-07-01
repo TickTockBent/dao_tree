@@ -20,6 +20,7 @@ import { useForgeStore } from '@/stores/forge'
 import { useScarStore } from '@/stores/scar'
 import { useLegacyStore } from '@/stores/legacy'
 import { useAlchemyStore } from '@/stores/alchemy'
+import { useHeartDemonsStore } from '@/stores/heartDemons'
 import { TECHNIQUE_DATA } from '@/data/techniques'
 
 export interface TribulationSlice {
@@ -69,6 +70,7 @@ export const useTribulationStore = defineStore('tribulation', () => {
   const scar = useScarStore()
   const legacy = useLegacyStore()
   const alchemy = useAlchemyStore()
+  const heartDemons = useHeartDemonsStore()
 
   const tribActive = ref(false)
   const tribElapsed = ref(0)
@@ -185,6 +187,10 @@ export const useTribulationStore = defineStore('tribulation', () => {
     const gradeRow = cfg.grades[gradeIndex]!
 
     tribActive.value = false
+
+    // Heart Demons (slice 8, §7.4): a Failed or Scarred outcome marks the
+    // heart as well as the soul; clean grades add nothing (data-driven).
+    heartDemons.onTribulationResolved(gradeRow.key)
 
     if (gradeRow.passes) {
       // Latch the passing grade; NEVER downgrade a higher grade.

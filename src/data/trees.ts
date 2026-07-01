@@ -49,5 +49,9 @@ export const TREE_DATA: TreeData = {
     // outside this registry (design §6.4: nothing outside the expedition resets).
     secret: { scope: 'life' },
     alchemy: { scope: 'life' },
+    // Slice 8: corruption + Dao Heart stacks survive realm breakthroughs
+    // (the permanent anti-rush tension, §7.4). Samsara carry is a slice-10
+    // decision — eternal promotion recorded as an open question there.
+    demons: { scope: 'life' },
   },
 }

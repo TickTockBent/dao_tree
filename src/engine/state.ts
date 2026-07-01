@@ -27,6 +27,7 @@ import { useGateStore } from '@/stores/gate'
 import { useForgeStore } from '@/stores/forge'
 import { useSecretRealmStore } from '@/stores/secretRealm'
 import { useAlchemyStore } from '@/stores/alchemy'
+import { useHeartDemonsStore } from '@/stores/heartDemons'
 
 /** Build the GameState snapshot consumed by meets(). */
 export function buildGameState(): GameState {
@@ -39,6 +40,7 @@ export function buildGameState(): GameState {
   const forge = useForgeStore()
   const secretRealm = useSecretRealmStore()
   const alchemy = useAlchemyStore()
+  const heartDemons = useHeartDemonsStore()
 
   // Realm bests + sub-stage labels + substage thresholds.
   const realmBest = {} as Record<RealmId, Decimal>
@@ -99,6 +101,8 @@ export function buildGameState(): GameState {
     achievements,
     secretRealmClears: secretRealm.totalClears,
     professionChosen: alchemy.professionChosen,
+    corruption: heartDemons.corruption,
+    daoHeartStacks: heartDemons.daoHeartStacks,
   }
 }
 

@@ -22,6 +22,7 @@ export type LayerId =
   | 'legacy' // Act I Legacy Grade (eternal)
   | 'secret' // Secret Realm expeditions (slice 7; expedition run-state is locally scoped)
   | 'alchemy' // Alchemy profession (slice 7; the Act I profession slot)
+  | 'demons' // Heart Demons + Demon Trials (slice 8; the permanent anti-rush tension)
 
 /** All ids that carry a numeric prestige row in the tree (the climb spine). */
 export type RealmLayerId = RealmId
@@ -130,6 +131,7 @@ export type AutomationKey =
 export type HintKey =
   | 'actComplete'
   | 'faceTribulation'
+  | 'faceDemonTrial' // slice 8: a Demon Trial holds the cultivator
   | 'healScar'
   | 'climbSoulFormation'
   | 'chooseAspect'
@@ -154,6 +156,8 @@ export type JournalEntryKey =
   | 'coreForged'
   | 'firstExpedition' // slice 7: first Secret Realm expedition clear
   | 'professionChosen' // slice 7: the Act I profession slot is picked
+  | 'corruptionTouched' // slice 8: the first heart-demon corruption gained
+  | 'firstDaoHeart' // slice 8: first Demon Trial cleared
   | 'sectJoined'
   | 'nascentSoul'
   | 'aspectChosen'

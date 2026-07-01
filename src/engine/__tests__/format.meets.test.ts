@@ -61,6 +61,8 @@ describe('meets', () => {
     achievements: {},
     secretRealmClears: 0,
     professionChosen: false,
+    corruption: 0,
+    daoHeartStacks: 0,
   }
 
   it('empty condition is always true', () => {

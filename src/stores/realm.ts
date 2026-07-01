@@ -18,6 +18,7 @@ import { useGameStore } from './game'
 import { useBodyStore } from './body'
 import { useSectStore } from './sect'
 import { useAlchemyStore } from './alchemy'
+import { useHeartDemonsStore } from './heartDemons'
 import type { RealmId } from '@/engine/types'
 
 // ---- State shape ----------------------------------------------------------
@@ -109,6 +110,7 @@ export const useRealmStore = defineStore('realm', () => {
   const game = useGameStore()
   const body = useBodyStore()
   const alchemy = useAlchemyStore()
+  const heartDemons = useHeartDemonsStore()
 
   const slice = ref<RealmSlice>(freshRealmSlice())
 
@@ -204,8 +206,20 @@ export const useRealmStore = defineStore('realm', () => {
     const aidApplied = alchemy.breakthroughGainMult(id).gt(decimalOne())
 
     // onPrestige runs BEFORE the cascade resets q (meridians/temper/q.best intact).
-    if (r.graded) computeAndStoreFoundationGrade(body)
+    if (r.graded) {
+      // Heart Demons (slice 8, §7.4 "rushed low-grade breakthroughs"): the
+      // LIVE score band of THIS prestige — not the stored best — measures the
+      // rush, so a weak breakthrough corrupts even a decorated cultivator.
+      // Computed BEFORE computeAndStoreFoundationGrade so both read the same
+      // pre-cascade state.
+      const liveBandIndex = foundationBandIndexForScore(foundationGradeScore(body))
+      const liveBand = findRealm('f').grade!.bands[liveBandIndex]
+      if (liveBand) heartDemons.onGradedPrestige(liveBand.tier)
+      computeAndStoreFoundationGrade(body)
+    }
     if (aidApplied) alchemy.consumeBreakthroughAid(id)
+    // Demon Trial objective progress (slice 8): every realm breakthrough counts.
+    heartDemons.onTrialPrestige()
 
     // Award points: points += gain; best = max(best, points); total += gain.
     const s = stateOf(id)

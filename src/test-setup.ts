@@ -18,6 +18,7 @@ import { useAutomationStore } from '@/stores/automation'
 import { usePipelinesStore } from '@/stores/pipelines'
 import { useSecretRealmStore } from '@/stores/secretRealm'
 import { useAlchemyStore } from '@/stores/alchemy'
+import { useHeartDemonsStore } from '@/stores/heartDemons'
 
 /** Boot a fresh Pinia + register all stores (like main.ts, without Vue/loop). */
 export function bootTestStores(): void {
@@ -39,6 +40,7 @@ export function bootTestStores(): void {
   const pipelines = usePipelinesStore()
   const secretRealm = useSecretRealmStore()
   const alchemy = useAlchemyStore()
+  const heartDemons = useHeartDemonsStore()
 
   game.registerSliceProvider({ id: 'b', save: body.save, load: body.load, fresh: body.fresh })
   game.registerSliceProvider({ id: 'realms', save: realm.save, load: realm.load, fresh: realm.fresh })
@@ -51,6 +53,7 @@ export function bootTestStores(): void {
   game.registerSliceProvider({ id: 'journal', save: journal.save, load: journal.load, fresh: journal.fresh })
   game.registerSliceProvider({ id: 'secret', save: secretRealm.save, load: secretRealm.load, fresh: secretRealm.fresh })
   game.registerSliceProvider({ id: 'alchemy', save: alchemy.save, load: alchemy.load, fresh: alchemy.fresh })
+  game.registerSliceProvider({ id: 'demons', save: heartDemons.save, load: heartDemons.load, fresh: heartDemons.fresh })
 
   game.registerUpdater({ id: 'body', update: body.update })
   game.registerUpdater({ id: 'dao', update: dao.update })
@@ -66,6 +69,7 @@ export function bootTestStores(): void {
   game.registerUpdater({ id: 'automation', update: automation.update })
   game.registerUpdater({ id: 'secretRealm', update: secretRealm.update })
   game.registerUpdater({ id: 'alchemy', update: alchemy.update })
+  game.registerUpdater({ id: 'heartDemons', update: heartDemons.update })
 
   game.registerAutomation({ id: 'automation', automate: automation.automate })
 

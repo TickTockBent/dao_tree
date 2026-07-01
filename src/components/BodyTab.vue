@@ -8,6 +8,7 @@ import { BODY_DATA, findBodyBuyable, temperTierForLevel } from '@/data/body'
 import { SETPIECE_DATA } from '@/data/setpieces'
 import { format } from '@/engine/format'
 import SoulAspectPanel from './SoulAspectPanel.vue'
+import HeartDemonsPanel from './HeartDemonsPanel.vue'
 
 const body = useBodyStore()
 const forge = useForgeStore()
@@ -104,6 +105,8 @@ const temperProgress = computed(() => {
     </section>
 
     <SoulAspectPanel />
+
+    <HeartDemonsPanel />
 
     <section class="panel">
       <h3>Scar</h3>

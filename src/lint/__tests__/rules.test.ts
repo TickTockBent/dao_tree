@@ -72,6 +72,8 @@ function syntheticEmptyState(): GameState {
     achievements: {},
     secretRealmClears: 0,
     professionChosen: false,
+    corruption: 0,
+    daoHeartStacks: 0,
   }
 }
 
