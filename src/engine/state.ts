@@ -25,6 +25,8 @@ import { useDaoStore } from '@/stores/dao'
 import { useSectStore } from '@/stores/sect'
 import { useGateStore } from '@/stores/gate'
 import { useForgeStore } from '@/stores/forge'
+import { useSecretRealmStore } from '@/stores/secretRealm'
+import { useAlchemyStore } from '@/stores/alchemy'
 
 /** Build the GameState snapshot consumed by meets(). */
 export function buildGameState(): GameState {
@@ -35,6 +37,8 @@ export function buildGameState(): GameState {
   const sect = useSectStore()
   const gate = useGateStore()
   const forge = useForgeStore()
+  const secretRealm = useSecretRealmStore()
+  const alchemy = useAlchemyStore()
 
   // Realm bests + sub-stage labels + substage thresholds.
   const realmBest = {} as Record<RealmId, Decimal>
@@ -93,6 +97,8 @@ export function buildGameState(): GameState {
     sectJoined: sect.joined,
     contributionBest: sect.contributionBestDecimal,
     achievements,
+    secretRealmClears: secretRealm.totalClears,
+    professionChosen: alchemy.professionChosen,
   }
 }
 

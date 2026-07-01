@@ -17,6 +17,7 @@ import { REALM_DATA, findRealm, substageLabelAtBest } from '@/data/realms'
 import { useGameStore } from './game'
 import { useBodyStore } from './body'
 import { useSectStore } from './sect'
+import { useAlchemyStore } from './alchemy'
 import type { RealmId } from '@/engine/types'
 
 // ---- State shape ----------------------------------------------------------
@@ -107,6 +108,7 @@ function foundationGradeMult(body: ReturnType<typeof useBodyStore>): Decimal {
 export const useRealmStore = defineStore('realm', () => {
   const game = useGameStore()
   const body = useBodyStore()
+  const alchemy = useAlchemyStore()
 
   const slice = ref<RealmSlice>(freshRealmSlice())
 
@@ -171,6 +173,9 @@ export const useRealmStore = defineStore('realm', () => {
     const r = findRealm(id)
     let gain = game.points.div(r.reqBase).pow(r.gainExp)
     if (r.graded) gain = gain.times(foundationGradeMult(body))
+    // Alchemy breakthrough aid (slice 7): folded HERE so the shown gain matches
+    // the landed gain while a clarity charge is held; identity otherwise.
+    gain = gain.times(alchemy.breakthroughGainMult(id))
     gain = gain.pow(1) // TMT gainExp field is the constant 1.
     return gain.floor().max(0)
   }
@@ -180,7 +185,9 @@ export const useRealmStore = defineStore('realm', () => {
     const r = findRealm(id)
     const nextGain = resetGain(id).add(1)
     // Invert: nextGain = (points/reqBase)^gainExp × gainMult → points = (nextGain/gainMult)^(1/gainExp) × reqBase.
-    const gainMult = r.graded ? foundationGradeMult(body) : decimalOne()
+    // The alchemy aid factor is part of gainMult so the shown nextAt stays honest while a charge is held.
+    let gainMult = r.graded ? foundationGradeMult(body) : decimalOne()
+    gainMult = gainMult.times(alchemy.breakthroughGainMult(id))
     return nextGain.div(gainMult).root(r.gainExp).times(r.reqBase).max(r.reqBase).ceil()
   }
 
@@ -193,9 +200,12 @@ export const useRealmStore = defineStore('realm', () => {
     if (!canReset(id)) return
     const r = findRealm(id)
     const gain = resetGain(id)
+    // A held clarity charge boosted this gain (folded in resetGain) — consume it.
+    const aidApplied = alchemy.breakthroughGainMult(id).gt(decimalOne())
 
     // onPrestige runs BEFORE the cascade resets q (meridians/temper/q.best intact).
     if (r.graded) computeAndStoreFoundationGrade(body)
+    if (aidApplied) alchemy.consumeBreakthroughAid(id)
 
     // Award points: points += gain; best = max(best, points); total += gain.
     const s = stateOf(id)

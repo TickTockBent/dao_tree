@@ -20,9 +20,25 @@ export type LayerId =
   | 'sect' // Sect standing
   | 'journal' // Narrative journal (eternal)
   | 'legacy' // Act I Legacy Grade (eternal)
+  | 'secret' // Secret Realm expeditions (slice 7; expedition run-state is locally scoped)
+  | 'alchemy' // Alchemy profession (slice 7; the Act I profession slot)
 
 /** All ids that carry a numeric prestige row in the tree (the climb spine). */
 export type RealmLayerId = RealmId
+
+// ---- Secret Realms + professions (slice 7) ---------------------------------
+
+/** The three v1 Secret Realm sites (design §6.4). */
+export type SecretRealmSiteKey = 'verdantHollow' | 'invertedSpiritLand' | 'shatteredStarVault'
+
+/** Expedition materials — produced by Secret Realms, consumed by professions (§7.6). */
+export type MaterialKey = 'spiritHerb' | 'essenceCrystal' | 'beastCore'
+
+/** The profession slots. Act I opens one; only Alchemy is implemented in v1. */
+export type ProfessionKey = 'alchemy' | 'artifice' | 'formations'
+
+/** Alchemy v1 recipe/pill keys (recipe and its product share a key). */
+export type PillKey = 'gatheringPill' | 'clarityPill' | 'heavenWardingPill'
 
 // ---- Elements + lattice ----------------------------------------------------
 

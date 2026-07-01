@@ -11,7 +11,7 @@
 //   baseRate × meridianMult × temperMult × realmMult × gateMult ×
 //   coreGradeMult × daoNodeQiMult × stanceQiMult × soulAspectQiMult ×
 //   sectStipendQiMult × techniqueQiMult × scarQiMult × temperedQiMult ×
-//   legacyQiMult
+//   legacyQiMult × activePillQiMult
 
 import { defineStore } from 'pinia'
 import { computed } from 'vue'
@@ -30,6 +30,7 @@ import { useGateStore } from './gate'
 import { useForgeStore } from './forge'
 import { useScarStore } from './scar'
 import { useLegacyStore } from './legacy'
+import { useAlchemyStore } from './alchemy'
 
 export const usePipelinesStore = defineStore('pipelines', () => {
   const body = useBodyStore()
@@ -40,6 +41,7 @@ export const usePipelinesStore = defineStore('pipelines', () => {
   const forge = useForgeStore()
   const scar = useScarStore()
   const legacy = useLegacyStore()
+  const alchemy = useAlchemyStore()
 
   // ---- Dao/stance/aspect/technique/legacy factors (identity until their slice lands) ----
 
@@ -160,7 +162,8 @@ export const usePipelinesStore = defineStore('pipelines', () => {
       .times(techniqueQiMult.value)
       .times(scar.scarQiMult)
       .times(scar.temperedQiMult)
-      .times(legacyQiMult.value),
+      .times(legacyQiMult.value)
+      .times(alchemy.activePillQiMult),
   )
 
   // ---- Insight/sec pipeline (M4 wires the dao trickle; stances/techniques compound it) ----

@@ -108,6 +108,24 @@ export const useDaoStore = defineStore('dao', () => {
     return true
   }
 
+  /**
+   * Grant a FREE Glimpse (tier 1) of a node — the secret-realm first-clear
+   * find (slice 7, §6.4 "Dao Glimpses" as expedition rewards). Only fires on
+   * an unowned node; deliberately bypasses cost AND prereq edges (a glimpse
+   * found in a pocket world, not climbed to). Higher tiers still go through
+   * buyNodeTier, whose canAffordNode keeps enforcing prereqs.
+   */
+  function grantGlimpse(key: LatticeNodeKey): boolean {
+    if (nodeTierOwned(key) > 0) return false
+    nodeTiers.value = { ...nodeTiers.value, [key]: 1 }
+    return true
+  }
+
+  /** Deposit an Insight surge (secret-realm completion reward, §7.3 epiphany source). */
+  function addInsight(amount: Decimal): void {
+    insight.value = insight.value.add(amount).max(0)
+  }
+
   // ---- Stances ------------------------------------------------------------
 
   /** The active stance row, or null. Self-heals if unlock unmet (§6.1 safety). */
@@ -195,6 +213,8 @@ export const useDaoStore = defineStore('dao', () => {
     nodeRequirementsMet,
     canAffordNode,
     buyNodeTier,
+    grantGlimpse,
+    addInsight,
     activeStanceRow,
     toggleStance,
     isRevealGateMet,

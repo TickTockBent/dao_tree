@@ -59,6 +59,8 @@ describe('meets', () => {
     sectJoined: false,
     contributionBest: decimalZero(),
     achievements: {},
+    secretRealmClears: 0,
+    professionChosen: false,
   }
 
   it('empty condition is always true', () => {

@@ -19,13 +19,19 @@ import LegacyDisplay from '@/components/LegacyDisplay.vue'
 import SectTab from '@/components/SectTab.vue'
 import JournalView from '@/components/JournalView.vue'
 import HintBar from '@/components/HintBar.vue'
+import SecretRealmTab from '@/components/SecretRealmTab.vue'
+import AlchemyTab from '@/components/AlchemyTab.vue'
+import { useSecretRealmStore } from '@/stores/secretRealm'
+import { useAlchemyStore } from '@/stores/alchemy'
 
-type TabId = 'realms' | 'body' | 'dao' | 'sect' | 'journal' | 'save'
+type TabId = 'realms' | 'body' | 'dao' | 'sect' | 'secret' | 'alchemy' | 'journal' | 'save'
 
 const game = useGameStore()
 const realm = useRealmStore()
 const dao = useDaoStore()
 const sect = useSectStore()
+const secretRealm = useSecretRealmStore()
+const alchemy = useAlchemyStore()
 const pipelines = usePipelinesStore()
 
 const { points } = storeToRefs(game)
@@ -50,6 +56,8 @@ function onExport() {
 
 const daoTabAvailable = computed(() => dao.isRevealed())
 const sectTabAvailable = computed(() => sect.isRevealed())
+const secretTabAvailable = computed(() => secretRealm.isRevealed())
+const alchemyTabAvailable = computed(() => alchemy.isRevealed())
 </script>
 
 <template>
@@ -68,6 +76,8 @@ const sectTabAvailable = computed(() => sect.isRevealed())
       <button :class="{ active: currentTab === 'body' }" @click="currentTab = 'body'">Body</button>
       <button v-if="daoTabAvailable" :class="{ active: currentTab === 'dao' }" @click="currentTab = 'dao'">Dao</button>
       <button v-if="sectTabAvailable" :class="{ active: currentTab === 'sect' }" @click="currentTab = 'sect'">Sect</button>
+      <button v-if="secretTabAvailable" :class="{ active: currentTab === 'secret' }" @click="currentTab = 'secret'">Realms Beyond</button>
+      <button v-if="alchemyTabAvailable" :class="{ active: currentTab === 'alchemy' }" @click="currentTab = 'alchemy'">Alchemy</button>
       <button :class="{ active: currentTab === 'journal' }" @click="currentTab = 'journal'">Journal</button>
       <button :class="{ active: currentTab === 'save' }" @click="currentTab = 'save'">Save</button>
     </nav>
@@ -90,6 +100,8 @@ const sectTabAvailable = computed(() => sect.isRevealed())
       <div v-else-if="currentTab === 'body'" class="tab-content"><BodyTab /></div>
       <div v-else-if="currentTab === 'dao'" class="tab-content"><DaoLatticeGraph /><StancesPanel /></div>
       <div v-else-if="currentTab === 'sect'" class="tab-content"><SectTab /></div>
+      <div v-else-if="currentTab === 'secret'" class="tab-content"><SecretRealmTab /></div>
+      <div v-else-if="currentTab === 'alchemy'" class="tab-content"><AlchemyTab /></div>
       <div v-else-if="currentTab === 'journal'" class="tab-content"><JournalView /></div>
 
       <div v-else-if="currentTab === 'save'" class="tab-content">

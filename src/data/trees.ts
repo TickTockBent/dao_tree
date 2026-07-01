@@ -43,5 +43,11 @@ export const TREE_DATA: TreeData = {
     sect: { scope: 'life' },
     journal: { scope: 'eternal' },
     legacy: { scope: 'eternal' },
+    // Slice 7: both survive every realm breakthrough (life-scoped, members of no
+    // tree). The secret-realm EXPEDITION run-state additionally resets on
+    // expedition entry — a LOCAL scope handled inside the store, deliberately
+    // outside this registry (design §6.4: nothing outside the expedition resets).
+    secret: { scope: 'life' },
+    alchemy: { scope: 'life' },
   },
 }

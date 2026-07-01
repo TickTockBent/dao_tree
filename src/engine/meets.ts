@@ -58,6 +58,10 @@ export interface ConditionClauses {
   contribution: number
   /** An achievement is earned: [layerId, achievementId]. */
   achievement: [LayerId, number]
+  /** Total secret-realm expedition clears >= N (slice 7). */
+  secretRealmClears: number
+  /** The Act I profession slot has been picked (slice 7). */
+  professionChosen: true
 }
 
 /** A condition object: any subset of clauses, AND-combined. Empty = always true. */
@@ -127,6 +131,10 @@ export interface GameState {
   contributionBest: Decimal
   /** Earned achievement ids per layer. */
   achievements: Record<string, Set<number>>
+  /** Total secret-realm expedition clears (slice 7). */
+  secretRealmClears: number
+  /** Whether the Act I profession slot has been picked (slice 7). */
+  professionChosen: boolean
 }
 
 // ---- Evaluation ------------------------------------------------------------
@@ -178,6 +186,10 @@ function clauseHolds<K extends keyof ConditionClauses>(
       const [layerId, achievementId] = value as [LayerId, number]
       return state.achievements[layerId]?.has(achievementId) ?? false
     }
+    case 'secretRealmClears':
+      return state.secretRealmClears >= (value as number)
+    case 'professionChosen':
+      return state.professionChosen
     default:
       // Exhaustiveness check — unknown keys should never reach here because
       // the type system rejects them at the call site. This default is

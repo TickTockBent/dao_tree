@@ -19,6 +19,7 @@ import { useSectStore } from '@/stores/sect'
 import { useForgeStore } from '@/stores/forge'
 import { useScarStore } from '@/stores/scar'
 import { useLegacyStore } from '@/stores/legacy'
+import { useAlchemyStore } from '@/stores/alchemy'
 import { TECHNIQUE_DATA } from '@/data/techniques'
 
 export interface TribulationSlice {
@@ -67,6 +68,7 @@ export const useTribulationStore = defineStore('tribulation', () => {
   const forge = useForgeStore()
   const scar = useScarStore()
   const legacy = useLegacyStore()
+  const alchemy = useAlchemyStore()
 
   const tribActive = ref(false)
   const tribElapsed = ref(0)
@@ -156,7 +158,14 @@ export const useTribulationStore = defineStore('tribulation', () => {
    */
   function beginTribulation(): void {
     if (!tribulationIsReady.value) return
-    const startingPool = tribulationPreparednessPool()
+    let startingPool = tribulationPreparednessPool()
+    // Heaven-Warding Pill (slice 7, §7.6): a held pill dissolves into the pool
+    // at trigger — flat bonus, consumed here. Zero/no-op when none is held.
+    const pillBonus = alchemy.tribulationPoolBonus
+    if (pillBonus.gt(decimalZero())) {
+      startingPool = startingPool.add(pillBonus)
+      alchemy.consumeWardingPill()
+    }
     // Consume banked Qi as fuel (the gamble).
     game.points = decimalZero()
     tribActive.value = true

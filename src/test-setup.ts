@@ -16,6 +16,8 @@ import { useJournalStore } from '@/stores/journal'
 import { useHintsStore } from '@/stores/hints'
 import { useAutomationStore } from '@/stores/automation'
 import { usePipelinesStore } from '@/stores/pipelines'
+import { useSecretRealmStore } from '@/stores/secretRealm'
+import { useAlchemyStore } from '@/stores/alchemy'
 
 /** Boot a fresh Pinia + register all stores (like main.ts, without Vue/loop). */
 export function bootTestStores(): void {
@@ -35,6 +37,8 @@ export function bootTestStores(): void {
   const hints = useHintsStore()
   const automation = useAutomationStore()
   const pipelines = usePipelinesStore()
+  const secretRealm = useSecretRealmStore()
+  const alchemy = useAlchemyStore()
 
   game.registerSliceProvider({ id: 'b', save: body.save, load: body.load, fresh: body.fresh })
   game.registerSliceProvider({ id: 'realms', save: realm.save, load: realm.load, fresh: realm.fresh })
@@ -45,6 +49,8 @@ export function bootTestStores(): void {
   game.registerSliceProvider({ id: 'trib', save: trib.save, load: trib.load, fresh: trib.fresh })
   game.registerSliceProvider({ id: 'legacy', save: legacy.save, load: legacy.load, fresh: legacy.fresh })
   game.registerSliceProvider({ id: 'journal', save: journal.save, load: journal.load, fresh: journal.fresh })
+  game.registerSliceProvider({ id: 'secret', save: secretRealm.save, load: secretRealm.load, fresh: secretRealm.fresh })
+  game.registerSliceProvider({ id: 'alchemy', save: alchemy.save, load: alchemy.load, fresh: alchemy.fresh })
 
   game.registerUpdater({ id: 'body', update: body.update })
   game.registerUpdater({ id: 'dao', update: dao.update })
@@ -58,6 +64,8 @@ export function bootTestStores(): void {
   game.registerUpdater({ id: 'journal', update: journal.update })
   game.registerUpdater({ id: 'hints', update: hints.update })
   game.registerUpdater({ id: 'automation', update: automation.update })
+  game.registerUpdater({ id: 'secretRealm', update: secretRealm.update })
+  game.registerUpdater({ id: 'alchemy', update: alchemy.update })
 
   game.registerAutomation({ id: 'automation', automate: automation.automate })
 

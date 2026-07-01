@@ -18,3 +18,5 @@ export { AUTOMATION_DATA, type AutomationRow, type Automates, type AutomatesPres
 export { SECT_DATA, type SectConfig, type SectArchetype, type SectMilestone, type SectMilestoneReward, type SectContributionConfig, findSectArchetype, sectMilestoneIndex } from './sect'
 export { TECHNIQUE_DATA, type TechniqueRow, type TechniqueEffect, findTechnique, techniqueIndex } from './techniques'
 export { JOURNAL_DATA, type JournalData, type JournalEntry, type JournalBonus, findJournalEntry } from './journal'
+export { SECRET_REALM_DATA, type SecretRealmData, type SecretRealmSite, type SecretRealmModifier, type SecretRealmRewards, type EssenceModel, findSecretRealmSite } from './secret-realm'
+export { ALCHEMY_DATA, type AlchemyData, type RecipeRow, type MaterialRow, type PillEffect, findRecipe } from './alchemy'
