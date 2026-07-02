@@ -54,6 +54,14 @@ export const JOURNAL_DATA: JournalData = {
       bonus: { qi: 100 },
     },
     {
+      // Slice 8.5: the first Deep Meditation rung is purchasable minutes in
+      // (q reached, 500 Qi) — the entry sits early with the other firsts.
+      key: 'deepMeditation',
+      when: { seclusionRungs: 1 },
+      title: 'The Door Closes',
+      text: 'You learn to leave the breath running like a banked fire and step away from yourself. When you return, the qi has kept its own count. Seclusion, the old texts call it — the discipline of trusting your own depths unattended.',
+    },
+    {
       key: 'foundationReached',
       when: { realm: ['f', 'Early Foundation'] },
       title: 'Foundation Laid',

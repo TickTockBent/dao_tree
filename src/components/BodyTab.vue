@@ -9,6 +9,7 @@ import { SETPIECE_DATA } from '@/data/setpieces'
 import { format } from '@/engine/format'
 import SoulAspectPanel from './SoulAspectPanel.vue'
 import HeartDemonsPanel from './HeartDemonsPanel.vue'
+import DeepMeditationPanel from './DeepMeditationPanel.vue'
 
 const body = useBodyStore()
 const forge = useForgeStore()
@@ -105,6 +106,8 @@ const temperProgress = computed(() => {
     </section>
 
     <SoulAspectPanel />
+
+    <DeepMeditationPanel />
 
     <HeartDemonsPanel />
 

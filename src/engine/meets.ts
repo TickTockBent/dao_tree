@@ -73,6 +73,8 @@ export interface ConditionClauses {
   corruption: number
   /** Dao Heart stacks (cleared Demon Trials) >= N (slice 8). */
   daoHeartStacks: number
+  /** Deep Meditation rungs purchased >= N (slice 8.5). */
+  seclusionRungs: number
 }
 
 /** A condition object: any subset of clauses, AND-combined. Empty = always true. */
@@ -159,6 +161,8 @@ export interface GameState {
   corruption: number
   /** Dao Heart stacks earned from cleared Demon Trials (slice 8). */
   daoHeartStacks: number
+  /** Deep Meditation rungs purchased (slice 8.5). */
+  seclusionRungs: number
 }
 
 // ---- Evaluation ------------------------------------------------------------
@@ -239,6 +243,8 @@ function clauseHolds<K extends keyof ConditionClauses>(
       return state.corruption >= (value as number)
     case 'daoHeartStacks':
       return state.daoHeartStacks >= (value as number)
+    case 'seclusionRungs':
+      return state.seclusionRungs >= (value as number)
     default:
       // Exhaustiveness check — unknown keys should never reach here because
       // the type system rejects them at the call site. This default is

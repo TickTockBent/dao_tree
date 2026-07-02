@@ -63,6 +63,7 @@ describe('meets', () => {
     professionChosen: false,
     corruption: 0,
     daoHeartStacks: 0,
+    seclusionRungs: 0,
   }
 
   it('empty condition is always true', () => {

@@ -34,6 +34,7 @@ import { AUTOMATION_DATA } from '@/data/automation'
 import { SECRET_REALM_DATA } from '@/data/secret-realm'
 import { ALCHEMY_DATA } from '@/data/alchemy'
 import { HEART_DEMON_DATA, findDemonTrial } from '@/data/heart-demons'
+import { SECLUSION_DATA } from '@/data/seclusion'
 import { meets, TEMPER_TIER_ORDER } from '@/engine/meets'
 import type { GameState } from '@/engine/meets'
 import type { MaterialKey } from '@/engine/types'
@@ -77,6 +78,7 @@ function syntheticEmptyState(): GameState {
     professionChosen: false,
     corruption: 0,
     daoHeartStacks: 0,
+    seclusionRungs: 0,
   }
 }
 
@@ -543,5 +545,36 @@ describe('§7.4 heart demon corruption data', () => {
 
   it('Dao Heart qiMultPerStack is an accelerant (>= 1)', () => {
     expect(HEART_DEMON_DATA.daoHeart.qiMultPerStack).toBeGreaterThanOrEqual(1)
+  })
+})
+
+// ---- §8.5 Deep Meditation (slice 8.5) ----------------------------------------
+
+describe('§8.5 seclusion data', () => {
+  it('every rung unlock references its own realm at best >= 1 (evaluates cleanly)', () => {
+    const state = syntheticEmptyState()
+    for (const rung of SECLUSION_DATA.rungs) {
+      expect(rung.unlock).toEqual({ realm: [rung.realm, 1] })
+      expect(() => meets(rung.unlock, state)).not.toThrow()
+    }
+  })
+
+  it('costs and bonuses are positive and costs strictly ascend (each rung a real decision)', () => {
+    expect(SECLUSION_DATA.baseCapSeconds).toBeGreaterThan(0)
+    let previousCost = 0
+    for (const rung of SECLUSION_DATA.rungs) {
+      expect(rung.capBonusSeconds).toBeGreaterThan(0)
+      expect(rung.qiCost).toBeGreaterThan(previousCost)
+      previousCost = rung.qiCost
+    }
+  })
+
+  it('rungs cost ONLY Qi (§6.6: QoL never requires optional systems)', () => {
+    // Structural: the SeclusionRung type has exactly one cost field, qiCost.
+    // This pin fails if anyone adds a second currency field to a rung row.
+    for (const rung of SECLUSION_DATA.rungs) {
+      const costKeys = Object.keys(rung).filter((k) => k.toLowerCase().includes('cost'))
+      expect(costKeys).toEqual(['qiCost'])
+    }
   })
 })

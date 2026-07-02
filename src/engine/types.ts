@@ -23,6 +23,7 @@ export type LayerId =
   | 'secret' // Secret Realm expeditions (slice 7; expedition run-state is locally scoped)
   | 'alchemy' // Alchemy profession (slice 7; the Act I profession slot)
   | 'demons' // Heart Demons + Demon Trials (slice 8; the permanent anti-rush tension)
+  | 'seclusion' // Deep Meditation offline-cap rungs (slice 8.5; eternal QoL progression)
 
 /** All ids that carry a numeric prestige row in the tree (the climb spine). */
 export type RealmLayerId = RealmId
@@ -158,6 +159,7 @@ export type JournalEntryKey =
   | 'professionChosen' // slice 7: the Act I profession slot is picked
   | 'corruptionTouched' // slice 8: the first heart-demon corruption gained
   | 'firstDaoHeart' // slice 8: first Demon Trial cleared
+  | 'deepMeditation' // slice 8.5: the first seclusion rung purchased
   | 'sectJoined'
   | 'nascentSoul'
   | 'aspectChosen'

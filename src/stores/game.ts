@@ -156,9 +156,11 @@ export const useGameStore = defineStore('game', () => {
       const now = Date.now()
       let diff = (now - time.value) / MS_PER_SECOND
       const trueDiff = diff
-      // Offline catch-up
+      // Offline catch-up. The cap is PROGRESSION (Deep Meditation): the
+      // seclusion store's live cap arrives through the registered fn; the
+      // constant is only the unwired fallback (tests that skip wiring).
       if (offTime.value !== null) {
-        const limit = OFFLINE_CAP_SECONDS // 1 hour offline cap
+        const limit = currentOfflineCap()
         if (offTime.value.remain > limit) offTime.value.remain = limit
         if (offTime.value.remain > 0) {
           const offlineDiff = Math.max(offTime.value.remain / OFFLINE_CATCHUP_DIVISOR, diff)
@@ -208,6 +210,15 @@ export const useGameStore = defineStore('game', () => {
   }
   function currentQiPerSecond(): Decimal {
     return qiPerSecondFn ? qiPerSecondFn() : decimalZero()
+  }
+
+  // ---- Offline cap (set externally by the seclusion store — same pattern) --
+  let offlineCapFn: (() => number) | null = null
+  function setOfflineCapFn(fn: () => number): void {
+    offlineCapFn = fn
+  }
+  function currentOfflineCap(): number {
+    return offlineCapFn ? offlineCapFn() : OFFLINE_CAP_SECONDS
   }
 
   // ---- Loop control -------------------------------------------------------
@@ -288,6 +299,8 @@ export const useGameStore = defineStore('game', () => {
     registerAutomation,
     registerSliceProvider,
     setQiPerSecondFn,
+    setOfflineCapFn,
+    currentOfflineCap,
     tick,
     startLoop,
     stopLoop,

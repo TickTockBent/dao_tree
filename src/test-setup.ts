@@ -19,6 +19,7 @@ import { usePipelinesStore } from '@/stores/pipelines'
 import { useSecretRealmStore } from '@/stores/secretRealm'
 import { useAlchemyStore } from '@/stores/alchemy'
 import { useHeartDemonsStore } from '@/stores/heartDemons'
+import { useSeclusionStore } from '@/stores/seclusion'
 
 /** Boot a fresh Pinia + register all stores (like main.ts, without Vue/loop). */
 export function bootTestStores(): void {
@@ -41,6 +42,7 @@ export function bootTestStores(): void {
   const secretRealm = useSecretRealmStore()
   const alchemy = useAlchemyStore()
   const heartDemons = useHeartDemonsStore()
+  const seclusion = useSeclusionStore()
 
   game.registerSliceProvider({ id: 'b', save: body.save, load: body.load, fresh: body.fresh })
   game.registerSliceProvider({ id: 'realms', save: realm.save, load: realm.load, fresh: realm.fresh })
@@ -54,6 +56,7 @@ export function bootTestStores(): void {
   game.registerSliceProvider({ id: 'secret', save: secretRealm.save, load: secretRealm.load, fresh: secretRealm.fresh })
   game.registerSliceProvider({ id: 'alchemy', save: alchemy.save, load: alchemy.load, fresh: alchemy.fresh })
   game.registerSliceProvider({ id: 'demons', save: heartDemons.save, load: heartDemons.load, fresh: heartDemons.fresh })
+  game.registerSliceProvider({ id: 'seclusion', save: seclusion.save, load: seclusion.load, fresh: seclusion.fresh })
 
   game.registerUpdater({ id: 'body', update: body.update })
   game.registerUpdater({ id: 'dao', update: dao.update })
@@ -74,6 +77,7 @@ export function bootTestStores(): void {
   game.registerAutomation({ id: 'automation', automate: automation.automate })
 
   game.setQiPerSecondFn(() => pipelines.qiPerSecond)
+  game.setOfflineCapFn(() => seclusion.offlineCapSeconds)
 
   registerDecimalPaths([
     'realms.q.points', 'realms.q.best', 'realms.q.total',

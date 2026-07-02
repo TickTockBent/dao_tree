@@ -25,6 +25,7 @@ import { usePipelinesStore } from '@/stores/pipelines'
 import { useSecretRealmStore } from '@/stores/secretRealm'
 import { useAlchemyStore } from '@/stores/alchemy'
 import { useHeartDemonsStore } from '@/stores/heartDemons'
+import { useSeclusionStore } from '@/stores/seclusion'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -48,6 +49,7 @@ const pipelines = usePipelinesStore()
 const secretRealm = useSecretRealmStore()
 const alchemy = useAlchemyStore()
 const heartDemons = useHeartDemonsStore()
+const seclusion = useSeclusionStore()
 const nav = useNavStore()
 
 // Slice providers (each store owns its save slice; game store assembles).
@@ -63,6 +65,7 @@ game.registerSliceProvider({ id: 'journal', save: journal.save, load: journal.lo
 game.registerSliceProvider({ id: 'secret', save: secretRealm.save, load: secretRealm.load, fresh: secretRealm.fresh })
 game.registerSliceProvider({ id: 'alchemy', save: alchemy.save, load: alchemy.load, fresh: alchemy.fresh })
 game.registerSliceProvider({ id: 'demons', save: heartDemons.save, load: heartDemons.load, fresh: heartDemons.fresh })
+game.registerSliceProvider({ id: 'seclusion', save: seclusion.save, load: seclusion.load, fresh: seclusion.fresh })
 
 // System updaters (forward pass, in dependency order: body before realm, etc.).
 game.registerUpdater({ id: 'body', update: body.update })
@@ -86,6 +89,9 @@ game.registerAutomation({ id: 'automation', automate: automation.automate })
 
 // Qi/sec pipeline: game store reads from pipelines store.
 game.setQiPerSecondFn(() => pipelines.qiPerSecond)
+
+// Offline cap: game store reads the live Deep Meditation cap (slice 8.5).
+game.setOfflineCapFn(() => seclusion.offlineCapSeconds)
 
 // Decimal paths for save hydration.
 registerDecimalPaths([

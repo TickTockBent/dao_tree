@@ -3,6 +3,16 @@
 All notable changes to **Dao Tree**. Versions track the itch.io releases;
 **0.2** was the first public release, so earlier development is folded into it.
 
+## 0.4.1 — 2026-07-02 — the door closes
+
+### Added
+- **Deep Meditation.** Offline progress is now something you *cultivate*. Deep
+  meditation sustains you in secluded cultivation while you are away — and each
+  realm you reach reveals a new meditation discipline to master (a one-time Qi
+  cost) that permanently deepens how much secluded progress you can bank. Five
+  disciplines across Act I take you from one hour to six. Once learned, a
+  discipline is never lost — not to breakthrough, not to anything.
+
 ## 0.4.0 — 2026-07-02 — realms beyond, the cauldron, and the heart's price
 
 ### Fixed

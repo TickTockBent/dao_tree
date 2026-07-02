@@ -53,5 +53,9 @@ export const TREE_DATA: TreeData = {
     // (the permanent anti-rush tension, §7.4). Samsara carry is a slice-10
     // decision — eternal promotion recorded as an open question there.
     demons: { scope: 'life' },
+    // Slice 8.5: Deep Meditation rungs are ETERNAL — QoL is never clawed back,
+    // not by cascade and (design intent) not by reincarnation. The soul
+    // learned to cultivate unattended; a new body does not unlearn it.
+    seclusion: { scope: 'eternal' },
   },
 }

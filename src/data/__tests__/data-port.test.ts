@@ -23,6 +23,7 @@ import {
   SECRET_REALM_DATA,
   ALCHEMY_DATA,
   HEART_DEMON_DATA,
+  SECLUSION_DATA,
   findDemonTrial,
   findRealm,
   substageLabelAtBest,
@@ -153,7 +154,7 @@ describe('GATE_DATA', () => {
 })
 
 describe('TREE_DATA', () => {
-  it('has 5 tree-scoped realms + 7 life + 2 eternal', () => {
+  it('has 5 tree-scoped realms + 7 life + 3 eternal', () => {
     const scopes = Object.entries(TREE_DATA.layers).map(([id, e]) => `${id}:${e.scope}`)
     expect(scopes).toEqual([
       'q:tree', 'f:tree', 'c:tree', 'n:tree', 's:tree',
@@ -163,6 +164,8 @@ describe('TREE_DATA', () => {
       'secret:life', 'alchemy:life',
       // Slice 8: corruption + Dao Heart stacks are life-scoped.
       'demons:life',
+      // Slice 8.5: Deep Meditation rungs are eternal (QoL is never clawed back).
+      'seclusion:eternal',
     ])
   })
 })
@@ -252,10 +255,15 @@ describe('TECHNIQUE_DATA', () => {
 })
 
 describe('JOURNAL_DATA', () => {
-  it('has 20 entries with firstBreath + actOneLegacy at the ends (slice 7 added 2, slice 8 added 2)', () => {
-    expect(JOURNAL_DATA.entries).toHaveLength(20)
+  it('has 21 entries with firstBreath + actOneLegacy at the ends (slices 7/8/8.5 added 2+2+1)', () => {
+    expect(JOURNAL_DATA.entries).toHaveLength(21)
     expect(JOURNAL_DATA.entries[0]?.key).toBe('firstBreath')
-    expect(JOURNAL_DATA.entries[19]?.key).toBe('actOneLegacy')
+    expect(JOURNAL_DATA.entries[20]?.key).toBe('actOneLegacy')
+  })
+
+  it('slice 8.5 entry latches on the first Deep Meditation rung', () => {
+    const deepMeditation = JOURNAL_DATA.entries.find((e) => e.key === 'deepMeditation')
+    expect(deepMeditation?.when).toEqual({ seclusionRungs: 1 })
   })
 
   it('slice 7 entries latch on first expedition clear and the profession pick', () => {
@@ -432,5 +440,19 @@ describe('HEART_DEMON_DATA', () => {
 
   it('Dao Heart qiMultPerStack is 1.02', () => {
     expect(HEART_DEMON_DATA.daoHeart.qiMultPerStack).toBe(1.02)
+  })
+})
+
+describe('SECLUSION_DATA (slice 8.5)', () => {
+  it('base cap is 1 hour with 5 one-hour Act I rungs', () => {
+    expect(SECLUSION_DATA.baseCapSeconds).toBe(3600)
+    expect(SECLUSION_DATA.rungs.map((r) => r.realm)).toEqual(['q', 'f', 'c', 'n', 's'])
+    for (const rung of SECLUSION_DATA.rungs) expect(rung.capBonusSeconds).toBe(3600)
+  })
+
+  it('rung costs match the shipped tuning', () => {
+    expect(SECLUSION_DATA.rungs.map((r) => r.qiCost)).toEqual([
+      500, 50000, 2000000, 50000000, 10000000000,
+    ])
   })
 })
