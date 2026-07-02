@@ -22,6 +22,8 @@ import {
   FACTORY_NUMERICS,
   SECRET_REALM_DATA,
   ALCHEMY_DATA,
+  HEART_DEMON_DATA,
+  findDemonTrial,
   findRealm,
   substageLabelAtBest,
 } from '@/data'
@@ -210,8 +212,13 @@ describe('HINT_DATA', () => {
     expect(HINT_DATA.hints[HINT_DATA.hints.length - 1]?.key).toBe('gatherQi')
   })
 
-  it('first row is actComplete', () => {
-    expect(HINT_DATA.hints[0]?.key).toBe('actComplete')
+  it('first row is faceDemonTrial (slice 8: the live involuntary state outranks everything)', () => {
+    expect(HINT_DATA.hints[0]?.key).toBe('faceDemonTrial')
+    expect(HINT_DATA.hints[0]?.when).toEqual({ demonTrialActive: true })
+  })
+
+  it('second row is actComplete', () => {
+    expect(HINT_DATA.hints[1]?.key).toBe('actComplete')
   })
 })
 
@@ -245,10 +252,10 @@ describe('TECHNIQUE_DATA', () => {
 })
 
 describe('JOURNAL_DATA', () => {
-  it('has 18 entries with firstBreath + actOneLegacy at the ends (slice 7 added 2)', () => {
-    expect(JOURNAL_DATA.entries).toHaveLength(18)
+  it('has 20 entries with firstBreath + actOneLegacy at the ends (slice 7 added 2, slice 8 added 2)', () => {
+    expect(JOURNAL_DATA.entries).toHaveLength(20)
     expect(JOURNAL_DATA.entries[0]?.key).toBe('firstBreath')
-    expect(JOURNAL_DATA.entries[17]?.key).toBe('actOneLegacy')
+    expect(JOURNAL_DATA.entries[19]?.key).toBe('actOneLegacy')
   })
 
   it('slice 7 entries latch on first expedition clear and the profession pick', () => {
@@ -256,6 +263,13 @@ describe('JOURNAL_DATA', () => {
     const professionChosen = JOURNAL_DATA.entries.find((e) => e.key === 'professionChosen')
     expect(firstExpedition?.when).toEqual({ secretRealmClears: 1 })
     expect(professionChosen?.when).toEqual({ professionChosen: true })
+  })
+
+  it('slice 8 entries latch on first corruption gain and first cleared Demon Trial', () => {
+    const corruptionTouched = JOURNAL_DATA.entries.find((e) => e.key === 'corruptionTouched')
+    const firstDaoHeart = JOURNAL_DATA.entries.find((e) => e.key === 'firstDaoHeart')
+    expect(corruptionTouched?.when).toEqual({ corruption: 1 })
+    expect(firstDaoHeart?.when).toEqual({ daoHeartStacks: 1 })
   })
 
   it('first two entries grant qi 100 bonus', () => {
@@ -368,5 +382,55 @@ describe('ALCHEMY_DATA', () => {
     expect(r.cost).toEqual({ essenceCrystal: 6, beastCore: 3 })
     expect(r.effect).toEqual({ type: 'tribulationPoolBonus', poolBonus: 40 })
     expect(r.unlock).toEqual({ realm: ['s', 1] })
+  })
+})
+
+describe('HEART_DEMON_DATA', () => {
+  it('corruption sources: rushed Foundation bands, forge pushes, tribulation grades', () => {
+    expect(HEART_DEMON_DATA.corruption.sources.rushedBreakthrough).toEqual({ Flawed: 12, Stable: 6 })
+    expect(HEART_DEMON_DATA.corruption.sources.forgePush).toEqual({ forceful: 10, reckless: 25 })
+    expect(HEART_DEMON_DATA.corruption.sources.tribulation).toEqual({ failed: 30, scarred: 10 })
+  })
+
+  it('passive bleed: 0.02/sec, +0.02/sec per Dao Heart stack', () => {
+    expect(HEART_DEMON_DATA.corruption.bleedPerSecond).toBe(0.02)
+    expect(HEART_DEMON_DATA.corruption.bleedPerDaoHeartStack).toBe(0.02)
+  })
+
+  it('has exactly the 3 tuned thresholds in ascending order, repeating every 120', () => {
+    expect(HEART_DEMON_DATA.thresholds).toEqual([
+      { at: 60, trial: 'whisperingDoubt' },
+      { at: 140, trial: 'hungryShadow' },
+      { at: 260, trial: 'hollowCrown' },
+    ])
+    expect(HEART_DEMON_DATA.repeatEvery).toBe(120)
+  })
+
+  it('whisperingDoubt: endure 120s at 0.8x Qi/sec', () => {
+    const t = findDemonTrial('whisperingDoubt')
+    expect(t.element).toBeNull()
+    expect(t.color).toBe('#9a86b8')
+    expect(t.qiMultWhileActive).toBe(0.8)
+    expect(t.objective).toEqual({ type: 'endure', seconds: 120 })
+  })
+
+  it('hungryShadow: gatherQi 400x q.reqBase at 0.7x Qi/sec', () => {
+    const t = findDemonTrial('hungryShadow')
+    expect(t.element).toBe('water')
+    expect(t.color).toBe('#5a7a99')
+    expect(t.qiMultWhileActive).toBe(0.7)
+    expect(t.objective).toEqual({ type: 'gatherQi', reqBaseFactor: 400 })
+  })
+
+  it('hollowCrown: prestigeCount 3 at 0.65x Qi/sec', () => {
+    const t = findDemonTrial('hollowCrown')
+    expect(t.element).toBe('fire')
+    expect(t.color).toBe('#b86a4a')
+    expect(t.qiMultWhileActive).toBe(0.65)
+    expect(t.objective).toEqual({ type: 'prestigeCount', count: 3 })
+  })
+
+  it('Dao Heart qiMultPerStack is 1.02', () => {
+    expect(HEART_DEMON_DATA.daoHeart.qiMultPerStack).toBe(1.02)
   })
 })

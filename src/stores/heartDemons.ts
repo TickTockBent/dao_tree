@@ -25,9 +25,12 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type Decimal from 'break_eternity.js'
+import Decimal from 'break_eternity.js'
 import { decimalOne } from '@/engine/decimal'
+import { HEART_DEMON_DATA, findDemonTrial } from '@/data/heart-demons'
 import type { HeartDemonTrialKey } from '@/data/heart-demons'
+import { findRealm } from '@/data/realms'
+import { usePipelinesStore } from './pipelines'
 import type { ForgePushKey, TribGradeKey, FoundationBandTier } from '@/engine/types'
 
 export interface DemonsSlice {
@@ -79,40 +82,144 @@ export const useHeartDemonsStore = defineStore('heartDemons', () => {
     return touched.value
   }
 
+  /** Corruption value at which the next trial fires (for the panel's marker). */
+  const nextThresholdAt = computed<number>(() => nextThreshold().at)
+
   const trialIsActive = computed<boolean>(() => activeTrial.value !== null)
 
   /** Qi/sec debuff while a trial holds (identity when none). */
-  const trialQiMult = computed<Decimal>(() => decimalOne()) // TODO(slice-8 agent)
+  const trialQiMult = computed<Decimal>(() =>
+    activeTrial.value === null
+      ? decimalOne()
+      : new Decimal(findDemonTrial(activeTrial.value).qiMultWhileActive),
+  )
 
   /** Permanent Dao Heart Qi mult (qiMultPerStack ^ stacks; identity at 0). */
-  const daoHeartQiMult = computed<Decimal>(() => decimalOne()) // TODO(slice-8 agent)
+  const daoHeartQiMult = computed<Decimal>(() =>
+    new Decimal(HEART_DEMON_DATA.daoHeart.qiMultPerStack).pow(daoHeartStacks.value),
+  )
+
+  /**
+   * gatherQi target: reqBaseFactor × q.reqBase (a small finite number ~8000).
+   * Kept finite by construction so the float-capped accumulator (below) is safe.
+   */
+  function gatherQiTarget(factor: number): number {
+    return factor * findRealm('q').reqBase
+  }
 
   // ---- Source hooks (called from realm/forge/tribulation — pinned) ---------
 
+  /**
+   * Add corruption from a source. While a trial is active, accumulation PAUSES
+   * (§6.3): the amount banks toward the next threshold instead. `touched`
+   * latches on any positive gain (reveals the panel).
+   */
+  function addCorruption(amount: number): void {
+    if (amount <= 0) return
+    touched.value = true
+    if (activeTrial.value !== null) banked.value += amount
+    else corruption.value += amount
+  }
+
   /** Graded (Foundation) prestige landed at this band tier (§7.4 rushed breakthroughs). */
-  function onGradedPrestige(_bandTier: FoundationBandTier): void {
-    // TODO(slice-8 agent)
+  function onGradedPrestige(bandTier: FoundationBandTier): void {
+    const sources = HEART_DEMON_DATA.corruption.sources.rushedBreakthrough
+    addCorruption((sources as Record<string, number>)[bandTier] ?? 0)
   }
 
   /** A forge push was performed (§7.4 reckless pushes; Steady adds nothing). */
-  function onForgePush(_pushKey: ForgePushKey): void {
-    // TODO(slice-8 agent)
+  function onForgePush(pushKey: ForgePushKey): void {
+    const sources = HEART_DEMON_DATA.corruption.sources.forgePush
+    addCorruption((sources as Record<string, number>)[pushKey] ?? 0)
   }
 
   /** A tribulation resolved at this grade (§7.4; clean grades add nothing). */
-  function onTribulationResolved(_gradeKey: TribGradeKey): void {
-    // TODO(slice-8 agent)
+  function onTribulationResolved(gradeKey: TribGradeKey): void {
+    const sources = HEART_DEMON_DATA.corruption.sources.tribulation
+    addCorruption((sources as Record<string, number>)[gradeKey] ?? 0)
   }
 
   /** Any realm prestige fired (objective progress for 'prestigeCount' trials). */
   function onTrialPrestige(): void {
-    // TODO(slice-8 agent)
+    if (activeTrial.value === null) return
+    if (findDemonTrial(activeTrial.value).objective.type === 'prestigeCount') {
+      trialPrestiges.value += 1
+    }
   }
 
-  function update(_diff: number): void {
-    // TODO(slice-8 agent): bleed (paused in trial); threshold crossing → begin
-    // trial; trial objective progress (endure/gatherQi via pipelines rate);
-    // clear → daoHeartStacks++, flush banked, fire queued crossing.
+  // ---- Trial state machine (§6.3) ------------------------------------------
+
+  /** Corruption at which the next trial fires, and which trial it is. */
+  function nextThreshold(): { at: number; trial: HeartDemonTrialKey } {
+    const thresholds = HEART_DEMON_DATA.thresholds
+    if (thresholdsCrossed.value < thresholds.length) {
+      return thresholds[thresholdsCrossed.value]!
+    }
+    // Past the table: the final trial repeats every `repeatEvery` corruption.
+    const last = thresholds[thresholds.length - 1]!
+    const repeatsBeyond = thresholdsCrossed.value - thresholds.length
+    return {
+      at: last.at + HEART_DEMON_DATA.repeatEvery * (repeatsBeyond + 1),
+      trial: last.trial,
+    }
+  }
+
+  /** Begin a trial: zero objective progress, count the crossing. */
+  function beginTrial(key: HeartDemonTrialKey): void {
+    thresholdsCrossed.value += 1
+    activeTrial.value = key
+    trialElapsed.value = 0
+    trialQiGathered.value = 0
+    trialPrestiges.value = 0
+  }
+
+  /** Clear the active trial: grant a stack, flush banked corruption. */
+  function clearTrial(): void {
+    daoHeartStacks.value += 1
+    activeTrial.value = null
+    corruption.value += banked.value
+    banked.value = 0
+  }
+
+  /** True once the active trial's objective is met. */
+  function objectiveComplete(key: HeartDemonTrialKey): boolean {
+    const objective = findDemonTrial(key).objective
+    switch (objective.type) {
+      case 'endure':
+        return trialElapsed.value >= objective.seconds
+      case 'gatherQi':
+        return trialQiGathered.value >= gatherQiTarget(objective.reqBaseFactor)
+      case 'prestigeCount':
+        return trialPrestiges.value >= objective.count
+    }
+  }
+
+  function update(diff: number): void {
+    if (activeTrial.value === null) {
+      // (a) passive orthodox bleed (paused during a trial).
+      const bleedRate =
+        HEART_DEMON_DATA.corruption.bleedPerSecond +
+        HEART_DEMON_DATA.corruption.bleedPerDaoHeartStack * daoHeartStacks.value
+      corruption.value = Math.max(0, corruption.value - bleedRate * diff)
+      // (b) threshold crossing → begin the next (or queued) trial.
+      const next = nextThreshold()
+      if (corruption.value >= next.at) beginTrial(next.trial)
+      return
+    }
+    // (c) a trial is active — progress its objective, then clear if met.
+    const key = activeTrial.value
+    const objective = findDemonTrial(key).objective
+    if (objective.type === 'endure') {
+      trialElapsed.value += diff
+    } else if (objective.type === 'gatherQi') {
+      // Cap accumulation at the (small, finite) target so late-game Qi/sec
+      // rates can never overflow the plain-number accumulator.
+      const rate = usePipelinesStore().qiPerSecond.toNumber() * diff
+      const target = gatherQiTarget(objective.reqBaseFactor)
+      trialQiGathered.value = Math.min(target, trialQiGathered.value + rate)
+    }
+    // prestigeCount progresses via onTrialPrestige (the realm hook).
+    if (objectiveComplete(key)) clearTrial()
   }
 
   function save(): Record<string, unknown> {
@@ -134,7 +241,19 @@ export const useHeartDemonsStore = defineStore('heartDemons', () => {
     banked.value = s.banked ?? 0
     thresholdsCrossed.value = s.thresholdsCrossed ?? 0
     daoHeartStacks.value = s.daoHeartStacks ?? 0
-    activeTrial.value = s.activeTrial ?? null
+    // Validate the saved trial key against the data table (review catch): an
+    // unknown key (stale save across a data rename) would otherwise throw in
+    // findDemonTrial() on the next tick and halt the loop. Recovery: drop the
+    // trial AND un-count its crossing, so the same threshold re-fires on the
+    // next update with whatever trial the CURRENT data assigns it — the player
+    // loses nothing but the partial objective progress.
+    const savedTrial = s.activeTrial ?? null
+    const trialKnown =
+      savedTrial !== null && HEART_DEMON_DATA.trials.some((t) => t.key === savedTrial)
+    activeTrial.value = trialKnown ? savedTrial : null
+    if (savedTrial !== null && !trialKnown && thresholdsCrossed.value > 0) {
+      thresholdsCrossed.value -= 1
+    }
     trialElapsed.value = s.trialElapsed ?? 0
     trialQiGathered.value = s.trialQiGathered ?? 0
     trialPrestiges.value = s.trialPrestiges ?? 0
@@ -158,6 +277,7 @@ export const useHeartDemonsStore = defineStore('heartDemons', () => {
     trialQiMult,
     daoHeartQiMult,
     isRevealed,
+    nextThresholdAt,
     onGradedPrestige,
     onForgePush,
     onTribulationResolved,

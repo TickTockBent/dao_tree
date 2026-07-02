@@ -17,8 +17,10 @@ import { useJournalStore } from '@/stores/journal'
 import { useHintsStore } from '@/stores/hints'
 import { useSecretRealmStore } from '@/stores/secretRealm'
 import { useAlchemyStore } from '@/stores/alchemy'
+import { useHeartDemonsStore } from '@/stores/heartDemons'
 import { findSecretRealmSite } from '@/data/secret-realm'
 import { ALCHEMY_DATA } from '@/data/alchemy'
+import { HEART_DEMON_DATA, findDemonTrial } from '@/data/heart-demons'
 import type { MaterialKey } from '@/engine/types'
 
 describe('smoke: Qi gathering + prestige', () => {
@@ -264,5 +266,53 @@ describe('smoke: Secret Realm + Alchemy (slice 7 full loop)', () => {
     alchemy.update(duration + 1)
     expect(alchemy.activePill).toBeNull()
     expect(pipelines.qiPerSecond.toNumber()).toBeCloseTo(identityQiPerSecond, 6)
+  })
+})
+
+describe('smoke: Heart Demons + Demon Trials (slice 8 involuntary trial loop)', () => {
+  beforeEach(() => { bootTestStores() })
+
+  it('reckless forge pushes force a trial involuntarily; the debuff, clear, and Dao Heart mult all wire through', () => {
+    const demons = useHeartDemonsStore()
+    const pipelines = usePipelinesStore()
+    const first = HEART_DEMON_DATA.thresholds[0]!
+    const reckless = HEART_DEMON_DATA.corruption.sources.forgePush.reckless!
+    expect(reckless).toBeGreaterThan(0)
+
+    // Baseline Qi/sec before any corruption/trial (identity multipliers).
+    const baseQi = pipelines.qiPerSecond.toNumber()
+    expect(baseQi).toBeGreaterThan(0)
+
+    // Drive corruption to the first threshold via the exact hook
+    // forge.performForge('reckless') calls — no player action beyond the
+    // pushes themselves forces what happens next.
+    let pushes = 0
+    while (demons.corruption < first.at) {
+      demons.onForgePush('reckless')
+      demons.update(0) // the forward-pass tick that runs the threshold check
+      pushes++
+      if (pushes > 1000) throw new Error('reckless pushes never reached the first threshold')
+    }
+
+    // The trial fires INVOLUNTARILY: crossing the threshold alone begins it.
+    expect(demons.activeTrial).toBe(first.trial)
+    const trial = findDemonTrial(first.trial)
+
+    // qiPerSecond is debuffed by exactly the data value.
+    expect(demons.trialQiMult.toNumber()).toBe(trial.qiMultWhileActive)
+    expect(pipelines.qiPerSecond.toNumber()).toBeCloseTo(baseQi * trial.qiMultWhileActive, 6)
+
+    // Endure it out via update() to clear.
+    if (trial.objective.type !== 'endure') {
+      throw new Error(`expected the first demon trial to be an endure objective, got ${trial.objective.type}`)
+    }
+    demons.update(trial.objective.seconds)
+    expect(demons.activeTrial).toBeNull()
+
+    // Clearing grants a Dao Heart stack, the debuff reverts, and the
+    // permanent Dao Heart Qi mult now applies in its place.
+    expect(demons.daoHeartStacks).toBe(1)
+    expect(demons.trialQiMult.toNumber()).toBe(1)
+    expect(pipelines.qiPerSecond.toNumber()).toBeCloseTo(baseQi * HEART_DEMON_DATA.daoHeart.qiMultPerStack, 6)
   })
 })

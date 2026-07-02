@@ -32,6 +32,17 @@ export interface HintData {
 export const HINT_DATA: HintData = {
   hints: [
     {
+      // A Demon Trial holds the cultivator RIGHT NOW (§6.3). This can fire at
+      // any phase — Foundation, forge, deep Nascent Soul, even mid-tribulation
+      // prep — so it sits above every other row, including actComplete: the
+      // live involuntary state is always the single most important thing to
+      // tell the player, and first-match-wins means nothing below this can
+      // ever shadow it.
+      key: 'faceDemonTrial',
+      when: { demonTrialActive: true },
+      text: 'A heart demon holds you fast. It cannot make you fail, only make you wait — see the trial through, and it releases you with a Dao Heart to show for it.',
+    },
+    {
       // Act I complete — tribulation passed, Legacy recorded. Final Act I state.
       key: 'actComplete',
       when: { tribulationPassed: true },

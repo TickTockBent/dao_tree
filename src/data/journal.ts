@@ -60,6 +60,12 @@ export const JOURNAL_DATA: JournalData = {
       text: 'The Foundation is the first honest reckoning with what you are made of. What you built these past weeks either holds now, or it doesn\'t.',
     },
     {
+      key: 'corruptionTouched',
+      when: { corruption: 1 },
+      title: 'A Voice That Is Not Yours',
+      text: 'Somewhere beneath the breath you rushed, something takes root and starts to count. It says nothing yet. You find yourself listening for it anyway.',
+    },
+    {
       key: 'outerDisciple',
       when: { achievement: ['gate', 11] },
       title: 'Outer Disciple',
@@ -76,6 +82,12 @@ export const JOURNAL_DATA: JournalData = {
       when: { realm: ['c', 'Core Forged'] },
       title: 'The Core Holds',
       text: 'The furnace-light fades. In your dantian, something crystalline and permanent settles into place. The Golden Core is yours alone, the weight of every meridian you opened and every impurity you burned away. This is the thing that will outlast the rest.',
+    },
+    {
+      key: 'firstDaoHeart',
+      when: { daoHeartStacks: 1 },
+      title: 'What Did Not Break You',
+      text: 'The voice pressed its case and you sat with it until it had nothing left to say. It does not leave for good — nothing that far in ever does — but something in you has hardened where it used to give. Call it a scar with a better shape.',
     },
     {
       key: 'firstExpedition',

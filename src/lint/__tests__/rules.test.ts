@@ -14,6 +14,8 @@
 //   §8.1 legacy data           — weight-sum, ascending floors, qiMult ≥ 1.
 //   §6.4 secret realm data     — closed rotation, positive essence inputs, closed rewards.
 //   §7.6 alchemy data          — closed economy, accelerant-only effects, §6.6 optionality.
+//   §6.3 demon trial data      — completability by construction, ascending thresholds,
+//                                resolvable trial keys, positive sources/bleed/repeat.
 
 import { describe, it, expect } from 'vitest'
 import Decimal from 'break_eternity.js'
@@ -31,6 +33,7 @@ import { LEGACY_DATA } from '@/data/legacy'
 import { AUTOMATION_DATA } from '@/data/automation'
 import { SECRET_REALM_DATA } from '@/data/secret-realm'
 import { ALCHEMY_DATA } from '@/data/alchemy'
+import { HEART_DEMON_DATA, findDemonTrial } from '@/data/heart-demons'
 import { meets } from '@/engine/meets'
 import type { GameState } from '@/engine/meets'
 import type { MaterialKey } from '@/engine/types'
@@ -434,5 +437,104 @@ describe('§7.6 alchemy data', () => {
       const fraction = recipe.effect.poolBonus / fullPool
       expect(fraction, `${recipe.key} poolBonus is >= 15% of a full pool`).toBeLessThan(0.15)
     }
+  })
+})
+
+// ---- §6.3 demon trial completability lint -----------------------------------
+
+describe('§6.3 demon trial completability', () => {
+  it('every trial objective is completable under its own modifiers', () => {
+    for (const trial of HEART_DEMON_DATA.trials) {
+      const objective = trial.objective
+      if (objective.type === 'endure') {
+        // Time always passes — no other modifier can block it.
+        expect(objective.seconds, `${trial.key} endure.seconds is not positive`).toBeGreaterThan(0)
+      } else if (objective.type === 'gatherQi') {
+        // Qi must still accrue under the debuff, and the target must be finite.
+        expect(
+          objective.reqBaseFactor,
+          `${trial.key} gatherQi.reqBaseFactor is not positive`,
+        ).toBeGreaterThan(0)
+        expect(
+          Number.isFinite(objective.reqBaseFactor),
+          `${trial.key} gatherQi.reqBaseFactor is not finite`,
+        ).toBe(true)
+        expect(
+          trial.qiMultWhileActive,
+          `${trial.key} gatherQi debuff zeroes Qi/sec — objective is unreachable`,
+        ).toBeGreaterThan(0)
+      } else if (objective.type === 'prestigeCount') {
+        // The realm must remain prestigable at any scale under the debuff.
+        expect(objective.count, `${trial.key} prestigeCount.count is not positive`).toBeGreaterThan(0)
+        expect(
+          trial.qiMultWhileActive,
+          `${trial.key} prestigeCount debuff zeroes Qi/sec — objective is unreachable`,
+        ).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  it('every debuff is in (0, 1] (a real debuff, never zero, never a boost)', () => {
+    for (const trial of HEART_DEMON_DATA.trials) {
+      expect(trial.qiMultWhileActive, `${trial.key} qiMultWhileActive <= 0`).toBeGreaterThan(0)
+      expect(trial.qiMultWhileActive, `${trial.key} qiMultWhileActive > 1 (not a debuff)`).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('thresholds are strictly ascending', () => {
+    const thresholds = HEART_DEMON_DATA.thresholds
+    for (let i = 1; i < thresholds.length; i++) {
+      expect(thresholds[i]!.at, `threshold ${i} is not ascending`).toBeGreaterThan(thresholds[i - 1]!.at)
+    }
+  })
+
+  it('every threshold names a trial key that resolves', () => {
+    for (const threshold of HEART_DEMON_DATA.thresholds) {
+      expect(() => findDemonTrial(threshold.trial)).not.toThrow()
+    }
+  })
+
+  it('repeatEvery is positive (the ladder never expires)', () => {
+    expect(HEART_DEMON_DATA.repeatEvery).toBeGreaterThan(0)
+  })
+
+  it('thresholds[0].at is comfortably above any single source amount (no instant trial)', () => {
+    const sources = HEART_DEMON_DATA.corruption.sources
+    const amounts = [
+      ...Object.values(sources.rushedBreakthrough),
+      ...Object.values(sources.forgePush),
+      ...Object.values(sources.tribulation),
+    ] as number[]
+    const maxSingleSource = Math.max(...amounts)
+    expect(
+      maxSingleSource,
+      'a single corruption source can instantly trigger the first trial',
+    ).toBeLessThan(HEART_DEMON_DATA.thresholds[0]!.at)
+  })
+})
+
+// ---- §7.4 heart demon corruption data ----------------------------------------
+
+describe('§7.4 heart demon corruption data', () => {
+  it('every listed source amount is positive', () => {
+    const sources = HEART_DEMON_DATA.corruption.sources
+    const amounts = [
+      ...Object.values(sources.rushedBreakthrough),
+      ...Object.values(sources.forgePush),
+      ...Object.values(sources.tribulation),
+    ] as number[]
+    expect(amounts.length).toBeGreaterThan(0)
+    for (const amount of amounts) {
+      expect(amount, 'a corruption source amount is not positive').toBeGreaterThan(0)
+    }
+  })
+
+  it('bleed rates are positive (corruption always drains without a trial)', () => {
+    expect(HEART_DEMON_DATA.corruption.bleedPerSecond).toBeGreaterThan(0)
+    expect(HEART_DEMON_DATA.corruption.bleedPerDaoHeartStack).toBeGreaterThan(0)
+  })
+
+  it('Dao Heart qiMultPerStack is an accelerant (>= 1)', () => {
+    expect(HEART_DEMON_DATA.daoHeart.qiMultPerStack).toBeGreaterThanOrEqual(1)
   })
 })

@@ -19,6 +19,7 @@ import { useForgeStore } from '@/stores/forge'
 import { usePipelinesStore } from '@/stores/pipelines'
 import { useSecretRealmStore } from '@/stores/secretRealm'
 import { useAlchemyStore } from '@/stores/alchemy'
+import { useHeartDemonsStore } from '@/stores/heartDemons'
 import { findRealm } from '@/data/realms'
 import { SETPIECE_DATA } from '@/data/setpieces'
 
@@ -240,6 +241,31 @@ export function runPacingSim(): void {
     console.error('FAIL: diligent policy engaged optional slice-7 systems (should be zero-touch)')
   } else {
     console.log('PASS: diligent policy reached Soul Formation with zero expedition clears and zero pills')
+  }
+
+  // §6.6 zero-corruption proof (slice 8): the diligent policy always forges
+  // Steady (adds zero corruption by data — HEART_DEMON_DATA.corruption.sources.
+  // forgePush has no 'steady' key) and never faces a tribulation in this run,
+  // so its only possible corruption source is a rushed (Flawed/Stable-band)
+  // Foundation prestige. The policy fully opens meridians, tempers to Tendons,
+  // and climbs q to 6th Level BEFORE ever touching f (see runDiligent), so its
+  // live grade score should land Solid or better every time — both unlisted
+  // in rushedBreakthrough, i.e. zero corruption. If that assumption is wrong
+  // for even one of the policy's several f prestiges (Phase 2 first pass, or
+  // Phase 3's fuel-banking passes, which may run after a cascade wipes q.best
+  // — the Peak Foundation keep-rule isn't earned yet at that point), the
+  // policy is unknowingly demonizing the "clean" path — a real finding, not
+  // something this check should paper over by retuning HEART_DEMON_DATA.
+  const heartDemons = useHeartDemonsStore()
+  console.log(`\nHeart Demon corruption (diligent, zero-touch policy): ${heartDemons.corruption}`)
+  console.log(`Dao Heart stacks (diligent, zero-touch policy): ${heartDemons.daoHeartStacks}`)
+  if (heartDemons.corruption !== 0) {
+    console.error(
+      'FAIL: diligent policy accrued heart-demon corruption — its Foundation prestiges landed a ' +
+        'low live band at least once (see the harden-pass finding in the slice-8 report)',
+    )
+  } else {
+    console.log('PASS: diligent policy reached Soul Formation with zero heart-demon corruption')
   }
 }
 
