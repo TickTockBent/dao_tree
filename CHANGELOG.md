@@ -3,6 +3,17 @@
 All notable changes to **Dao Tree**. Versions track the itch.io releases;
 **0.2** was the first public release, so earlier development is folded into it.
 
+## 0.4.2 — unreleased
+
+### Changed
+- **Every Soul Aspect is now a real choice.** The Sword and Flowing Souls were
+  Insight-only — strictly worse than the free Formless Soul for anyone building
+  around Qi, a trap dressed as a reward. Every earned (Seed-gated) aspect now
+  carries the Formless foundation on both axes plus its elemental lean, so the
+  aspect you unlocked is never the wrong pick — only a different one. A new
+  design rule enforces this permanently: no earned aspect may punish the
+  gatherer's path.
+
 ## 0.4.1 — 2026-07-02 — the door closes
 
 ### Added

@@ -149,6 +149,24 @@ describe('§9.2 no dead multipliers', () => {
       expect(band.qiMult, `${band.label} qiMult < 1`).toBeGreaterThanOrEqual(1)
     }
   })
+
+  it('no Seed-gated aspect punishes the default Qi grammar (the metalSoul trap-aspect rule)', () => {
+    // An EARNED aspect must never be the wrong pick vs the free Formless floor
+    // for the game's central Qi-banking playstyle: its qiMult (implicit 1 when
+    // undeclared) must be >= Formless's. Found by the diversity sim's
+    // counterfactual probes (2026-07-02) — a dominated option is a trust-tax.
+    const nRealm = REALM_DATA.find((r) => r.soulAspect)
+    const aspects = nRealm!.soulAspect!.aspects
+    const formless = aspects.find((a) => a.key === 'formless')!
+    const formlessQi = formless.effect.qiMult ?? 1
+    for (const aspect of aspects) {
+      if (aspect.element === null) continue
+      expect(
+        aspect.effect.qiMult ?? 1,
+        `${aspect.key} punishes the default Qi grammar vs Formless`,
+      ).toBeGreaterThanOrEqual(formlessQi)
+    }
+  })
 })
 
 // ---- §6 gradeScore scaling --------------------------------------------------

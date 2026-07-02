@@ -218,16 +218,22 @@ export const REALM_DATA: readonly RealmRow[] = [
         // Formless — the generalist floor. Always pickable ({}); the completability
         // floor so NS is never aspect-blocked even with no Dao Seeds.
         { key: 'formless', label: 'Formless Soul', element: null, requires: {}, effect: { qiMult: 1.2, insightMult: 1.2 } },
+        // Element aspects: Seed-gated, so they carry Formless's 1.2 as a FLOOR on
+        // both axes plus their elemental lean — an earned aspect is never the
+        // wrong pick against the free floor (the metalSoul trap-aspect fix,
+        // 2026-07-02: insight-only lines were strictly worse than Formless for
+        // the default Qi grammar; found by the diversity sim's counterfactual
+        // probes, lint-enforced in rules.test as the default-grammar floor).
         // Metal (Sword) — the §4.2 sword line is an Insight engine; lean insightMult.
-        { key: 'metalSoul', label: 'Sword Soul', element: 'metal', requires: { daoElementTier: ['metal', 2] }, effect: { insightMult: 1.5 } },
+        { key: 'metalSoul', label: 'Sword Soul', element: 'metal', requires: { daoElementTier: ['metal', 2] }, effect: { qiMult: 1.2, insightMult: 1.5 } },
         // Wood — vitality of the living world; lean qiMult.
-        { key: 'woodSoul', label: 'Verdant Soul', element: 'wood', requires: { daoElementTier: ['wood', 2] }, effect: { qiMult: 1.45 } },
+        { key: 'woodSoul', label: 'Verdant Soul', element: 'wood', requires: { daoElementTier: ['wood', 2] }, effect: { qiMult: 1.45, insightMult: 1.2 } },
         // Water (Flow) — the §4.2 flow line leans Insight.
-        { key: 'waterSoul', label: 'Flowing Soul', element: 'water', requires: { daoElementTier: ['water', 2] }, effect: { insightMult: 1.5 } },
+        { key: 'waterSoul', label: 'Flowing Soul', element: 'water', requires: { daoElementTier: ['water', 2] }, effect: { qiMult: 1.2, insightMult: 1.5 } },
         // Fire (Life) — feeds the body's gathering; lean qiMult.
-        { key: 'fireSoul', label: 'Blazing Soul', element: 'fire', requires: { daoElementTier: ['fire', 2] }, effect: { qiMult: 1.5 } },
+        { key: 'fireSoul', label: 'Blazing Soul', element: 'fire', requires: { daoElementTier: ['fire', 2] }, effect: { qiMult: 1.5, insightMult: 1.2 } },
         // Earth (Mountain) — immovable foundation; lean qiMult.
-        { key: 'earthSoul', label: 'Mountain Soul', element: 'earth', requires: { daoElementTier: ['earth', 2] }, effect: { qiMult: 1.45 } },
+        { key: 'earthSoul', label: 'Mountain Soul', element: 'earth', requires: { daoElementTier: ['earth', 2] }, effect: { qiMult: 1.45, insightMult: 1.2 } },
       ],
     },
   },
