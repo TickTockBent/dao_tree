@@ -90,11 +90,7 @@ function asDecimal(v: unknown): Decimal {
 const TICK_ROUNDS = 20
 const TICK_DIFF_SECONDS = 0.5
 
-// SKELETON GRACE: skipIf guards the empty-goldens window between the skeleton
-// commit and the first fixture landing. The implement pass that adds the
-// first golden MUST replace `describe.skipIf(...)` with a plain `describe`
-// so an emptied goldens dir can never silently pass again.
-describe.skipIf(fixtureFiles.length === 0)('golden-save lineage', () => {
+describe('golden-save lineage', () => {
   it('has at least one golden fixture', () => {
     expect(fixtureFiles.length).toBeGreaterThan(0)
   })

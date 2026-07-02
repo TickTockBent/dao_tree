@@ -1,0 +1,169 @@
+{
+  "version": "0.3.0",
+  "note": "mid-Act-I: q rebuilt post-cascade (best 9), Stable foundation (grade 1) re-earned to best 26 after Core Formation (c.best 2), core forged Lower (steady push), 4 meridians, temper 10 (Tendons), Azure Sword sect with ~1920 contribution + stipend",
+  "save": {
+    "saveVersion": 1,
+    "versionType": "dao-tree",
+    "time": 1750000000000,
+    "timePlayed": 7200,
+    "points": "543",
+    "keepGoing": false,
+    "hasNaN": false,
+    "devSpeed": null,
+    "offTime": null,
+    "tab": null,
+    "navTab": null,
+    "subtabs": {},
+    "lastSafeTab": null,
+    "b": {
+      "primaryMeridians": 4,
+      "extraordinaryMeridians": 0,
+      "temperLevel": 10,
+      "foundationGrade": 1,
+      "coreGrade": 1,
+      "soulAspect": "",
+      "scarDepth": 0,
+      "scarHealProgress": 0,
+      "scarHealedDepth": 0,
+      "milestones": [
+        0,
+        1,
+        2
+      ]
+    },
+    "realms": {
+      "q": {
+        "points": "9",
+        "best": "9",
+        "total": "9",
+        "unlocked": true,
+        "resetTime": 1,
+        "milestones": [
+          0,
+          1,
+          2
+        ]
+      },
+      "f": {
+        "points": "1",
+        "best": "26",
+        "total": "26",
+        "unlocked": true,
+        "resetTime": 1,
+        "milestones": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      "c": {
+        "points": "2",
+        "best": "2",
+        "total": "2",
+        "unlocked": true,
+        "resetTime": 1,
+        "milestones": [
+          0,
+          1
+        ]
+      },
+      "n": {
+        "points": "0",
+        "best": "0",
+        "total": "0",
+        "unlocked": false,
+        "resetTime": 0,
+        "milestones": []
+      },
+      "s": {
+        "points": "0",
+        "best": "0",
+        "total": "0",
+        "unlocked": false,
+        "resetTime": 0,
+        "milestones": []
+      }
+    },
+    "dao": {
+      "insight": "0",
+      "activeStance": "",
+      "revealed": false,
+      "nodeTiers": {}
+    },
+    "sect": {
+      "archetype": "azureSword",
+      "contribution": "1919.9428284311603",
+      "best": "1919.9428284311603",
+      "revealed": true,
+      "techniques": [],
+      "milestones": [
+        0
+      ]
+    },
+    "gate": {
+      "unlocked": true,
+      "achievements": []
+    },
+    "forge": {
+      "refinementProgress": "0",
+      "warming": false,
+      "lastForgeCracked": false
+    },
+    "trib": {
+      "tribActive": false,
+      "tribElapsed": 0,
+      "tribPool": "0",
+      "tribPoolMax": "0",
+      "tribWaveIndex": 0,
+      "tribGrade": -1,
+      "tribCooldownUntil": 0
+    },
+    "legacy": {
+      "actOneGrade": -1
+    },
+    "journal": {
+      "latched": [],
+      "reflected": [],
+      "stage": ""
+    }
+  },
+  "expect": [
+    {
+      "path": "realms.q.best",
+      "gte": 9
+    },
+    {
+      "path": "realms.f.best",
+      "gte": 25
+    },
+    {
+      "path": "realms.c.best",
+      "gte": 2
+    },
+    {
+      "path": "b.primaryMeridians",
+      "equals": 4
+    },
+    {
+      "path": "b.temperLevel",
+      "equals": 10
+    },
+    {
+      "path": "b.foundationGrade",
+      "equals": 1
+    },
+    {
+      "path": "b.coreGrade",
+      "gte": 1
+    },
+    {
+      "path": "sect.archetype",
+      "equals": "azureSword"
+    },
+    {
+      "path": "sect.best",
+      "gte": 1900
+    }
+  ]
+}

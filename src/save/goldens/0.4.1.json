@@ -1,0 +1,214 @@
+{
+  "version": "0.4.1",
+  "note": "mid-Act-I post-forge: Stable foundation (grade 1, f.best 26 after c.best 2), core forged Lower, temper 10 + 4 meridians, Azure Sword sect ~1920 contribution, Verdant Hollow cleared into alchemy (profession + 1 held gathering pill), and Deep Meditation q+f rungs purchased",
+  "save": {
+    "saveVersion": 1,
+    "versionType": "dao-tree",
+    "time": 1750000000000,
+    "timePlayed": 7200,
+    "points": "543",
+    "keepGoing": false,
+    "hasNaN": false,
+    "devSpeed": null,
+    "offTime": null,
+    "tab": null,
+    "navTab": null,
+    "subtabs": {},
+    "lastSafeTab": null,
+    "b": {
+      "primaryMeridians": 4,
+      "extraordinaryMeridians": 0,
+      "temperLevel": 10,
+      "foundationGrade": 1,
+      "coreGrade": 1,
+      "soulAspect": "",
+      "scarDepth": 0,
+      "scarHealProgress": 0,
+      "scarHealedDepth": 0,
+      "milestones": [
+        0,
+        1,
+        2
+      ]
+    },
+    "realms": {
+      "q": {
+        "points": "9",
+        "best": "9",
+        "total": "9",
+        "unlocked": true,
+        "resetTime": 1,
+        "milestones": [
+          0,
+          1,
+          2
+        ]
+      },
+      "f": {
+        "points": "1",
+        "best": "26",
+        "total": "26",
+        "unlocked": true,
+        "resetTime": 1,
+        "milestones": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      "c": {
+        "points": "2",
+        "best": "2",
+        "total": "2",
+        "unlocked": true,
+        "resetTime": 1,
+        "milestones": [
+          0,
+          1
+        ]
+      },
+      "n": {
+        "points": "0",
+        "best": "0",
+        "total": "0",
+        "unlocked": false,
+        "resetTime": 0,
+        "milestones": []
+      },
+      "s": {
+        "points": "0",
+        "best": "0",
+        "total": "0",
+        "unlocked": false,
+        "resetTime": 0,
+        "milestones": []
+      }
+    },
+    "dao": {
+      "insight": "107.65822165984403",
+      "activeStance": "",
+      "revealed": false,
+      "nodeTiers": {}
+    },
+    "sect": {
+      "archetype": "azureSword",
+      "contribution": "1919.9428284311603",
+      "best": "1919.9428284311603",
+      "revealed": true,
+      "techniques": [],
+      "milestones": [
+        0
+      ]
+    },
+    "gate": {
+      "unlocked": true,
+      "achievements": []
+    },
+    "forge": {
+      "refinementProgress": "0",
+      "warming": false,
+      "lastForgeCracked": false
+    },
+    "trib": {
+      "tribActive": false,
+      "tribElapsed": 0,
+      "tribPool": "0",
+      "tribPoolMax": "0",
+      "tribWaveIndex": 0,
+      "tribGrade": -1,
+      "tribCooldownUntil": 0
+    },
+    "legacy": {
+      "actOneGrade": -1
+    },
+    "journal": {
+      "latched": [],
+      "reflected": [],
+      "stage": ""
+    },
+    "secret": {
+      "expedition": {
+        "active": false,
+        "siteKey": null,
+        "elapsed": 0,
+        "essence": 0
+      },
+      "clears": {
+        "verdantHollow": 1
+      },
+      "cooldownUntil": {
+        "verdantHollow": 721
+      }
+    },
+    "alchemy": {
+      "profession": "alchemy",
+      "materials": {
+        "spiritHerb": 528.2911082992201
+      },
+      "pills": {
+        "gatheringPill": 1
+      },
+      "activePill": null
+    },
+    "demons": {
+      "corruption": 24,
+      "banked": 0,
+      "thresholdsCrossed": 0,
+      "daoHeartStacks": 0,
+      "activeTrial": null,
+      "trialElapsed": 0,
+      "trialQiGathered": 0,
+      "trialPrestiges": 0,
+      "touched": true
+    },
+    "seclusion": {
+      "purchased": [
+        "q",
+        "f"
+      ]
+    }
+  },
+  "expect": [
+    {
+      "path": "realms.q.best",
+      "gte": 9
+    },
+    {
+      "path": "realms.f.best",
+      "gte": 25
+    },
+    {
+      "path": "realms.c.best",
+      "gte": 2
+    },
+    {
+      "path": "b.temperLevel",
+      "equals": 10
+    },
+    {
+      "path": "b.coreGrade",
+      "gte": 1
+    },
+    {
+      "path": "sect.archetype",
+      "equals": "azureSword"
+    },
+    {
+      "path": "secret.clears.verdantHollow",
+      "equals": 1
+    },
+    {
+      "path": "alchemy.profession",
+      "equals": "alchemy"
+    },
+    {
+      "path": "seclusion.purchased.0",
+      "equals": "q"
+    },
+    {
+      "path": "seclusion.purchased.1",
+      "equals": "f"
+    }
+  ]
+}

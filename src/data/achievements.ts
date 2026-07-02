@@ -50,16 +50,31 @@ export interface AchievementDef {
 
 /**
  * The registry. Append-only once a version ships (keys are permanent).
- * ⟨seed⟩ Three entries pin the shape; the Act I set is filled in by the
- * implementation pass — every entry meets()-expressible, spoiler-heavy late
- * beats marked hidden.
+ * The Act I set. Every entry meets()-expressible (done !== null, lint-pinned);
+ * hidden is reserved for horizon beats (Nascent Soul onward, heart-demon
+ * spoilers, mastery capstones) — the current loop is never veiled.
+ *
+ * NOT expressible in the v1 grammar (left for event-driven award() call
+ * sites later): a specific forge-push outcome, a core GRADE threshold
+ * (coreBelowCeiling speaks to headroom, not grade), tribulation grades,
+ * "core at its ceiling" (needs negation).
  */
 export const ACHIEVEMENT_DATA: readonly AchievementDef[] = [
+  // ---- spine — the realm climb ----------------------------------------------
   {
     key: 'FIRST_BREATH',
     name: 'First Breath',
     flavor: 'Draw in a single breath of qi. Every immortal began here.',
     done: { qi: 1 },
+    hidden: false,
+    category: 'spine',
+  },
+  {
+    key: 'SIXTH_LEVEL',
+    name: 'The Sixth Level',
+    flavor:
+      'Reach the 6th Level of Qi Condensation — the level at which the path ahead first shows itself.',
+    done: { realm: ['q', '6th Level'] },
     hidden: false,
     category: 'spine',
   },
@@ -72,12 +87,174 @@ export const ACHIEVEMENT_DATA: readonly AchievementDef[] = [
     category: 'spine',
   },
   {
+    key: 'NASCENT_SOUL',
+    name: 'A Second Self',
+    flavor:
+      'Reach Nascent Soul. Something small and bright opens its eyes inside your dantian, and it is you.',
+    done: { realm: ['n', 'Early Nascent Soul'] },
+    hidden: true,
+    category: 'spine',
+  },
+  {
+    key: 'SOUL_FORMATION',
+    name: 'Soul Formation',
+    flavor:
+      'Enter Soul Formation, where the self you built begins to draw the regard of the heavens.',
+    done: { realm: ['s', 'Early Soul Formation'] },
+    hidden: true,
+    category: 'spine',
+  },
+
+  // ---- body — meridians and temper --------------------------------------------
+  {
+    key: 'FIRST_MERIDIAN',
+    name: 'A Channel Opens',
+    flavor: 'Open the first of the twelve primary meridians. The way in is also the way through.',
+    done: { meridians: 1 },
+    hidden: false,
+    category: 'body',
+  },
+  {
+    key: 'TWELVE_RIVERS',
+    name: 'Twelve Rivers',
+    flavor: 'Open all twelve primary meridians. The qi moves through you now without asking.',
+    done: { primaryMeridiansAll: true },
+    hidden: false,
+    category: 'body',
+  },
+  {
+    key: 'TEMPERED_FLESH',
+    name: 'Tempered Flesh',
+    flavor: 'Temper your body to Flesh. Pain is a teacher with one lesson, taught well.',
+    done: { temperTier: 'flesh' },
+    hidden: false,
+    category: 'body',
+  },
+  {
+    key: 'TEMPERED_MARROW',
+    name: 'To the Marrow',
+    flavor: 'Temper your body to Marrow. Nothing of the old, untrained flesh remains.',
+    done: { temperTier: 'marrow' },
+    hidden: false,
+    category: 'body',
+  },
+
+  // ---- forge — the Golden Core --------------------------------------------------
+  {
     key: 'CORE_FORGED',
     name: 'The Golden Core',
     flavor: 'Forge a Golden Core in the crucible of your own Foundation.',
     done: { coreForged: true },
     hidden: false,
     category: 'forge',
+  },
+  {
+    key: 'CORE_TEMPERED',
+    name: 'Thrice-Refined',
+    flavor:
+      'Refine the Golden Core to its tempered state. What is forged once is perfected slowly.',
+    done: { realm: ['c', 'Core Tempered'] },
+    hidden: false,
+    category: 'forge',
+  },
+
+  // ---- world — sect, secret realms, profession ----------------------------------
+  {
+    key: 'SECT_JOINED',
+    name: 'A Name in the Ledger',
+    flavor: 'Join a sect. A token, a bow, a name written down — and the weight of belonging.',
+    done: { sectJoined: true },
+    hidden: false,
+    category: 'world',
+  },
+  {
+    key: 'SECT_STANDING',
+    name: 'Standing',
+    flavor:
+      'Earn a thousand contribution in service of your sect. Deeds accumulate the way qi does: slowly, then all at once.',
+    done: { contribution: 1000 },
+    hidden: false,
+    category: 'world',
+  },
+  {
+    key: 'FIRST_DELVE',
+    name: 'First Delve',
+    flavor: 'Clear a Secret Realm expedition and carry something real back out.',
+    done: { secretRealmClears: 1 },
+    hidden: false,
+    category: 'world',
+  },
+  {
+    key: 'REALM_DELVER',
+    name: 'Realm Delver',
+    flavor: 'Clear ten Secret Realm expeditions. The hidden places have begun to expect you.',
+    done: { secretRealmClears: 10 },
+    hidden: false,
+    category: 'world',
+  },
+  {
+    key: 'SECOND_DISCIPLINE',
+    name: 'A Second Discipline',
+    flavor: 'Choose a profession. The cauldron asks for its own patience.',
+    done: { professionChosen: true },
+    hidden: false,
+    category: 'world',
+  },
+
+  // ---- heart — corruption and Dao Hearts -----------------------------------------
+  {
+    key: 'THE_WHISPER_COMES',
+    name: 'The Whisper Comes',
+    flavor: 'Let corruption climb until a heart demon stirs. Every shortcut keeps its own ledger.',
+    done: { corruption: 60 },
+    hidden: true,
+    category: 'heart',
+  },
+  {
+    key: 'FIRST_DAO_HEART',
+    name: 'Dao Heart',
+    flavor:
+      'Clear a Demon Trial and take your first Dao Heart. What did not break you has a shape now.',
+    done: { daoHeartStacks: 1 },
+    hidden: true,
+    category: 'heart',
+  },
+
+  // ---- mastery — capstones and long-tail feats -----------------------------------
+  {
+    key: 'THIRTEENTH_LEVEL',
+    name: 'The Thirteenth Level',
+    flavor:
+      'Reach the 13th Level of Qi Condensation. Most stop counting at nine; the path did not.',
+    done: { realm: ['q', '13th Level'] },
+    hidden: false,
+    category: 'mastery',
+  },
+  {
+    key: 'SEED_OF_THE_DAO',
+    name: 'Seed of the Dao',
+    flavor: 'Deepen a Dao glimpse into a Seed. Comprehension, planted, grows on its own.',
+    done: { anyDaoNode: 2 },
+    hidden: false,
+    category: 'mastery',
+  },
+  {
+    key: 'CLOSED_DOOR',
+    name: 'Closed-Door Cultivator',
+    flavor:
+      'Master all five disciplines of deep meditation. Behind the closed door, the work continues without you.',
+    done: { seclusionRungs: 5 },
+    hidden: true,
+    category: 'mastery',
+  },
+  {
+    key: 'SECT_ELDER',
+    name: 'Elder',
+    flavor:
+      'Reach Late Soul Formation with thirty thousand contribution to your name. The youngest disciples look at you the way you once looked up.',
+    done: { sectJoined: true, contribution: 30000, realm: ['s', 'Late Soul Formation'] },
+    hidden: true,
+    category: 'mastery',
   },
 ] as const
 

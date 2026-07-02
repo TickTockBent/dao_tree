@@ -29,7 +29,7 @@ compatibility is proven in CI before every change, not discovered by players.
   "save": { "...": "the serialized PlayerSave exactly as writeSave stores it" },
   "expect": [
     { "path": "realms.c.best", "gte": 3 },
-    { "path": "seclusion.rungs.0", "equals": "q" }
+    { "path": "seclusion.purchased.0", "equals": "q" }
   ]
 }
 ```

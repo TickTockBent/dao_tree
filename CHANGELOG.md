@@ -5,6 +5,13 @@ All notable changes to **Dao Tree**. Versions track the itch.io releases;
 
 ## 0.4.2 — unreleased
 
+### Added
+- **Achievements — the eternal record.** A trophy shelf in the Journal tab:
+  twenty-two deeds across the Path, the Vessel, the Crucible, the World, the
+  Heart, and Mastery. What is earned here survives everything — no
+  breakthrough, no tribulation, nothing resets it. Later horizons show only
+  as ??? until reached; the road you are on is always legible.
+
 ### Changed
 - **Every Soul Aspect is now a real choice.** The Sword and Flowing Souls were
   Insight-only — strictly worse than the free Formless Soul for anyone building
