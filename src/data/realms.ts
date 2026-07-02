@@ -1,8 +1,10 @@
 // src/data/realms.ts — single source of truth for the realm chain (spec §5).
 //
 // Port of js/data/realms.js. Every tunable number for the realm spine lives
-// here; tuning edits data, never code. All values are pass-1 ⟨tune⟩ figures
-// from docs/internal/early-game-spec-v0.1.2.md §5/§6/§7.
+// here; tuning edits data, never code. Values originate from
+// early-game-spec-v0.1.2.md §5/§6/§7 (design docs live in git history as of
+// 0c75e51 — retrieve via `git show 5887814:docs/<name>`), tuned since by the
+// pacing passes recorded in the commit log.
 
 import type { Condition } from '@/engine/meets'
 import type {

@@ -13,7 +13,7 @@
 // must never require optional systems. Costs are deliberately affordable-but-
 // noticeable sinks at each realm's banking scale. ⟨tune⟩
 //
-// The genre note this answers (docs/idle_research.md): offline generosity is
+// The genre note this answers (idle_research.md, in git history): offline generosity is
 // one of the most-loved idle features and stingy caps read as punishment. The
 // framing here is "your seclusion deepens" (what you KEEP), never "offline
 // capped" (what you lose).
