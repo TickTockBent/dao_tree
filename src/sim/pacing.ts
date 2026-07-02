@@ -100,6 +100,15 @@ interface SpineConfig {
    * whether the ×7.45 ext-meridian ceiling is must-buy content or a trap.
    */
   buyExtraordinaryMeridians?: boolean
+  /**
+   * COUNTERFACTUAL probe only (deferred-decision #2, tax-vs-ritual): force-
+   * preserve c.best + c.milestones across every n/s cascade, simulating a
+   * c keep rule that does NOT exist in the game. The † runs measure the
+   * c-churn tax — the time spent re-climbing Core Formation after each big
+   * prestige. NOT game-legal; implemented as a sim-side snapshot/restore
+   * around realm.prestige (see simPrestige), never as an engine change.
+   */
+  counterfactualCKeep?: boolean
 }
 
 interface ProfileSummary {
@@ -112,12 +121,26 @@ interface ProfileSummary {
   extraordinaryMeridians: number
 }
 
+/**
+ * The Realistic actor's swept knobs (the jitter-sensitivity sweep varies these
+ * two; everything else stays at the REALISTIC_* constants). Deterministic —
+ * the sweep is a fixed grid, not sampled.
+ */
+interface RealisticParams {
+  /** Late-game (post-forge) check-in interval, sim seconds. */
+  lateCheckinSeconds: number
+  /** Prestige when banked Qi >= this × reqBase (the over-banking factor). */
+  bankMultiple: number
+}
+
 interface SimState {
   simSeconds: number
   maxIterations: number
   marks: ProfileMarks
-  /** Horizontal plan (spine + focused profiles). Absent for Diligent/Realistic drivers. */
+  /** Horizontal plan (spine + focused profiles). Absent for the Diligent driver. */
   config?: SpineConfig
+  /** Realistic knobs (defaulted to the REALISTIC_* constants; swept by the jitter grid). */
+  realisticParams?: RealisticParams
   /** Gathering pills swallowed this run (report column). */
   pillsSwallowed: number
   /** Gathering/clarity/warding pills crafted this run. */
@@ -453,17 +476,44 @@ function qiForGain(realmId: 'q' | 'f' | 'c' | 'n' | 's', gain: Decimal): Decimal
 }
 
 /**
+ * All non-Diligent prestiges route through here. Normally a plain
+ * realm.prestige — but when the profile carries the COUNTERFACTUAL
+ * counterfactualCKeep flag and the resetter is n or s, c.best + c.milestones
+ * are snapshotted before the cascade and restored after, simulating a c keep
+ * rule (the same shape as the real soulCarriesTheClimb rule: best + milestones
+ * survive, banked points do NOT). Sim-side only; the engine's doReset cascade
+ * still runs untouched. This is the churn-decomposition probe for deferred-
+ * decision #2 (tax-vs-ritual) — labeled COUNTERFACTUAL, not game-legal.
+ */
+function simPrestige(realmId: 'q' | 'f' | 'c' | 'n' | 's', state: SimState): void {
+  const realm = useRealmStore()
+  const probeCKeep =
+    state.config?.counterfactualCKeep === true && (realmId === 'n' || realmId === 's')
+  const cBefore = probeCKeep ? realm.stateOf('c') : null
+  const keptBest = cBefore ? cBefore.best : ''
+  const keptMilestones = cBefore ? [...cBefore.milestones] : []
+  realm.prestige(realmId)
+  if (probeCKeep) {
+    const cAfter = realm.stateOf('c')
+    // Restore the keep-rule keys only if the cascade actually wiped them (it
+    // always does today — nothing keeps c below n/s — but stay defensive).
+    if (new Decimal(cAfter.best).lt(new Decimal(keptBest))) {
+      realm.slice['c'] = { ...cAfter, best: keptBest, milestones: keptMilestones }
+    }
+  }
+}
+
+/**
  * Competent prestige at the realm's reqBase — the minimum-gain prestige,
  * time-optimal for sub-linear gainExp (gain/time ∝ points^(gainExp−1) falls
  * with banking). Engages the horizontal systems at the decision point.
  */
 function prestigeRealmTicking(realmId: 'q' | 'f' | 'c' | 'n' | 's', state: SimState): void {
   const game = useGameStore()
-  const realm = useRealmStore()
   const r = findRealm(realmId)
   advanceBanked(new Decimal(r.reqBase), state)
   if (game.points.lt(r.reqBase)) game.points = new Decimal(r.reqBase)
-  realm.prestige(realmId)
+  simPrestige(realmId, state)
   engageSpine(state)
 }
 
@@ -486,7 +536,7 @@ function climbRealmChunked(
     const bankedPoints = new Decimal(realm.stateOf(realmId).points)
     const gainNeeded = new Decimal(targetBest).sub(bankedPoints).max(1)
     advanceBanked(qiForGain(realmId, gainNeeded), state)
-    realm.prestige(realmId)
+    simPrestige(realmId, state)
     engageSpine(state)
     if (++iterations > state.maxIterations) {
       throw new Error(`climbRealmChunked('${realmId}') exceeded ${state.maxIterations} iterations`)
@@ -737,9 +787,12 @@ function engageSpine(state: SimState): void {
  * smoke-test territory, not modeled here.
  *
  * Bit-identity contract: with the Competent config, every branch below runs the
- * same operations in the same order as the pre-refactor runCompetent, so the
- * pinned 74,041s / 20.57h figure is preserved to the second. The refactor only
- * added opt-out branches for the focused profiles and never reordered a
+ * same operations in the same order as the pre-refactor runCompetent — verified
+ * to the second (74,041s) against the pre-refactor run on the same data. (That
+ * CONSTANT is data-relative: the aspect rebalance in src/data/realms.ts commit
+ * 562c6ad shifts the measured hours; the invariant that survives data tunes is
+ * the policy shape, re-baselined in the report below.) The refactor only added
+ * opt-out branches for the focused profiles and never reordered a
  * Competent-live path.
  */
 function runSpine(state: SimState): void {
@@ -1040,14 +1093,15 @@ function buyLatticeHesitant(): void {
   }
 }
 
-/** One over-banked prestige from the idle pile, iff banked >= 1.5× reqBase. Returns whether it fired. */
+/** One over-banked prestige from the idle pile, iff banked >= bankMultiple × reqBase. Returns whether it fired. */
 function realisticBankedPrestige(realmId: 'q' | 'f' | 'c' | 'n' | 's', state: SimState): boolean {
   const realm = useRealmStore()
   const game = useGameStore()
   if (!realm.canReset(realmId)) return false
+  const bankMultiple = state.realisticParams?.bankMultiple ?? REALISTIC_BANK_MULTIPLE
   const reqBase = new Decimal(findRealm(realmId).reqBase)
-  if (game.points.lt(reqBase.times(REALISTIC_BANK_MULTIPLE))) return false
-  realm.prestige(realmId)
+  if (game.points.lt(reqBase.times(bankMultiple))) return false
+  simPrestige(realmId, state)
   recordMarks(state)
   return true
 }
@@ -1140,23 +1194,43 @@ function realisticHorizontals(state: SimState, ctx: RealisticContext): void {
   engagePillActions(state)
 }
 
-function runRealistic(state: SimState): void {
-  state.config = REALISTIC_CONFIG
-  const realm = useRealmStore()
-  const body = useBodyStore()
-  const ctx: RealisticContext = { cascades: 0, sawSectReveal: false }
-  let guard = 0
-  while (realm.realmBest('s').toNumber() < S_GREAT_CIRCLE_AT) {
-    const interval = body.coreGrade >= 0 ? REALISTIC_CHECKIN_LATE_SECONDS : REALISTIC_CHECKIN_EARLY_SECONDS
-    advanceIdle(interval, state)
-    buyBodyRealistic()
-    realisticHorizontals(state, ctx)
-    realisticSpineStep(state, ctx)
-    if (++guard > state.maxIterations) {
-      throw new Error('runRealistic exceeded the check-in cap — the spine appears stalled')
+/** The Realistic actor's default knobs (the headline run; the sweep varies them). */
+const REALISTIC_DEFAULT_PARAMS: RealisticParams = {
+  lateCheckinSeconds: REALISTIC_CHECKIN_LATE_SECONDS,
+  bankMultiple: REALISTIC_BANK_MULTIPLE,
+}
+
+/**
+ * Build a Realistic runner with explicit knobs. config lets the † probe attach
+ * counterfactualCKeep; params feed the jitter-sensitivity sweep. The default
+ * (REALISTIC_CONFIG + REALISTIC_DEFAULT_PARAMS) is the headline actor.
+ */
+function realisticRunner(
+  config: SpineConfig = REALISTIC_CONFIG,
+  params: RealisticParams = REALISTIC_DEFAULT_PARAMS,
+): (state: SimState) => void {
+  return (state: SimState) => {
+    state.config = config
+    state.realisticParams = params
+    const realm = useRealmStore()
+    const body = useBodyStore()
+    const ctx: RealisticContext = { cascades: 0, sawSectReveal: false }
+    let guard = 0
+    while (realm.realmBest('s').toNumber() < S_GREAT_CIRCLE_AT) {
+      const interval =
+        body.coreGrade >= 0 ? params.lateCheckinSeconds : REALISTIC_CHECKIN_EARLY_SECONDS
+      advanceIdle(interval, state)
+      buyBodyRealistic()
+      realisticHorizontals(state, ctx)
+      realisticSpineStep(state, ctx)
+      if (++guard > state.maxIterations) {
+        throw new Error('runRealistic exceeded the check-in cap — the spine appears stalled')
+      }
     }
   }
 }
+
+const runRealistic = realisticRunner()
 
 // ---- Main -------------------------------------------------------------------
 
@@ -1176,6 +1250,25 @@ function summarize(state: SimState): ProfileSummary {
     sBest: realm.realmBest('s').toNumber(),
     extraordinaryMeridians: body.extraordinaryMeridians,
   }
+}
+
+/**
+ * Quiet variant for the jitter sweep: boots + runs a profile and snapshots the
+ * summary WITHOUT the per-profile console block (9 sweep points would drown
+ * the report). Same boot path and state shape as runProfile.
+ */
+function runProfileQuiet(fn: (state: SimState) => void): SimState {
+  bootSim()
+  const state: SimState = {
+    simSeconds: 0,
+    maxIterations: 100000,
+    marks: {},
+    pillsSwallowed: 0,
+    pillsCrafted: 0,
+  }
+  fn(state)
+  state.summary = summarize(state)
+  return state
 }
 
 function runProfile(name: string, fn: (state: SimState) => void): SimState {
@@ -1343,6 +1436,19 @@ export function runPacingSim(): void {
   // ---- Realistic: the experience-target actor (calibration) ----------------
   const realisticRun = runProfile('Realistic', runRealistic)
 
+  // ---- C-keep counterfactuals († runs): the churn-decomposition probes ------
+  // Same policies as Competent/Realistic, but c.best + c.milestones are force-
+  // preserved across n/s cascades (COUNTERFACTUAL — a c keep rule that does not
+  // exist in the game). The base-vs-† delta is the measured c-churn tax.
+  const competentCKeepRun = runProfile(
+    'Competent†',
+    spineRunner({ ...COMPETENT_CONFIG, counterfactualCKeep: true }),
+  )
+  const realisticCKeepRun = runProfile(
+    'Realistic†',
+    realisticRunner({ ...REALISTIC_CONFIG, counterfactualCKeep: true }),
+  )
+
   // ---- Structural assertions: focused builds inherit the competent spine ---
   // Each must terminate at the tribulation trigger AND beat Diligent by >= 4×
   // (they share the rate-restoring spine, so this MUST hold — a failure is a
@@ -1401,6 +1507,8 @@ export function runPacingSim(): void {
     markRow('SectFocused*', sectCounterfactualRun),
     markRow('PillFocused*', pillCounterfactualRun),
     markRow('Realistic', realisticRun),
+    markRow('Competent†', competentCKeepRun),
+    markRow('Realistic†', realisticCKeepRun),
   ])
 
   // ---- BUILD DIVERSITY (calibration — bands await sign-off) -----------------
@@ -1440,10 +1548,11 @@ export function runPacingSim(): void {
   attribution('SectFocused', sectHours, sectCfHours)
   attribution('PillFocused', pillHours, pillCfHours)
   console.log(
-    '  NOTE: a NEGATIVE Formless penalty means the metal aspect (insightMult 1.5, no qiMult) is ' +
-      'WORSE than Formless (qiMult 1.2 × insightMult 1.2) for these Qi-banking builds — the aspect ' +
-      'lock is NOT their bottleneck; the lag is residual/systemic. The element axis only pays for a ' +
-      'Qi-leaning soul (fire/wood/earth), which is itself lattice-Seed-gated.',
+    '  NOTE (post-rebalance data): every element aspect now carries qiMult >= 1.2 (the Formless ' +
+      'floor), so a forced element aspect can only match-or-beat Formless and the penalty now ' +
+      'measures the true cost of the aspect lock. A near-zero penalty means the lock is not the ' +
+      "bottleneck; the lag vs Competent is residual/systemic. (Pre-rebalance, metalSoul's missing " +
+      'qiMult made this penalty run NEGATIVE — the trap-aspect finding, since fixed in data.)',
   )
   // Aspect-adjusted cluster: swap in the counterfactual (element-aspect) hours for
   // the two Formless-locked builds, leaving LatticeFocused (already element) as-is.
@@ -1487,6 +1596,91 @@ export function runPacingSim(): void {
       `expeditions=${realisticRun.summary?.expeditions}`,
   )
   console.log('  (Calibration only — Competent is the regression floor; Realistic is the experience target. Two bands, two jobs.)')
+
+  // ---- C-CHURN DECOMPOSITION (decision input for #2 — no assertion) --------
+  // The † runs force-preserve c across n/s cascades (COUNTERFACTUAL c keep
+  // rule). base − † = the c-churn tax; churn share = tax / base. For Realistic,
+  // the remaining delta vs Competent splits into idle-gap (R† − C†, the human-
+  // imperfection cost with churn removed from both) and churn-gap (the extra
+  // churn Realistic pays beyond Competent's — its every-other-cascade lapses
+  // make its c climbs slower and rarer, so it banks at degraded rates longer).
+  const competentCKeepHours = competentCKeepRun.simSeconds / 3600
+  const realisticCKeepHours = realisticCKeepRun.simSeconds / 3600
+  const competentChurnHours = competentHours - competentCKeepHours
+  const realisticChurnHours = realisticHours - realisticCKeepHours
+  console.log('\n=== C-CHURN DECOMPOSITION (decision input for #2 — no assertion) ===')
+  console.table([
+    {
+      profile: 'Competent',
+      baseHours: competentHours.toFixed(2),
+      withCKeep: competentCKeepHours.toFixed(2),
+      churnTaxHours: competentChurnHours.toFixed(2),
+      churnShare: `${((competentChurnHours / competentHours) * 100).toFixed(1)}%`,
+    },
+    {
+      profile: 'Realistic',
+      baseHours: realisticHours.toFixed(2),
+      withCKeep: realisticCKeepHours.toFixed(2),
+      churnTaxHours: realisticChurnHours.toFixed(2),
+      churnShare: `${((realisticChurnHours / realisticHours) * 100).toFixed(1)}%`,
+    },
+  ])
+  const experienceGapHours = realisticHours - competentHours
+  const idleGapHours = realisticCKeepHours - competentCKeepHours
+  const churnGapHours = realisticChurnHours - competentChurnHours // == gap − idleGap
+  console.log(
+    `  Realistic − Competent gap: ${experienceGapHours.toFixed(2)}h = ` +
+      `idle/imperfection ${idleGapHours.toFixed(2)}h (${((idleGapHours / experienceGapHours) * 100).toFixed(1)}%) + ` +
+      `keep-topology churn ${churnGapHours.toFixed(2)}h (${((churnGapHours / experienceGapHours) * 100).toFixed(1)}%)`,
+  )
+  console.log(
+    '  (COUNTERFACTUAL probe — the c keep rule does not exist in the game; this measures what one would buy back.)',
+  )
+
+  // ---- REALISTIC SENSITIVITY (calibration) ----------------------------------
+  // Deterministic 9-point grid (no RNG): late-game check-in interval at
+  // 0.8×/1.0×/1.2× of REALISTIC_CHECKIN_LATE_SECONDS crossed with banking
+  // factor 1.3/1.5/1.7. Quiet runs — only the grid + spread are printed.
+  const SWEEP_LATE_FACTORS = [0.8, 1.0, 1.2] as const
+  const SWEEP_BANK_MULTIPLES = [1.3, 1.5, 1.7] as const
+  const SWEEP_NARROW_SWING_RATIO = 1.15 // ⟨tune⟩ max/min below this reads as "a number, not a range"
+  const sweepRows: { lateCheckin: string; bank: number; hours: number }[] = []
+  for (const lateFactor of SWEEP_LATE_FACTORS) {
+    for (const bankMultiple of SWEEP_BANK_MULTIPLES) {
+      const params: RealisticParams = {
+        lateCheckinSeconds: REALISTIC_CHECKIN_LATE_SECONDS * lateFactor,
+        bankMultiple,
+      }
+      const sweepRun = runProfileQuiet(realisticRunner(REALISTIC_CONFIG, params))
+      sweepRows.push({
+        lateCheckin: `${lateFactor.toFixed(1)}× (${(REALISTIC_CHECKIN_LATE_SECONDS * lateFactor).toFixed(0)}s)`,
+        bank: bankMultiple,
+        hours: sweepRun.simSeconds / 3600,
+      })
+    }
+  }
+  const sweepHours = sweepRows.map((row) => row.hours).sort((a, b) => a - b)
+  const sweepMin = sweepHours[0]!
+  const sweepMax = sweepHours[sweepHours.length - 1]!
+  const sweepMedian = sweepHours[Math.floor(sweepHours.length / 2)]!
+  const sweepSwing = sweepMax / sweepMin
+  console.log('\n=== REALISTIC SENSITIVITY (calibration) ===')
+  console.table(
+    sweepRows.map((row) => ({
+      lateCheckin: row.lateCheckin,
+      bankMultiple: row.bank,
+      hours: row.hours.toFixed(2),
+    })),
+  )
+  console.log(
+    `  min ${sweepMin.toFixed(2)}h | median ${sweepMedian.toFixed(2)}h | max ${sweepMax.toFixed(2)}h ` +
+      `| swing ${sweepSwing.toFixed(3)}× (full 9-point grid; wall budget held)`,
+  )
+  console.log(
+    sweepSwing < SWEEP_NARROW_SWING_RATIO
+      ? `  Interpretation: NARROW swing (< ${SWEEP_NARROW_SWING_RATIO}×) — the headline is a number; pin the experience band on it.`
+      : `  Interpretation: WIDE swing (>= ${SWEEP_NARROW_SWING_RATIO}×) — pin a RANGE [${sweepMin.toFixed(1)}h … ${sweepMax.toFixed(1)}h], not a point.`,
+  )
 }
 
 // Executed via `npm run sim` (tsx src/sim/pacing.ts). Nothing else imports
