@@ -136,6 +136,17 @@ interface SpineConfig {
    * exclusive with both keep flags.
    */
   counterfactualCoreRemembers?: number
+  /**
+   * COUNTERFACTUAL probe only — the "brief ritual" asymptote for the
+   * remembers sweep (designer follow-up on fixed-r vanishing the tail):
+   * with a floor f set, segment k's clock scale is max(r^(k−1), f) — the
+   * compression flattens toward a floor instead of decaying to zero, so the
+   * late re-climbs stay VISIBLE ("I still do this, but I've mastered it")
+   * rather than becoming full-keep with extra steps. Only meaningful
+   * alongside counterfactualCoreRemembers; a floor without an r throws at
+   * runner construction (assertProbeFlagsExclusive).
+   */
+  counterfactualRemembersFloor?: number
 }
 
 interface ProfileSummary {
@@ -574,10 +585,18 @@ function trackCReclimbCurve(realmId: 'q' | 'f' | 'c' | 'n' | 's', state: SimStat
     } else {
       const ascentIndex = state.cReclimbSegments.length + 1
       const remembersRate = state.config?.counterfactualCoreRemembers
+      let clockScale = 1
+      if (remembersRate !== undefined) {
+        clockScale = remembersRate ** (ascentIndex - 1)
+        // "Brief ritual" asymptote: the scale flattens toward the floor
+        // instead of decaying to zero (see counterfactualRemembersFloor).
+        const scaleFloor = state.config?.counterfactualRemembersFloor
+        if (scaleFloor !== undefined) clockScale = Math.max(clockScale, scaleFloor)
+      }
       state.cReclimbOpen = {
         startSeconds: state.simSeconds,
         cascadesSpanned: 1,
-        clockScale: remembersRate === undefined ? 1 : remembersRate ** (ascentIndex - 1),
+        clockScale,
       }
     }
     return // an n/s cascade can never close a segment
@@ -1143,6 +1162,14 @@ function assertProbeFlagsExclusive(config: SpineConfig): void {
         'counterfactualCoreRemembers (r) are mutually exclusive probes — pick one',
     )
   }
+  if (
+    config.counterfactualRemembersFloor !== undefined &&
+    config.counterfactualCoreRemembers === undefined
+  ) {
+    throw new Error(
+      'counterfactualRemembersFloor is a modifier on the remembers probe — it needs counterfactualCoreRemembers set',
+    )
+  }
 }
 
 /** A spine profile runner: attach the config, then drive the shared spine. */
@@ -1464,6 +1491,25 @@ const FLAT_DISCOUNT_SPREAD = 0.05 // ⟨tune⟩ per-k ‡ discount max−min <= 
 // ⟨tune⟩ Fewer Realistic re-climbs than this = too few samples for the curve to
 // be FELT — the pre-named fallback signal (extend the curve into Act II instead).
 const FELT_CURVE_MIN_SAMPLES = 5
+
+// ---- R refinement (Realistic curve shape — designer follow-up) ---------------
+// The r value is chosen by its effect on the REALISTIC curve shape, not the
+// total ("the total is going to be fine anywhere in that range; the feel is in
+// the shape"). Fine grid around the confirmed r≈0.7 neighborhood; the 0.70
+// point reuses the coarse-sweep run rather than re-running it.
+const R_REFINEMENT_GRID = [0.65, 0.7, 0.75, 0.8] as const // ⟨tune⟩
+const R_REFINEMENT_FLOOR_R = 0.7 // the floor variants ride the confirmed-neighborhood r
+const R_REFINEMENT_FLOORS = [0.05, 0.1] as const // ⟨tune⟩ "brief ritual" scale floors f
+// Single-breath bar: a re-climb completing within ONE late-game check-in
+// interval is felt as "a breath". HONESTY NOTE: the clock-compression
+// counterfactual can show sub-check-in durations the real (check-in-quantized)
+// mechanic would never produce — so raw seconds under-report legibility; the
+// single-breath COUNT is the honest metric (how many climbs are breaths, and
+// whether any drop below noticeable at all).
+const BREATH_SECONDS = REALISTIC_CHECKIN_LATE_SECONDS
+const VANISH_INSTANT_SECONDS = 60 // ⟨tune⟩ below this a climb reads as effectively zero (invisible)
+const VANISH_TAIL_ROWS = 4 // the designer's read is on the last few climbs
+const VANISH_TAIL_INSTANT_COUNT = 2 // ⟨tune⟩ >= this many instant tail climbs = the ritual VANISHED
 
 /** One curve-table row: `k=3: 512s (8.5m) [spans 2 cascades]`. */
 function reclimbRowText(segment: CReclimbSegment): string {
@@ -2120,6 +2166,82 @@ export function runPacingSim(): void {
     '  († is a reference endpoint only: it also keeps best — 0 re-climbs by construction — so it is',
   )
   console.log('  NOT the r→0 limit of the remembers sweep. COUNTERFACTUAL probes throughout; no game rule exists.)')
+
+  // ---- R REFINEMENT (Realistic curve shape — slice-9 r choice) --------------
+  // Designer follow-up on the sweep above: r≈0.7 is the right NEIGHBORHOOD, but
+  // the value is chosen by the Realistic curve SHAPE. Failure mode to detect: a
+  // tail of effectively-instant re-climbs — "a vanished ritual is just
+  // full-keep with extra steps; a brief ritual is 'I still do this, but I've
+  // mastered it.'" The floor variants probe his proposed fix if fixed-r
+  // vanishes the tail: scale = max(r^(k−1), f), flattening toward a
+  // brief-ritual asymptote instead of decaying to zero. Realistic ONLY —
+  // Competent's baseline tail already self-compresses to 0s (see the curve
+  // above), so it carries no shape signal for this choice.
+  console.log('\n=== R REFINEMENT (Realistic curve shape — decision input for slice-9 r; no assertion) ===')
+  console.log(
+    `  (Full grid ran — nothing dropped. r=${R_REFINEMENT_FLOOR_R} reuses the coarse-sweep run. ` +
+      'Totals are secondary by design brief; the read is the tail.)',
+  )
+  console.log(
+    `  (single-breath = climb <= one late check-in (${BREATH_SECONDS}s); instant = < ${VANISH_INSTANT_SECONDS}s. ` +
+      'The compression counterfactual can show sub-check-in durations the real quantized mechanic',
+  )
+  console.log(
+    '  would never produce, so the single-breath COUNT — not raw seconds — is the legibility metric.)',
+  )
+  const realisticCoarseRemembersRun = remembersRuns.find(
+    (row) => row.profile === 'Realistic' && row.r === R_REFINEMENT_FLOOR_R,
+  )!.run
+  const rRefinementVariants: { label: string; run: SimState }[] = R_REFINEMENT_GRID.map((r) => ({
+    label: `r=${r}`,
+    run:
+      r === R_REFINEMENT_FLOOR_R
+        ? realisticCoarseRemembersRun // the duplicate grid point — reused, not re-run
+        : runProfileQuiet(realisticRunner({ ...REALISTIC_CONFIG, counterfactualCoreRemembers: r })),
+  }))
+  for (const scaleFloor of R_REFINEMENT_FLOORS) {
+    rRefinementVariants.push({
+      label: `r=${R_REFINEMENT_FLOOR_R} f=${scaleFloor}`,
+      run: runProfileQuiet(
+        realisticRunner({
+          ...REALISTIC_CONFIG,
+          counterfactualCoreRemembers: R_REFINEMENT_FLOOR_R,
+          counterfactualRemembersFloor: scaleFloor,
+        }),
+      ),
+    })
+  }
+  const tailVerdictByLabel: { label: string; verdict: 'BRIEF' | 'VANISHES' | 'HEAVY' }[] = []
+  for (const { label, run } of rRefinementVariants) {
+    const segments = run.cReclimbSegments
+    printReclimbCurve(`Realistic ${label}`, segments)
+    const tail = segments.slice(-VANISH_TAIL_ROWS)
+    const singleBreathCount = segments.filter((s) => s.durationSeconds <= BREATH_SECONDS).length
+    const instantTailCount = tail.filter((s) => s.durationSeconds < VANISH_INSTANT_SECONDS).length
+    const verdict: 'BRIEF' | 'VANISHES' | 'HEAVY' =
+      instantTailCount >= VANISH_TAIL_INSTANT_COUNT
+        ? 'VANISHES'
+        : tail.every((s) => s.durationSeconds <= BREATH_SECONDS)
+          ? 'BRIEF'
+          : 'HEAVY'
+    console.log(
+      `    last ${VANISH_TAIL_ROWS}: ${tail.map((s) => `${s.durationSeconds.toFixed(0)}s`).join(' / ')} ` +
+        `| single-breath climbs: ${singleBreathCount}/${segments.length} (instant in tail: ${instantTailCount}) | tail: ${verdict}`,
+    )
+    console.log(`    total: ${(run.simSeconds / 3600).toFixed(2)}h (secondary)`)
+    tailVerdictByLabel.push({ label, verdict })
+  }
+  // The designer's criterion, one line: which variants keep the tail BRIEF
+  // (climbs still register) vs VANISH it (trailing climbs effectively zero).
+  const labelsWithVerdict = (verdict: 'BRIEF' | 'VANISHES' | 'HEAVY'): string => {
+    const labels = tailVerdictByLabel.filter((row) => row.verdict === verdict).map((row) => row.label)
+    return labels.length > 0 ? labels.join(', ') : 'none'
+  }
+  console.log(
+    `  BRIEF-vs-VANISH: BRIEF tail (ritual mastered, still felt) → [${labelsWithVerdict('BRIEF')}] | ` +
+      `VANISHED tail (full-keep with extra steps) → [${labelsWithVerdict('VANISHES')}] | ` +
+      `HEAVY tail (not yet a ritual) → [${labelsWithVerdict('HEAVY')}]`,
+  )
 
   // ---- PINNED BANDS (Gate-D: calibration reviewed, signed off by Wes 2026-07-02) ----
   // Three bands, three jobs. These are the ONLY hard pacing pins in the sim;
