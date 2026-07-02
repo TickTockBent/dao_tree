@@ -26,6 +26,7 @@ import { useSecretRealmStore } from '@/stores/secretRealm'
 import { useAlchemyStore } from '@/stores/alchemy'
 import { useHeartDemonsStore } from '@/stores/heartDemons'
 import { useSeclusionStore } from '@/stores/seclusion'
+import { useAchievementsStore } from '@/stores/achievements'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -50,6 +51,7 @@ const secretRealm = useSecretRealmStore()
 const alchemy = useAlchemyStore()
 const heartDemons = useHeartDemonsStore()
 const seclusion = useSeclusionStore()
+const achievements = useAchievementsStore()
 const nav = useNavStore()
 
 // Slice providers (each store owns its save slice; game store assembles).
@@ -66,6 +68,7 @@ game.registerSliceProvider({ id: 'secret', save: secretRealm.save, load: secretR
 game.registerSliceProvider({ id: 'alchemy', save: alchemy.save, load: alchemy.load, fresh: alchemy.fresh })
 game.registerSliceProvider({ id: 'demons', save: heartDemons.save, load: heartDemons.load, fresh: heartDemons.fresh })
 game.registerSliceProvider({ id: 'seclusion', save: seclusion.save, load: seclusion.load, fresh: seclusion.fresh })
+game.registerSliceProvider({ id: 'ach', save: achievements.save, load: achievements.load, fresh: achievements.fresh })
 
 // System updaters (forward pass, in dependency order: body before realm, etc.).
 game.registerUpdater({ id: 'body', update: body.update })
@@ -83,6 +86,7 @@ game.registerUpdater({ id: 'automation', update: automation.update })
 game.registerUpdater({ id: 'secretRealm', update: secretRealm.update })
 game.registerUpdater({ id: 'alchemy', update: alchemy.update })
 game.registerUpdater({ id: 'heartDemons', update: heartDemons.update })
+game.registerUpdater({ id: 'achievements', update: achievements.update })
 
 // Automation reverse-pass hook.
 game.registerAutomation({ id: 'automation', automate: automation.automate })

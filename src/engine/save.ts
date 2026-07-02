@@ -227,12 +227,32 @@ function buildFreshSave(): PlayerSave {
 }
 
 /**
+ * Revive a parsed save object into a live `PlayerSave`: run migrations, merge
+ * over fresh defaults (so fields added by later versions are filled), and
+ * hydrate Decimals. This is the single load path shared by localStorage load,
+ * base64 import, and the golden-save harness (which feeds it version-lineage
+ * fixtures directly — the reason this seam exists as its own function).
+ * Throws if the object is not a Dao Tree save (versionType / saveVersion).
+ */
+export function reviveSave(parsed: Record<string, unknown>): PlayerSave {
+  if (parsed.versionType !== 'dao-tree' || typeof parsed.saveVersion !== 'number') {
+    throw new Error('Not a Dao Tree save.')
+  }
+  runMigrations(parsed)
+  const fresh = buildFreshSave()
+  const merged = { ...fresh, ...parsed }
+  const hydrated = hydrateDecimals(merged) as PlayerSave
+  hydrated.saveVersion = SAVE_VERSION
+  hydrated.versionType = 'dao-tree'
+  return hydrated
+}
+
+/**
  * Load the save from localStorage. Returns the hydrated `PlayerSave`, or a
  * fresh save if none exists / the existing one is unrecoverable.
  *
- * `onForeignSave` is called with the raw parsed save when a save exists but
- * its `versionType` doesn't match — the caller can decide whether to offer
- * import. For the fresh-start port we discard foreign saves.
+ * Fresh-start policy: a foreign save (mismatched `versionType` or no
+ * `saveVersion`) is discarded — for the 0.3.0 port we ship no 0.2.x importer.
  */
 export function loadSave(): PlayerSave {
   const raw = localStorage.getItem(SAVE_KEY)
@@ -244,19 +264,12 @@ export function loadSave(): PlayerSave {
     console.warn('Save JSON corrupt; starting fresh.')
     return buildFreshSave()
   }
-  // Fresh-start policy: reject saves without our versionType / saveVersion.
-  if (parsed.versionType !== 'dao-tree' || typeof parsed.saveVersion !== 'number') {
+  try {
+    return reviveSave(parsed)
+  } catch {
     console.info('Foreign or pre-0.3 save; starting fresh (no importer).')
     return buildFreshSave()
   }
-  runMigrations(parsed)
-  // Merge with fresh defaults so new fields are filled, then hydrate Decimals.
-  const fresh = buildFreshSave()
-  const merged = { ...fresh, ...parsed }
-  const hydrated = hydrateDecimals(merged) as PlayerSave
-  hydrated.saveVersion = SAVE_VERSION
-  hydrated.versionType = 'dao-tree'
-  return hydrated
 }
 
 /** Serialize and write the save. Refuses to persist NaN-corrupted state. */
@@ -291,16 +304,7 @@ export function exportSave(save: PlayerSave): string {
 export function importSave(encoded: string): PlayerSave {
   const json = decodeURIComponent(escape(atob(encoded.trim())))
   const parsed = JSON.parse(json) as Record<string, unknown>
-  if (parsed.versionType !== 'dao-tree' || typeof parsed.saveVersion !== 'number') {
-    throw new Error('Not a Dao Tree save.')
-  }
-  runMigrations(parsed)
-  const fresh = buildFreshSave()
-  const merged = { ...fresh, ...parsed }
-  const hydrated = hydrateDecimals(merged) as PlayerSave
-  hydrated.saveVersion = SAVE_VERSION
-  hydrated.versionType = 'dao-tree'
-  return hydrated
+  return reviveSave(parsed)
 }
 
 /** Wipe the save (hard reset). */

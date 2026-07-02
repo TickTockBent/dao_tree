@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (vue-tsc + eslint)
+        run: npm run lint
+
+      - name: Tests (incl. golden-save lineage)
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # The pacing sim prints PASS/FAIL lines (incl. the Gate-D pinned bands)
+      # but always exits 0 — enforce the FAIL lines here.
+      - name: Pacing sim (pinned bands)
+        run: |
+          npm run sim | tee sim-output.log
+          if grep -q "FAIL" sim-output.log; then
+            echo "::error::Pacing sim reported FAIL lines (see log above)"
+            exit 1
+          fi
