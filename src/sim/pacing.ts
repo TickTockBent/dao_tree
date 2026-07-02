@@ -109,6 +109,7 @@ interface ProfileSummary {
   pillsUsed: number
   expeditions: number
   sBest: number
+  extraordinaryMeridians: number
 }
 
 interface SimState {
@@ -294,17 +295,29 @@ function runDiligent(state: SimState): void {
 // section is SIM POLICY (player behavior), never game data: if the run lands
 // off budget that is a finding to report, not a license to retune src/data/**.
 //
-// NOT modeled, by design:
-// - The First Tribulation set-piece: the run STOPS at s Great Circle (320),
-//   the tribulation trigger — the smoke tests cover the set-piece itself.
-// - Extraordinary meridians (brief scope is the 12 primary; their ×1.25-each
-//   track is reported as known additional headroom, not engaged).
-// - Secret realms, alchemy, heart-demon trials, gate achievements: their
-//   stores are never engaged and never ticked. Not ticking heartDemons is
-//   FAITHFUL here, not a fidelity gap: its passive bleed only DECAYS
-//   corruption (never accrues it), and both profiles avoid every corruption
-//   source (Steady forges, strong-band breakthroughs) — so corruption stays
-//   0 either way, which the §6.6 zero-touch assertion below pins.
+// NOT modeled, by design (for the Diligent/Competent CONTROL pair; some of these
+// are now probed by the focused/probe profiles added below — noted inline):
+// - The First Tribulation set-piece: every run STOPS at s Great Circle (320),
+//   the tribulation trigger — the smoke tests cover the set-piece itself. (This
+//   is also why the PillFocused Heaven-Warding pool bonus is untested: the sim
+//   never enters a tribulation to draw it.)
+// - Extraordinary meridians: NOT engaged by Diligent/Competent/the three focused
+//   builds. The MeridianProbe profile (added below, question #14) DOES engage
+//   them, payback-aware, to measure whether the track is must-buy or a trap.
+// - Secret realms + alchemy: unengaged by Diligent/Competent/Lattice/Sect; the
+//   PillFocused profile (and Realistic) DO engage them (expeditions + pills),
+//   ticking the alchemy + secretRealm stores via config.tickProfession.
+// - heart-demon trials + gate achievements: never engaged. Not ticking
+//   heartDemons is FAITHFUL, not a gap: its passive bleed only DECAYS corruption
+//   (never accrues it), and the control pair avoids every corruption source
+//   (Steady forges, strong-band breakthroughs) — so corruption stays 0 either
+//   way, which the §6.6 zero-touch assertion below pins.
+// - SECLUSION (offline progression): DELIBERATELY not modeled by any profile.
+//   This sim is a foreground-time oracle — it advances an analytic in-game clock
+//   with no wall-clock/offline dimension, so there is no away-time for seclusion
+//   rungs to convert. No profile buys a seclusion rung; engaging the system here
+//   would measure nothing (the sim has no offline gap to accelerate) and would
+//   only perturb the comparable foreground clocks. Left entirely out on purpose.
 
 // Policy constants (player-behavior knobs, in this file's policy-constant style).
 const COMPETENT_PAYBACK_SECONDS = 180 // buy a body upgrade when cost <= ~3 min of current Qi/sec
@@ -822,11 +835,358 @@ function runSpine(state: SimState): void {
   }
 }
 
+// ---- Spine profile configs --------------------------------------------------
+//
+// Every config drives the SAME vertical spine (runSpine); the flags select which
+// horizontal grammar(s) the run touches. Competent turns them all on and is the
+// pinned regression floor; the three focused profiles turn on exactly one.
+
+const COMPETENT_CONFIG: SpineConfig = {
+  engageSect: true,
+  engageLattice: true,
+  engagePills: false,
+  useBreathingTrance: true,
+  tickProfession: false,
+  pickElementAspect: true,
+  sectArchetype: COMPETENT_SECT_ARCHETYPE,
+  aspectPreference: COMPETENT_ASPECT_PREFERENCE,
+}
+
+// LatticeFocused: Dao lattice only — nodes cheapest-first toward 8 Seeds,
+// Breathing Trance outside banking, element aspect once a Seed lands. No sect,
+// no alchemy.
+const LATTICE_CONFIG: SpineConfig = {
+  engageSect: false,
+  engageLattice: true,
+  engagePills: false,
+  useBreathingTrance: true,
+  tickProfession: false,
+  pickElementAspect: true,
+  sectArchetype: COMPETENT_SECT_ARCHETYPE,
+  aspectPreference: COMPETENT_ASPECT_PREFERENCE,
+}
+
+// SectFocused: sect standing only — join at reveal (first archetype), buy every
+// affordable technique cheapest-first, stipend accrues naturally. No lattice
+// purchases, NO stance (stances are the dao grammar), no alchemy.
+//
+// STRUCTURAL COUPLING (reported as a finding): every element soul aspect gates
+// on daoElementTier ['x', 2] — a lattice Seed. SectFocused buys ZERO lattice
+// nodes, so it can NEVER reach an element aspect and is locked to Formless
+// (×1.2/×1.2). The aspect axis is therefore coupled to the lattice grammar, not
+// the sect grammar; a pure sect build cannot buy into an element soul. The
+// SectFocused* counterfactual isolates how much of its lag is this coupling.
+const SECT_CONFIG: SpineConfig = {
+  engageSect: true,
+  engageLattice: false,
+  engagePills: false,
+  useBreathingTrance: false,
+  tickProfession: false,
+  pickElementAspect: false,
+  sectArchetype: COMPETENT_SECT_ARCHETYPE, // 'azureSword' — the first archetype in SECT_DATA
+  aspectPreference: COMPETENT_ASPECT_PREFERENCE,
+}
+
+// PillFocused: alchemy + secret realms only — run expeditions when the active
+// site is enterable and its material is wanted, craft + swallow Qi-Gathering
+// pills, hold Clarity charges + one Heaven-Warding pill. No sect, no lattice, no
+// stance. Formless (same lattice-Seed coupling as SectFocused). The Warding
+// pill's tribulation-pool effect is UNTESTED here — the run stops at s.best 320
+// (the tribulation trigger), before the pool is ever drawn.
+const PILL_CONFIG: SpineConfig = {
+  engageSect: false,
+  engageLattice: false,
+  engagePills: true,
+  useBreathingTrance: false,
+  tickProfession: true,
+  pickElementAspect: false,
+  sectArchetype: COMPETENT_SECT_ARCHETYPE,
+  aspectPreference: COMPETENT_ASPECT_PREFERENCE,
+}
+
+// MeridianProbe (question #14): the shared spine + the extraordinary-meridian
+// track, payback-aware, once unlocked — and NO horizontal system. Isolates
+// whether the ×~6 ext-meridian ceiling is must-buy spine content the actors
+// wrongly skip, or a trap.
+const MERIDIAN_PROBE_CONFIG: SpineConfig = {
+  engageSect: false,
+  engageLattice: false,
+  engagePills: false,
+  useBreathingTrance: false,
+  tickProfession: false,
+  pickElementAspect: false,
+  sectArchetype: COMPETENT_SECT_ARCHETYPE,
+  aspectPreference: COMPETENT_ASPECT_PREFERENCE,
+  buyExtraordinaryMeridians: true,
+}
+
+/** A spine profile runner: attach the config, then drive the shared spine. */
+function spineRunner(config: SpineConfig): (state: SimState) => void {
+  return (state: SimState) => {
+    state.config = config
+    runSpine(state)
+  }
+}
+
+/** Competent kept as a named export-adjacent runner for the bit-identity check. */
+function runCompetent(state: SimState): void {
+  state.config = COMPETENT_CONFIG
+  runSpine(state)
+}
+
+// ---- Realistic profile (the experience-target actor) ------------------------
+//
+// A deterministically-imperfect player: decisions only on a fixed check-in grid,
+// idle time between check-ins, suboptimal (over-banked) prestiges, a shorter
+// body-buy payback horizon, partial + late horizontal engagement, and rate
+// restoration that "forgets" the core re-climb every other cascade. No RNG.
+// This is the calibration target — its hours are REPORTED, never asserted.
+
+// Policy constants (⟨tune⟩ — sim policy, never game data).
+const REALISTIC_CHECKIN_EARLY_SECONDS = 300 // watches closely early
+const REALISTIC_CHECKIN_LATE_SECONDS = 1800 // stops watching after the forge
+const REALISTIC_BANK_MULTIPLE = 1.5 // prestige at 1.5× the min-worthwhile pile, not the optimal window
+const REALISTIC_PAYBACK_SECONDS = 60 // buys body upgrades later + less eagerly than the spine's 180s
+const REALISTIC_LATTICE_INSIGHT_MULTIPLE = 2 // hesitates: buys a node only when Insight > 2× its cost
+const REALISTIC_NASCENT_PRE_KEEP = COMPETENT_NASCENT_RECLIMB_PRE_KEEP // 30 (Peak NS) before the s keep rule
+const REALISTIC_SECT_ARCHETYPE: SectArchetypeKey = 'azureSword'
+const REALISTIC_TENDON_TEMPER_LEVEL = 10 // the Core-gate temper floor pushed through to unlock the forge
+
+// Realistic uses its OWN driver, but reuses tickSystems + engagePillActions, so
+// it carries a config: profession clocks tick, no spine stance, no auto element
+// aspect (its ensureRealisticAspect handles that).
+const REALISTIC_CONFIG: SpineConfig = {
+  engageSect: false,
+  engageLattice: false,
+  engagePills: false,
+  useBreathingTrance: false,
+  tickProfession: true,
+  pickElementAspect: false,
+  sectArchetype: REALISTIC_SECT_ARCHETYPE,
+  aspectPreference: COMPETENT_ASPECT_PREFERENCE,
+}
+
+interface RealisticContext {
+  /** Completed s-cascades (drives the core-restore-every-other alternation). */
+  cascades: number
+  /** True once the sect reveal has been SEEN at a check-in (join fires one later). */
+  sawSectReveal: boolean
+}
+
+/** Advance a fixed idle span: accrue Qi at the live rate + tick systems, chunked. */
+function advanceIdle(seconds: number, state: SimState): void {
+  const game = useGameStore()
+  const pipelines = usePipelinesStore()
+  let remaining = seconds
+  while (remaining > 1e-9) {
+    const dt = Math.min(remaining, COMPETENT_MAX_EVENT_STEP_SECONDS)
+    const qiPerSec = pipelines.qiPerSecond
+    if (qiPerSec.gt(0)) game.points = game.points.add(qiPerSec.times(dt))
+    game.timePlayed = game.timePlayed + dt
+    state.simSeconds += dt
+    tickSystems(dt, state)
+    remaining -= dt
+  }
+}
+
+/** 60s-payback body buys from the CURRENT idle pile (Realistic never advances mid-check-in). */
+function buyBodyRealistic(): void {
+  const body = useBodyStore()
+  const game = useGameStore()
+  const pipelines = usePipelinesStore()
+  const targets: { key: 'primaryMeridian' | 'temper'; cap: number }[] = [
+    { key: 'primaryMeridian', cap: COMPETENT_MERIDIAN_TARGET },
+    { key: 'temper', cap: COMPETENT_TEMPER_TARGET },
+  ]
+  for (const target of targets) {
+    while (body.buyableAmount(target.key) < target.cap) {
+      const cost = body.buyableCost(target.key, body.buyableAmount(target.key))
+      if (cost.gt(pipelines.qiPerSecond.times(REALISTIC_PAYBACK_SECONDS))) break // payback gate
+      if (game.points.lt(cost)) break // can't afford from the pile yet
+      if (!body.buyBuyable(target.key)) break
+    }
+  }
+}
+
+/** Push temper to Tendon so the forge (Core unlock) opens — a player forces this gate. */
+function forceTemperForForge(): void {
+  const body = useBodyStore()
+  const game = useGameStore()
+  while (body.temperLevel < REALISTIC_TENDON_TEMPER_LEVEL) {
+    const cost = body.buyableCost('temper', body.temperLevel)
+    if (game.points.lt(cost)) break
+    if (!body.buyBuyable('temper')) break
+  }
+}
+
+/** Hesitant lattice buys: cheapest-first, but only when Insight > 2× the node cost. */
+function buyLatticeHesitant(): void {
+  const dao = useDaoStore()
+  if (!dao.revealed) return
+  for (;;) {
+    let cheapestKey: (typeof LATTICE_DATA.nodes)[number]['key'] | null = null
+    let cheapestCost: Decimal | null = null
+    for (const node of LATTICE_DATA.nodes) {
+      if (!dao.canAffordNode(node.key)) continue
+      const cost = dao.nodeCost(node.key)
+      if (cheapestCost === null || cost.lt(cheapestCost)) {
+        cheapestKey = node.key
+        cheapestCost = cost
+      }
+    }
+    if (cheapestKey === null || cheapestCost === null) return
+    if (dao.insight.lte(cheapestCost.times(REALISTIC_LATTICE_INSIGHT_MULTIPLE))) return // hesitate
+    if (!dao.buyNodeTier(cheapestKey)) return
+  }
+}
+
+/** One over-banked prestige from the idle pile, iff banked >= 1.5× reqBase. Returns whether it fired. */
+function realisticBankedPrestige(realmId: 'q' | 'f' | 'c' | 'n' | 's', state: SimState): boolean {
+  const realm = useRealmStore()
+  const game = useGameStore()
+  if (!realm.canReset(realmId)) return false
+  const reqBase = new Decimal(findRealm(realmId).reqBase)
+  if (game.points.lt(reqBase.times(REALISTIC_BANK_MULTIPLE))) return false
+  realm.prestige(realmId)
+  recordMarks(state)
+  return true
+}
+
+/** Bind an aspect once Nascent Soul exists: element if a Seed happened to land, else Formless. */
+function ensureRealisticAspect(state: SimState): void {
+  const body = useBodyStore()
+  const realm = useRealmStore()
+  if (body.soulAspectChosen) return
+  if (!realm.stateOf('n').unlocked) return
+  tryPickElementAspect(state)
+  if (!body.soulAspectChosen) {
+    const formless = findRealm('n').soulAspect!.aspects.find((a) => a.key === 'formless')!
+    body.setSoulAspect(formless.key, formless.requires)
+  }
+}
+
+/** The n/s climb with imperfect restoration: f every cascade, core only every OTHER. */
+function realisticNascentSoulStep(state: SimState, ctx: RealisticContext): void {
+  const realm = useRealmStore()
+  // Restore f every cascade (it is always wiped).
+  if (realm.realmBest('f').toNumber() < F_GREAT_CIRCLE_AT) {
+    realisticBankedPrestige('f', state)
+    return
+  }
+  // Restore core only every OTHER cascade (deterministic "forgets half the time").
+  const restoreCoreThisCascade = ctx.cascades % 2 === 0
+  if (restoreCoreThisCascade && realm.realmBest('c').toNumber() < C_TOP_SUBSTAGE_AT) {
+    realisticBankedPrestige('c', state)
+    return
+  }
+  // Nascent Soul target: Perfected once the keep rule is up, else pre-keep depth;
+  // the FIRST s prestige needs n Apex live.
+  const keepEarned = realm.hasMilestone('s', S_KEEP_MILESTONE_INDEX)
+  let nascentTarget = keepEarned ? N_PERFECTED_AT : REALISTIC_NASCENT_PRE_KEEP
+  if (!realm.stateOf('s').unlocked) nascentTarget = Math.max(nascentTarget, N_APEX_AT)
+  if (realm.realmBest('n').toNumber() < nascentTarget) {
+    // n's FIRST unlock needs c Core Refined (best >= 2); force the core up to it
+    // even on a "forgot core" cascade, or Nascent Soul can never open.
+    if (!realm.stateOf('n').unlocked && realm.realmBest('c').toNumber() < 2) {
+      realisticBankedPrestige('c', state)
+      return
+    }
+    realisticBankedPrestige('n', state)
+    return
+  }
+  ensureRealisticAspect(state)
+  if (realisticBankedPrestige('s', state)) ctx.cascades++
+}
+
+/** One vertical decision at a check-in (exactly one prestige, or the forge). */
+function realisticSpineStep(state: SimState, ctx: RealisticContext): void {
+  const realm = useRealmStore()
+  const body = useBodyStore()
+  const forge = useForgeStore()
+  if (realm.realmBest('q').toNumber() < Q_SIXTH_LEVEL_AT) {
+    realisticBankedPrestige('q', state)
+    return
+  }
+  if (body.coreGrade < 0 && realm.realmBest('f').toNumber() < F_GREAT_CIRCLE_AT) {
+    realisticBankedPrestige('f', state)
+    return
+  }
+  if (body.coreGrade < 0) {
+    forceTemperForForge()
+    if (forge.performForge('steady') >= 0) {
+      forge.toggleWarming()
+      recordMarks(state)
+    }
+    return
+  }
+  realisticNascentSoulStep(state, ctx)
+}
+
+/** Partial, imperfectly-timed horizontal engagement at a check-in. */
+function realisticHorizontals(state: SimState, ctx: RealisticContext): void {
+  const sect = useSectStore()
+  // Sect: join one FULL check-in after the reveal is first seen (late).
+  if (!sect.joined) {
+    if (ctx.sawSectReveal) sect.joinSect(REALISTIC_SECT_ARCHETYPE)
+    else if (sect.isRevealGateMet()) ctx.sawSectReveal = true
+  } else {
+    buyTechniquesCheapestFirst()
+  }
+  buyLatticeHesitant()
+  // Crafts/uses gathering pills, holds Clarity + one Warding, enters an
+  // expedition only when the active site is enterable AT this check-in (so it
+  // misses rotations it isn't watching). Reuses the PillFocused hook — Realistic
+  // never plans Clarity timing, but a held charge auto-aids the next n/s prestige.
+  engagePillActions(state)
+}
+
+function runRealistic(state: SimState): void {
+  state.config = REALISTIC_CONFIG
+  const realm = useRealmStore()
+  const body = useBodyStore()
+  const ctx: RealisticContext = { cascades: 0, sawSectReveal: false }
+  let guard = 0
+  while (realm.realmBest('s').toNumber() < S_GREAT_CIRCLE_AT) {
+    const interval = body.coreGrade >= 0 ? REALISTIC_CHECKIN_LATE_SECONDS : REALISTIC_CHECKIN_EARLY_SECONDS
+    advanceIdle(interval, state)
+    buyBodyRealistic()
+    realisticHorizontals(state, ctx)
+    realisticSpineStep(state, ctx)
+    if (++guard > state.maxIterations) {
+      throw new Error('runRealistic exceeded the check-in cap — the spine appears stalled')
+    }
+  }
+}
+
 // ---- Main -------------------------------------------------------------------
+
+/** End-state snapshot for the report table (read while this profile's Pinia is live). */
+function summarize(state: SimState): ProfileSummary {
+  const body = useBodyStore()
+  const dao = useDaoStore()
+  const sect = useSectStore()
+  const secretRealm = useSecretRealmStore()
+  const realm = useRealmStore()
+  return {
+    aspect: body.soulAspect || 'none',
+    seeds: dao.heldDaoSeedCount(),
+    techniques: sect.techniques.length,
+    pillsUsed: state.pillsSwallowed,
+    expeditions: secretRealm.totalClears,
+    sBest: realm.realmBest('s').toNumber(),
+    extraordinaryMeridians: body.extraordinaryMeridians,
+  }
+}
 
 function runProfile(name: string, fn: (state: SimState) => void): SimState {
   bootSim()
-  const state: SimState = { simSeconds: 0, maxIterations: 100000, marks: {} }
+  const state: SimState = {
+    simSeconds: 0,
+    maxIterations: 100000,
+    marks: {},
+    pillsSwallowed: 0,
+    pillsCrafted: 0,
+  }
   const start = Date.now()
   fn(state)
   const elapsed = Date.now() - start
@@ -846,6 +1206,9 @@ function runProfile(name: string, fn: (state: SimState) => void): SimState {
   console.log(`Temper: ${body.temperLevel}`)
   console.log(`Core grade: ${body.coreGrade}`)
   console.log(`Soul aspect: ${body.soulAspect}`)
+
+  // Snapshot end-state NOW — the next runProfile's bootSim swaps the Pinia.
+  state.summary = summarize(state)
   return state
 }
 
@@ -958,10 +1321,61 @@ export function runPacingSim(): void {
       `(${((competentRun.simSeconds / PACING_BUDGETS.diligent.toTribulation) * 100).toFixed(0)}% of budget)`,
   )
 
-  // Marks table (hours to each first crossing; '—' = never reached).
+  // ---- Focused profiles: ONE horizontal grammar each -----------------------
+  // (All run AFTER the competent reads above — bootSim swaps the Pinia.)
+  const latticeRun = runProfile('LatticeFocused', spineRunner(LATTICE_CONFIG))
+  const sectRun = runProfile('SectFocused', spineRunner(SECT_CONFIG))
+  const pillRun = runProfile('PillFocused', spineRunner(PILL_CONFIG))
+
+  // ---- MeridianProbe: spine + ext-meridian track, no horizontals (#14) ------
+  const meridianRun = runProfile('MeridianProbe', spineRunner(MERIDIAN_PROBE_CONFIG))
+
+  // ---- Counterfactual aspect probes (force-grant metal, bypass the Seed gate)
+  const sectCounterfactualRun = runProfile(
+    'SectFocused*',
+    spineRunner({ ...SECT_CONFIG, counterfactualForceMetalAspect: true }),
+  )
+  const pillCounterfactualRun = runProfile(
+    'PillFocused*',
+    spineRunner({ ...PILL_CONFIG, counterfactualForceMetalAspect: true }),
+  )
+
+  // ---- Realistic: the experience-target actor (calibration) ----------------
+  const realisticRun = runProfile('Realistic', runRealistic)
+
+  // ---- Structural assertions: focused builds inherit the competent spine ---
+  // Each must terminate at the tribulation trigger AND beat Diligent by >= 4×
+  // (they share the rate-restoring spine, so this MUST hold — a failure is a
+  // loud FINDING, not a tuning license).
+  const focused: { name: string; run: SimState }[] = [
+    { name: 'LatticeFocused', run: latticeRun },
+    { name: 'SectFocused', run: sectRun },
+    { name: 'PillFocused', run: pillRun },
+  ]
+  for (const { name, run } of focused) {
+    const sBest = run.summary?.sBest ?? 0
+    if (sBest < S_GREAT_CIRCLE_AT) {
+      console.error(`\nFAIL (FINDING): ${name} did not reach s.best >= ${S_GREAT_CIRCLE_AT} (got ${sBest})`)
+    } else {
+      console.log(`\nPASS: ${name} reached s.best >= ${S_GREAT_CIRCLE_AT} (tribulation trigger)`)
+    }
+    if (run.simSeconds * 4 > diligentRun.simSeconds) {
+      console.error(
+        `FAIL (FINDING): ${name} ${(run.simSeconds / 3600).toFixed(2)}h does not beat Diligent ` +
+          `${diligentHours.toFixed(1)}h by 4× — a focused build on the shared spine is structurally weak.`,
+      )
+    } else {
+      console.log(
+        `PASS: ${name} beats Diligent by >= 4× (${(run.simSeconds / 3600).toFixed(2)}h vs ` +
+          `${(diligentHours / 4).toFixed(1)}h = Diligent/4)`,
+      )
+    }
+  }
+
+  // ---- Six+ profile marks table (crossings + end-state summary) ------------
   const hoursOrDash = (seconds: number | undefined): string =>
     seconds === undefined ? '—' : (seconds / 3600).toFixed(2)
-  const markRow = (profileName: string, run: SimState): Record<string, string> => ({
+  const markRow = (profileName: string, run: SimState): Record<string, string | number> => ({
     profile: profileName,
     totalHours: (run.simSeconds / 3600).toFixed(2),
     fFirst: hoursOrDash(run.marks.fFirst),
@@ -970,8 +1384,109 @@ export function runPacingSim(): void {
     nPerfected: hoursOrDash(run.marks.nPerfected),
     sFirst: hoursOrDash(run.marks.sFirst),
     s320: hoursOrDash(run.marks.sGreatCircle),
+    aspect: run.summary?.aspect ?? '?',
+    seeds: run.summary?.seeds ?? 0,
+    techs: run.summary?.techniques ?? 0,
+    pills: run.summary?.pillsUsed ?? 0,
+    expeds: run.summary?.expeditions ?? 0,
   })
-  console.table([markRow('Diligent', diligentRun), markRow('Competent', competentRun)])
+  console.log('\n=== MARKS TABLE (hours to first crossing + end-state) ===')
+  console.table([
+    markRow('Diligent', diligentRun),
+    markRow('Competent', competentRun),
+    markRow('LatticeFocused', latticeRun),
+    markRow('SectFocused', sectRun),
+    markRow('PillFocused', pillRun),
+    markRow('MeridianProbe', meridianRun),
+    markRow('SectFocused*', sectCounterfactualRun),
+    markRow('PillFocused*', pillCounterfactualRun),
+    markRow('Realistic', realisticRun),
+  ])
+
+  // ---- BUILD DIVERSITY (calibration — bands await sign-off) -----------------
+  const latticeHours = latticeRun.simSeconds / 3600
+  const sectHours = sectRun.simSeconds / 3600
+  const pillHours = pillRun.simSeconds / 3600
+  const focusedHours = [latticeHours, sectHours, pillHours]
+  const clusterMax = Math.max(...focusedHours)
+  const clusterMin = Math.min(...focusedHours)
+  const clusterRatio = clusterMax / clusterMin
+  console.log('\n=== BUILD DIVERSITY (calibration — bands await sign-off) ===')
+  console.log(`  LatticeFocused: ${latticeHours.toFixed(2)}h  (${(latticeHours / competentHours).toFixed(2)}× Competent)`)
+  console.log(`  SectFocused:    ${sectHours.toFixed(2)}h  (${(sectHours / competentHours).toFixed(2)}× Competent)`)
+  console.log(`  PillFocused:    ${pillHours.toFixed(2)}h  (${(pillHours / competentHours).toFixed(2)}× Competent)`)
+  console.log(
+    `  Cluster ratio (max/min) = ${clusterRatio.toFixed(3)}  ` +
+      `[${clusterMin.toFixed(2)}h … ${clusterMax.toFixed(2)}h]`,
+  )
+  console.log('  (Gate-D discipline: first measurement is calibration — NO hard assertion on the cluster; Wes pins the band.)')
+
+  // ---- Formless-penalty attribution (aspect-adjusted diversity) ------------
+  // SectFocused + PillFocused are locked to Formless because element aspects gate
+  // on lattice Seeds (daoElementTier ['x', 2]) they never buy. The counterfactual
+  // variants force-grant the metal aspect to split their lag into "Formless
+  // penalty" vs "residual (the horizontal system itself)".
+  const sectCfHours = sectCounterfactualRun.simSeconds / 3600
+  const pillCfHours = pillCounterfactualRun.simSeconds / 3600
+  console.log('\n=== FORMLESS-PENALTY ATTRIBUTION (counterfactual probes) ===')
+  console.log('  Element aspects require a lattice Seed; a pure sect/alchemy build cannot reach one.')
+  const attribution = (name: string, hours: number, cfHours: number): void => {
+    const formlessPenalty = hours - cfHours // time the Formless lock costs
+    console.log(
+      `  ${name}: ${hours.toFixed(2)}h → counterfactual ${cfHours.toFixed(2)}h  ` +
+        `| Formless penalty ${formlessPenalty.toFixed(2)}h, residual ${(cfHours - competentHours).toFixed(2)}h vs Competent`,
+    )
+  }
+  attribution('SectFocused', sectHours, sectCfHours)
+  attribution('PillFocused', pillHours, pillCfHours)
+  console.log(
+    '  NOTE: a NEGATIVE Formless penalty means the metal aspect (insightMult 1.5, no qiMult) is ' +
+      'WORSE than Formless (qiMult 1.2 × insightMult 1.2) for these Qi-banking builds — the aspect ' +
+      'lock is NOT their bottleneck; the lag is residual/systemic. The element axis only pays for a ' +
+      'Qi-leaning soul (fire/wood/earth), which is itself lattice-Seed-gated.',
+  )
+  // Aspect-adjusted cluster: swap in the counterfactual (element-aspect) hours for
+  // the two Formless-locked builds, leaving LatticeFocused (already element) as-is.
+  const adjustedHours = [latticeHours, sectCfHours, pillCfHours]
+  const adjustedRatio = Math.max(...adjustedHours) / Math.min(...adjustedHours)
+  console.log(
+    `  Cluster ratio — raw ${clusterRatio.toFixed(3)} | aspect-adjusted ${adjustedRatio.toFixed(3)}`,
+  )
+
+  // ---- MeridianProbe interpretation (#14) ----------------------------------
+  const meridianHours = meridianRun.simSeconds / 3600
+  const focusedBest = clusterMin
+  const focusedWorst = clusterMax
+  console.log('\n=== MERIDIAN PROBE (#14 — ext-meridian track vs the focused three) ===')
+  console.log(
+    `  MeridianProbe: ${meridianHours.toFixed(2)}h  (${(meridianHours / competentHours).toFixed(2)}× Competent)  ` +
+      `| extraordinary meridians bought: ${meridianRun.summary?.extraordinaryMeridians ?? 0}/${EXTRAORDINARY_MERIDIAN_TARGET}`,
+  )
+  console.log(`  Focused band: ${focusedBest.toFixed(2)}h … ${focusedWorst.toFixed(2)}h`)
+  let meridianVerdict: string
+  if (meridianHours < focusedBest) {
+    meridianVerdict =
+      'DOMINATES the focused three — ext-meridians read as MUST-BUY spine content; ' +
+      'Competent (and every profile) has known headroom by skipping them. Report, do NOT retune.'
+  } else if (meridianHours <= focusedWorst) {
+    meridianVerdict = 'CLUSTERS with the focused three — the ext-meridian track is competitive standalone content.'
+  } else {
+    meridianVerdict = 'TRAILS the focused three — the ×~6 ext-meridian ceiling reads as over-advertised trap content.'
+  }
+  console.log(`  Verdict: ${meridianVerdict}`)
+
+  // ---- EXPERIENCE TARGET (calibration) -------------------------------------
+  const realisticHours = realisticRun.simSeconds / 3600
+  console.log('\n=== EXPERIENCE TARGET (calibration) ===')
+  console.log(
+    `  Realistic (imperfect actor): ${realisticHours.toFixed(2)}h — the number to be pinned as the experience band.`,
+  )
+  console.log(
+    `  End-state: aspect=${realisticRun.summary?.aspect}, seeds=${realisticRun.summary?.seeds}, ` +
+      `techniques=${realisticRun.summary?.techniques}, pills=${realisticRun.summary?.pillsUsed}, ` +
+      `expeditions=${realisticRun.summary?.expeditions}`,
+  )
+  console.log('  (Calibration only — Competent is the regression floor; Realistic is the experience target. Two bands, two jobs.)')
 }
 
 // Executed via `npm run sim` (tsx src/sim/pacing.ts). Nothing else imports
