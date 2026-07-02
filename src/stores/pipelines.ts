@@ -49,12 +49,20 @@ export const usePipelinesStore = defineStore('pipelines', () => {
 
   // ---- Dao/stance/aspect/technique/legacy factors (identity until their slice lands) ----
 
+  // Slice 9 nullification seam: a severed Dao Manifestation contributes
+  // nothing — MANIFESTATION-tier effects (tierIndex 2, landing with the
+  // lattice ring) are skipped while severed; Glimpse/Seed are untouched
+  // (the severable's effect domain is the Manifestation, not the lattice).
+  const MANIFESTATION_TIER_INDEX = 2
+
   /** Dao node qiMult: product of every owned tier's qiMult across all nodes. */
   const daoNodeQiMult = computed<Decimal>(() => {
+    const manifestationSevered = severing.isSevered('manifestation')
     let product = decimalOne()
     for (const node of LATTICE_DATA.nodes) {
       const owned = dao.nodeTierOwned(node.key)
       node.effects.forEach((effect, tierIndex) => {
+        if (manifestationSevered && tierIndex === MANIFESTATION_TIER_INDEX) return
         if ('qiMult' in effect && owned >= tierIndex + 1) {
           product = product.times(effect.qiMult)
         }
@@ -65,10 +73,12 @@ export const usePipelinesStore = defineStore('pipelines', () => {
 
   /** Dao node insightMult: product of every owned tier's insightMult. */
   const daoNodeInsightMult = computed<Decimal>(() => {
+    const manifestationSevered = severing.isSevered('manifestation')
     let product = decimalOne()
     for (const node of LATTICE_DATA.nodes) {
       const owned = dao.nodeTierOwned(node.key)
       node.effects.forEach((effect, tierIndex) => {
+        if (manifestationSevered && tierIndex === MANIFESTATION_TIER_INDEX) return
         if ('insightMult' in effect && owned >= tierIndex + 1) {
           product = product.times(effect.insightMult)
         }

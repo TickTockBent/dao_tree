@@ -249,6 +249,12 @@ export const useRealmStore = defineStore('realm', () => {
     // Latch sub-stage milestones (done() = best >= stage.at).
     latchMilestones(id)
 
+    // Slice 9 (D23/D25): each Spirit Severing breakthrough completes one
+    // severance ritual — the climb IS the ritual, and the ritual counter is
+    // the clock that carries every active severance's transcendent multiplier
+    // up its ramp (v1 design; docs/slice-9.md §2).
+    if (id === 'x') soul.recordSeveranceRitual()
+
     // Run the doReset cascade: reset every strictly-lower same-tree tree-scoped layer.
     runDoResetCascade(id)
 
