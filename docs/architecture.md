@@ -10,7 +10,7 @@ are a **first-class engine concept with a scope enum, not individual
 features**:
 
 - **soul** — carried by the reincarnating cultivator: the ascent counter
-  (slice 9), Dao Heart.
+  (slice 9), the severance ritual (slice 9, D23), Dao Heart.
 - **world** — living in the world, findable by any life: sect seed-stores,
   wild seedings, territory effects, the chronicle's raw material.
 - **dao** *(reserved)* — comprehension/philosophical progress: earned
@@ -23,11 +23,14 @@ the next accumulator is a data entry, not a feature. Five planned systems —
 weather, loot table, sect monopoly, chronicle, Samsara economy — are five
 expressions of "the world remembers," not five systems.
 
-**Staging (agreed):** slice 9 ships the ascent counter as the first typed
-instance — the TYPE is defined (scope tag, diminishing-returns descriptor,
-persistence rule) but no machinery exists for scopes with zero instances.
-Slice 10's world instances force the generalization; dao validates it.
-Premature generality is how convergent designs die.
+**Staging (agreed, amended by D23):** slice 9 ships **two soul instances**
+— the ascent counter and the severance ritual ("you've mastered the core;
+now master the severance"). The TYPE is defined (scope tag,
+diminishing-returns descriptor, persistence rule) and immediately proves
+itself on a second same-scope data entry; machinery for scopes with zero
+instances still does not exist. Slice 10's world instances force the
+cross-scope generalization; dao validates it. Premature generality is how
+convergent designs die.
 
 **Scope model mapping:** the enum already exists in embryo — `doReset`
 compiles from `tree | life | eternal` scopes today, and eternal state is

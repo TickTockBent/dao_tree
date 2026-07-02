@@ -19,7 +19,9 @@ retrieve any of them with `git show 5887814:docs/<name>`.
 Code comments that cite "ledger #N" / "deferred-decision #N" predate the
 split: #1–#16 resolve to the matching **D-number in decisions.md** (numbering
 preserved); #17/#18 live in design-directions.md (almanac, spirit garden);
-#19/#20 in architecture.md (accumulators, dynasty harness).
+#19/#20 in architecture.md (accumulators, dynasty harness). Decisions made
+after the split continue from **D21** (D17–D20 intentionally skipped to keep
+the old numbers unambiguous).
 
 Working rules that span the suite:
 - **Rule 0.1** — no game-data change ships without evidence and Wes's sign-off.

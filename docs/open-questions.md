@@ -4,20 +4,8 @@ Each entry: what needs deciding, the **trigger** that forces it, and the
 current lean. When decided, the entry moves to [decisions.md](decisions.md)
 as a dated record.
 
-## Q1 — The r value and the tail register *(trigger: slice 9 keep-rule work)*
-
-The "core remembers" direction is decided (D2); two constants remain, both
-Wes's pick with the curves already in hand ([calibration.md](calibration.md)):
-
-- **r** — anywhere in [0.65, 0.75] is structurally sound (BRIEF tail); 0.70
-  is the measured center.
-- **Register** — plain r=0.7 ends Act I's re-temper as *a breath* (last
-  climbs ~3.6min); adding scale floor f=0.05 ends it as *a moment* (~9min,
-  guaranteed-visible ritual). f=0.1 overcorrects to HEAVY.
-
-r-as-a-function-of-k was considered and rejected at Act I resolution
-(12 re-climbs supports "steep then plateau," nothing more complex); the
-question returns naturally if Spirit Severing extends the curve across acts.
+*(Q1 — r value and tail register — decided 2026-07-02, moved to
+[decisions.md](decisions.md) D21: r = 0.70, f = 0.05.)*
 
 ## Q2 — "Qi gains from spending" expedition modifier *(trigger: Act II realm sites)*
 
@@ -77,3 +65,15 @@ loot-never-gate assertion (zero-rare Competent stays in band). Scoped in
 [design-directions.md](design-directions.md); the Realistic band's banking
 knob wakes when this lands, and the band re-derives rather than silently
 widening (the pin's FAIL text says so).
+
+## Q9 — Severing numbers: k, ramp shape, breakeven timing, final severable list *(trigger: k-probe results in hand)*
+
+D23 fixed the *shape* (sequential set-pieces; ramped multiplier; lifetime
+net-positive with a felt weakness window; breakeven timing as the tuning
+lever). The numbers await the k-probe: each candidate severable's live
+contribution per build (felt-hours delta + end-of-run rate share), and
+breakeven-timing brackets across candidate (k, start-fraction, ramp-horizon)
+triples. Wes signs off the numbers per rule 0.1. **Lean on the ramp driver:**
+the severance ritual (D23's second soul accumulator) carries the multiplier
+— *mastering the severance* is what crosses breakeven, unifying the ramp and
+the second-mountain ritual into one mechanic instead of two clocks.

@@ -136,3 +136,62 @@ SectFocused, doesn't dominate Competent. Not a trap, not must-buy. Closed.
 README rewritten (D9 set the urgency). Both `LICENSE` and
 `Prestige-tree-license` stay: HEAD contains no TMT code since 0.3.0, but repo
 history distributes it.
+
+*(D17–D20 are intentionally skipped: those old ledger numbers live in
+design-directions.md and architecture.md per the README's numbering map.
+Post-split decisions continue from D21.)*
+
+## D21 — Keep-rule constants: r = 0.70, floor f = 0.05
+
+*2026-07-02, slice-9 design pass; closes Q1.* The core-remembers curve ships
+at **r = 0.70 with scale floor f = 0.05** — the "moment" register: Act I's
+re-temper ends at ~9 minutes, a mastered-but-still-visible ritual, never
+experientially vanished at Realistic cadence ("a brief ritual is 'I still do
+this, but I've mastered it'"). The floor doubles as D2's open optimizer
+bound: Competent's 1,344 re-climbs cannot compound below 5% scale, so one
+knob answers both the register question and the bound lever. Curve data in
+[calibration.md](calibration.md).
+
+## D22 — Lattice scale: medium
+
+*2026-07-02, the Act I content-complete gate decision (retired expansion
+doc's open item #1, due exactly now).* **Medium lattice**: ~25 nodes,
+Glimpse → Seed → Manifestation tiers only; Laws fold into Act III realms.
+Severing gets the whole stage — the Act II tree must not compete with the
+slice's headline mechanic for attention.
+
+## D23 — Spirit Severing v1 shape
+
+*2026-07-02, slice-9 design pass.* On top of the committed spec (three
+severances of real build pieces; transcendent multiplier covering a superset
+of the severed piece's effect domain; lint verifies the formula *shape*, sim
+asserts the pacing; severed pieces return next life; three-lives
+transcendence):
+
+- **Sequential, not simultaneous.** Three set-pieces spaced across the
+  realm, not a build-planner form. Each severance is *lived with* before the
+  next is chosen.
+- **Lifetime net-positive, not immediately.** The transcendent multiplier
+  **ramps** — starts below breakeven, crosses above over time — so each
+  severance opens a felt weakness window. **Breakeven timing is the tuning
+  lever, not k alone**; the k-probe measures breakeven timing alongside
+  lifetime net (Q9).
+- **The ascent counter is untouched.** Severing neither resets nor extends
+  Act I's curve. Spirit Severing introduces **its own ritual with its own
+  acceleration curve** — a second soul-scoped accumulator ("you've mastered
+  the core; now master the severance"). The pattern extends across acts with
+  new content, never by resetting the old curve. (This also retires Q1's
+  r-as-a-function-of-k residue: Act II gets a new curve, not an extension.)
+- **Severable criterion:** a severable must have a legible, isolatable
+  effect domain — that is what makes the k > 1 superset rule verifiable.
+  v1 candidates: soul aspect, stance, profession, meridian set bonuses,
+  lattice Manifestation. Final list and numbers ride on the k-probe (Q9).
+
+## D24 — Steam launch gate: transcendence first
+
+*2026-07-02, extends D9.* Three-lives transcendence creates an implicit
+promise the moment severing ships. Per-attachment severance data is recorded
+from day one (schema now, content later), and the Steam-readiness checklist
+gains a hard item: **Steam launch must postdate transcendence
+implementation**, not merely Act II content. Fine on itch, not fine on
+Steam.
