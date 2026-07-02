@@ -26,6 +26,8 @@ import { findRealm } from '@/data/realms'
 import { SETPIECE_DATA } from '@/data/setpieces'
 import { LATTICE_DATA } from '@/data/lattice'
 import { TECHNIQUE_DATA } from '@/data/techniques'
+import { findSecretRealmSite } from '@/data/secret-realm'
+import type { SectArchetypeKey, SecretRealmSiteKey } from '@/engine/types'
 
 // ---- Pinned budgets (from the old pacing sim, pass-3 tune) ------------------
 // Pinned budgets from the old pacing sim (reference targets for future parity pins).
@@ -61,10 +63,66 @@ interface ProfileMarks {
   sGreatCircle?: number
 }
 
+/**
+ * A profile's horizontal-engagement plan, threaded through the shared spine
+ * driver (`runSpine`). The VERTICAL play — meridians→12, temper→20, q→f→forge
+ * steady→warm, and the rate-restoration re-climbs after every n/s cascade — is
+ * identical for every profile that carries a config; only these flags flip which
+ * horizontal grammar the run touches. Competent flips them all on; each focused
+ * profile flips exactly one. See CONFIG objects below.
+ */
+interface SpineConfig {
+  /** Join the sect at reveal + buy techniques cheapest-first. */
+  engageSect: boolean
+  /** Buy Dao lattice nodes cheapest-first toward COMPETENT_SEED_TARGET Seeds. */
+  engageLattice: boolean
+  /** Run secret-realm expeditions + craft/swallow alchemy pills. */
+  engagePills: boolean
+  /** Breathing Trance ON below the banking threshold (the §6.1 stance play). */
+  useBreathingTrance: boolean
+  /** Tick the alchemy + secretRealm stores across waits (expedition/pill clocks). */
+  tickProfession: boolean
+  /** Try to bind an element soul aspect (else the spine falls back to Formless). */
+  pickElementAspect: boolean
+  /** The archetype joined when engageSect is set. */
+  sectArchetype: SectArchetypeKey
+  /** Element-aspect preference order (only read when pickElementAspect is set). */
+  aspectPreference: readonly string[]
+  /**
+   * COUNTERFACTUAL probe only: at the Formless fallback, force-grant the metal
+   * element aspect by bypassing its daoElementTier Seed gate. Isolates the
+   * Formless-vs-element penalty for aspect-locked profiles. NOT game-legal.
+   */
+  counterfactualForceMetalAspect?: boolean
+  /**
+   * Buy the extraordinary-meridian track payback-aware once unlocked (the
+   * MeridianProbe question #14). No horizontal system; a spine-only probe of
+   * whether the ×7.45 ext-meridian ceiling is must-buy content or a trap.
+   */
+  buyExtraordinaryMeridians?: boolean
+}
+
+interface ProfileSummary {
+  aspect: string
+  seeds: number
+  techniques: number
+  pillsUsed: number
+  expeditions: number
+  sBest: number
+}
+
 interface SimState {
   simSeconds: number
   maxIterations: number
   marks: ProfileMarks
+  /** Horizontal plan (spine + focused profiles). Absent for Diligent/Realistic drivers. */
+  config?: SpineConfig
+  /** Gathering pills swallowed this run (report column). */
+  pillsSwallowed: number
+  /** Gathering/clarity/warding pills crafted this run. */
+  pillsCrafted: number
+  /** End-state snapshot, captured before the next bootSim swaps the Pinia. */
+  summary?: ProfileSummary
 }
 
 /**
@@ -268,7 +326,10 @@ const COMPETENT_ASPECT_PREFERENCE = ['fireSoul', 'woodSoul', 'earthSoul', 'metal
 
 // Data-derived thresholds (read from src/data/realms.ts, never retuned here).
 const Q_SIXTH_LEVEL_AT = findRealm('q').substages.find((s) => s.label === '6th Level')!.at
+const Q_TENTH_LEVEL_AT = findRealm('q').substages.find((s) => s.label === '10th Level')!.at
 const Q_TOP_SUBSTAGE_AT = findRealm('q').substages[findRealm('q').substages.length - 1]!.at
+// Extraordinary-meridian track cap (data limit) — MeridianProbe only.
+const EXTRAORDINARY_MERIDIAN_TARGET = 8
 const F_GREAT_CIRCLE_AT = findRealm('f').substages.find((s) => s.label === 'Great Circle')!.at
 const C_TOP_SUBSTAGE_AT = findRealm('c').substages[findRealm('c').substages.length - 1]!.at
 const N_APEX_AT = findRealm('n').substages.find((s) => s.label === 'Apex')!.at
@@ -289,12 +350,20 @@ const S_KEEP_MILESTONE_INDEX = findRealm('s').substages.findIndex(
  * horizontal systems staying starved there. Contribution, Insight, and forge
  * refinement all accrue through here.
  */
-function tickSystems(dt: number): void {
+function tickSystems(dt: number, state: SimState): void {
   useBodyStore().update(dt)
   useDaoStore().update(dt)
   useForgeStore().update(dt)
   useRealmStore().update(dt)
   useSectStore().update(dt)
+  // The profession clocks (alchemy pill timers, secret-realm expedition essence +
+  // cooldowns + rotation) only tick for a profile that engages them (PillFocused
+  // and Realistic). Every OTHER profile — Competent included — leaves them
+  // starved, so this addition is byte-identical for the pinned Competent run.
+  if (state.config?.tickProfession) {
+    useAlchemyStore().update(dt)
+    useSecretRealmStore().update(dt)
+  }
 }
 
 /**
@@ -320,7 +389,7 @@ function advanceToQiTicking(target: Decimal, state: SimState): void {
     }
     game.timePlayed = game.timePlayed + dt
     state.simSeconds += dt
-    tickSystems(dt)
+    tickSystems(dt, state)
     if (++guard > state.maxIterations) {
       throw new Error('advanceToQiTicking exceeded iteration cap — Qi/sec appears stalled')
     }
@@ -341,7 +410,14 @@ function setBreathingTrance(active: boolean): void {
  * §6.1 opportunity cost, played deliberately.
  */
 function advanceBanked(target: Decimal, state: SimState): void {
-  setBreathingTrance(target.toNumber() < COMPETENT_BANKING_QI_THRESHOLD)
+  // Only stance-carrying profiles (Competent, LatticeFocused) play the §6.1
+  // Breathing Trance opportunity cost. SectFocused and PillFocused take "no
+  // stance" (stances are the dao grammar), so their config leaves it off. For
+  // Competent (useBreathingTrance = true) this is byte-identical to the prior
+  // unconditional call.
+  if (state.config?.useBreathingTrance) {
+    setBreathingTrance(target.toNumber() < COMPETENT_BANKING_QI_THRESHOLD)
+  }
   advanceToQiTicking(target, state)
 }
 
@@ -375,7 +451,7 @@ function prestigeRealmTicking(realmId: 'q' | 'f' | 'c' | 'n' | 's', state: SimSt
   advanceBanked(new Decimal(r.reqBase), state)
   if (game.points.lt(r.reqBase)) game.points = new Decimal(r.reqBase)
   realm.prestige(realmId)
-  engageHorizontals(state)
+  engageSpine(state)
 }
 
 /**
@@ -398,7 +474,7 @@ function climbRealmChunked(
     const gainNeeded = new Decimal(targetBest).sub(bankedPoints).max(1)
     advanceBanked(qiForGain(realmId, gainNeeded), state)
     realm.prestige(realmId)
-    engageHorizontals(state)
+    engageSpine(state)
     if (++iterations > state.maxIterations) {
       throw new Error(`climbRealmChunked('${realmId}') exceeded ${state.maxIterations} iterations`)
     }
@@ -450,13 +526,29 @@ function buyBodyBuyablesPaybackAware(state: SimState): void {
   const body = useBodyStore()
   const realm = useRealmStore()
   const pipelines = usePipelinesStore()
-  void realm
-  const buyTargets: { key: 'primaryMeridian' | 'temper'; cap: number }[] = [
+  const buyTargets: { key: 'primaryMeridian' | 'temper' | 'extraordinaryMeridian'; cap: number }[] = [
     { key: 'primaryMeridian', cap: COMPETENT_MERIDIAN_TARGET },
     { key: 'temper', cap: COMPETENT_TEMPER_TARGET },
   ]
+  // MeridianProbe (#14): the extraordinary-meridian track, payback-aware, once
+  // unlocked (all 12 primary open + q 10th Level). Only the probe sets this flag,
+  // so this push is skipped for Competent and the focused profiles — bit-identical.
+  if (state.config?.buyExtraordinaryMeridians) {
+    buyTargets.push({ key: 'extraordinaryMeridian', cap: EXTRAORDINARY_MERIDIAN_TARGET })
+  }
   for (const buyTarget of buyTargets) {
     while (body.buyableAmount(buyTarget.key) < buyTarget.cap) {
+      // The ext-meridian track is gated; skip (don't burn Qi advancing to a cost
+      // we cannot spend) until all 12 primary are open and q hits 10th Level.
+      if (
+        buyTarget.key === 'extraordinaryMeridian' &&
+        !(
+          body.primaryMeridians >= COMPETENT_MERIDIAN_TARGET &&
+          realm.realmBest('q').toNumber() >= Q_TENTH_LEVEL_AT
+        )
+      ) {
+        break
+      }
       const cost = body.buyableCost(buyTarget.key, body.buyableAmount(buyTarget.key))
       const paybackBudget = pipelines.qiPerSecond.times(COMPETENT_PAYBACK_SECONDS)
       if (cost.gt(paybackBudget)) break
@@ -513,43 +605,139 @@ function buyTechniquesCheapestFirst(): void {
  * fallback of last resort, bound just before the first s prestige (see
  * runCompetent) so a slightly-late Seed doesn't lock the run out of ×1.5.
  */
-function tryPickElementAspect(): void {
+function tryPickElementAspect(state: SimState): void {
   const body = useBodyStore()
   const realm = useRealmStore()
   if (body.soulAspectChosen) return
   if (!realm.stateOf('n').unlocked) return
+  const preference = state.config?.aspectPreference ?? COMPETENT_ASPECT_PREFERENCE
   const aspects = findRealm('n').soulAspect!.aspects
-  for (const preferredKey of COMPETENT_ASPECT_PREFERENCE) {
+  for (const preferredKey of preference) {
     const aspect = aspects.find((a) => a.key === preferredKey)
     if (aspect && body.setSoulAspect(aspect.key, aspect.requires)) return
   }
 }
 
-/** All horizontal-system engagement at a decision point (idempotent, cheap). */
-function engageHorizontals(state: SimState): void {
-  const sect = useSectStore()
-  if (!sect.joined && sect.isRevealGateMet()) sect.joinSect(COMPETENT_SECT_ARCHETYPE)
+// ---- Alchemy + secret-realm hooks (PillFocused / Realistic) -----------------
+
+// Held-pill targets (sim policy, this file's constant style). ⟨tune⟩
+const PILL_CLARITY_HOLD_TARGET = 2 // clarity charges banked ahead of n/s prestiges
+const PILL_WARDING_HOLD_TARGET = 1 // one Heaven-Warding pill carried (pool effect untested — sim stops at s320)
+
+/**
+ * Does the site's dropped material still have unmet recipe demand? spiritHerb is
+ * the perpetual gathering-pill feedstock (always in demand); essenceCrystal and
+ * beastCore are only wanted while we are still topping up held Clarity/Warding
+ * charges. Used to decide whether entering the currently-active site is worth
+ * the run — we never idle-wait for a rotation, only act on natural boundaries.
+ */
+function pillMaterialHasDemand(siteKey: SecretRealmSiteKey): boolean {
+  const alchemy = useAlchemyStore()
+  const material = findSecretRealmSite(siteKey).rewards.material
+  if (material === 'spiritHerb') return true
+  if (material === 'essenceCrystal') {
+    return (
+      alchemy.pillCount('clarityPill') < PILL_CLARITY_HOLD_TARGET ||
+      alchemy.pillCount('heavenWardingPill') < PILL_WARDING_HOLD_TARGET
+    )
+  }
+  if (material === 'beastCore') return alchemy.pillCount('heavenWardingPill') < PILL_WARDING_HOLD_TARGET
+  return false
+}
+
+/**
+ * PillFocused engagement at a decision point: enter the active expedition when
+ * profitable, craft what the materials allow, hold Clarity charges (they auto-aid
+ * the next n/s prestige via realm.prestige) and one Heaven-Warding pill, and keep
+ * a Qi-Gathering pill burning. Deterministic; no idle-waiting for rotation.
+ */
+function engagePillActions(state: SimState): void {
+  const alchemy = useAlchemyStore()
+  const secretRealm = useSecretRealmStore()
+  if (!alchemy.revealed) return // sealed until the core is forged
+  if (!alchemy.professionChosen) alchemy.chooseProfession('alchemy')
+
+  // Enter the active site iff enterable (in rotation, unlocked, off cooldown, no
+  // run) AND its material is still wanted. Essence then accrues across the
+  // subsequent ticked waits and resolves at the run's duration boundary.
+  const activeSite = secretRealm.activeSiteKey
+  if (activeSite && secretRealm.canEnter(activeSite) && pillMaterialHasDemand(activeSite)) {
+    secretRealm.enter(activeSite)
+  }
+
+  // Craft: gathering pills whenever affordable, then top up held Clarity + one
+  // Warding pill to their hold targets.
+  while (alchemy.canCraft('gatheringPill')) {
+    if (!alchemy.craft('gatheringPill')) break
+    state.pillsCrafted++
+  }
+  while (
+    alchemy.pillCount('clarityPill') < PILL_CLARITY_HOLD_TARGET &&
+    alchemy.canCraft('clarityPill')
+  ) {
+    if (!alchemy.craft('clarityPill')) break
+    state.pillsCrafted++
+  }
+  while (
+    alchemy.pillCount('heavenWardingPill') < PILL_WARDING_HOLD_TARGET &&
+    alchemy.canCraft('heavenWardingPill')
+  ) {
+    if (!alchemy.craft('heavenWardingPill')) break
+    state.pillsCrafted++
+  }
+
+  // Keep a Qi-Gathering pill burning (×2 Qi/sec). One active timed pill at a
+  // time; re-swallow only once the prior lapses.
+  if (!alchemy.activePill && alchemy.pillCount('gatheringPill') > 0) {
+    if (alchemy.activatePill('gatheringPill')) state.pillsSwallowed++
+  }
+}
+
+/**
+ * All horizontal-system engagement at a decision point, gated by the profile's
+ * SpineConfig. The ORDER is the pinned Competent order (sect-join, body buys,
+ * lattice, techniques, pills, aspect, marks); body buys and mark-recording are
+ * always run (vertical spine), each horizontal grammar is opt-in. With the
+ * Competent config every branch that Competent used stays live in the same
+ * order and the pill branch is skipped, so the run is byte-identical.
+ */
+function engageSpine(state: SimState): void {
+  const cfg = state.config!
+  if (cfg.engageSect) {
+    const sect = useSectStore()
+    if (!sect.joined && sect.isRevealGateMet()) sect.joinSect(cfg.sectArchetype)
+  }
   buyBodyBuyablesPaybackAware(state)
-  buyLatticeNodesCheapestFirst()
-  buyTechniquesCheapestFirst()
-  tryPickElementAspect()
+  if (cfg.engageLattice) buyLatticeNodesCheapestFirst()
+  if (cfg.engageSect) buyTechniquesCheapestFirst()
+  if (cfg.engagePills) engagePillActions(state)
+  if (cfg.pickElementAspect) tryPickElementAspect(state)
   recordMarks(state)
 }
 
 /**
- * Competent policy: everything Diligent does, plus horizontal engagement and
- * rate restoration. Stops at s Great Circle (320) — the tribulation trigger;
- * the set-piece itself is smoke-test territory, not modeled here.
+ * The shared VERTICAL SPINE, parameterized by state.config. Everything Diligent
+ * does, plus horizontal engagement (which grammars via the config flags) and
+ * rate restoration. Competent is this spine with every flag on; the three
+ * focused profiles are this spine with exactly one horizontal grammar on. Stops
+ * at s Great Circle (320) — the tribulation trigger; the set-piece itself is
+ * smoke-test territory, not modeled here.
+ *
+ * Bit-identity contract: with the Competent config, every branch below runs the
+ * same operations in the same order as the pre-refactor runCompetent, so the
+ * pinned 74,041s / 20.57h figure is preserved to the second. The refactor only
+ * added opt-out branches for the focused profiles and never reordered a
+ * Competent-live path.
  */
-function runCompetent(state: SimState): void {
+function runSpine(state: SimState): void {
   const body = useBodyStore()
   const realm = useRealmStore()
   const forge = useForgeStore()
 
   // Phase 1: bootstrap Qi Condensation to 6th Level. The sect joins at reveal
   // (q 2nd Level) and meridians/temper accrete payback-aware via the
-  // engageHorizontals call inside every prestige.
-  engageHorizontals(state)
+  // engageSpine call inside every prestige.
+  engageSpine(state)
   while (realm.realmBest('q').toNumber() < Q_SIXTH_LEVEL_AT) {
     prestigeRealmTicking('q', state)
   }
@@ -614,12 +802,20 @@ function runCompetent(state: SimState): void {
     climbNascentWithRestoration(nascentTarget, state)
     climbRealmChunked('q', Q_TOP_SUBSTAGE_AT, state)
     // Aspect fallback of last resort: if no element gate ever landed, take
-    // Formless now rather than entering Soul Formation aspectless.
+    // Formless now rather than entering Soul Formation aspectless. The
+    // counterfactual probes (SectFocused* / PillFocused*) instead force-grant the
+    // metal element aspect here, bypassing the daoElementTier Seed gate — NOT
+    // game-legal play, a sim probe isolating the Formless-vs-element delta.
     if (!body.soulAspectChosen) {
-      tryPickElementAspect()
+      tryPickElementAspect(state)
       if (!body.soulAspectChosen) {
-        const formlessAspect = findRealm('n').soulAspect!.aspects.find((a) => a.key === 'formless')!
-        body.setSoulAspect(formlessAspect.key, formlessAspect.requires)
+        if (state.config?.counterfactualForceMetalAspect) {
+          const metalSoul = findRealm('n').soulAspect!.aspects.find((a) => a.key === 'metalSoul')!
+          body.setSoulAspect(metalSoul.key, {}) // {} == unconditional: gate bypass
+        } else {
+          const formlessAspect = findRealm('n').soulAspect!.aspects.find((a) => a.key === 'formless')!
+          body.setSoulAspect(formlessAspect.key, formlessAspect.requires)
+        }
       }
     }
     prestigeRealmTicking('s', state)
