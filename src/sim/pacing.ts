@@ -19,6 +19,7 @@ import { useForgeStore } from '@/stores/forge'
 import { usePipelinesStore } from '@/stores/pipelines'
 import { useSecretRealmStore } from '@/stores/secretRealm'
 import { useAlchemyStore } from '@/stores/alchemy'
+import type { ActivePill } from '@/stores/alchemy'
 import { useHeartDemonsStore } from '@/stores/heartDemons'
 import { useDaoStore } from '@/stores/dao'
 import { useSectStore } from '@/stores/sect'
@@ -27,7 +28,9 @@ import { SETPIECE_DATA } from '@/data/setpieces'
 import { LATTICE_DATA } from '@/data/lattice'
 import { TECHNIQUE_DATA } from '@/data/techniques'
 import { findSecretRealmSite } from '@/data/secret-realm'
-import type { SectArchetypeKey, SecretRealmSiteKey } from '@/engine/types'
+import { ALCHEMY_DATA } from '@/data/alchemy'
+import type { Condition } from '@/engine/meets'
+import type { PillKey, SectArchetypeKey, SecretRealmSiteKey } from '@/engine/types'
 
 // ---- Pinned budgets (from the old pacing sim, pass-3 tune) ------------------
 // Pinned budgets from the old pacing sim (reference targets for future parity pins).
@@ -52,6 +55,17 @@ export const PACING_BUDGETS = {
 } as const
 
 // ---- Sim state --------------------------------------------------------------
+
+/**
+ * SEVERING PROBE (Q9): the D23 candidate severables that are measurable in
+ * Act I today. 'extraordinaryMeridians' stands in for D23's "meridian set
+ * bonuses" — no distinct set-completion bonus exists in BODY_DATA (meridianMult
+ * is a smooth per-meridian 1.15^n / 1.25^n product); the extraordinary track
+ * (a "set" of 8) is the closest real effect a severance could take. The
+ * lattice Manifestation tier (also a D23 candidate) does not exist yet and is
+ * reported as a GAP, never faked.
+ */
+type SeverableKey = 'soulAspect' | 'stance' | 'profession' | 'extraordinaryMeridians'
 
 /** First-crossing timestamps (sim seconds) for the report table. */
 interface ProfileMarks {
@@ -147,6 +161,34 @@ interface SpineConfig {
    * runner construction (assertProbeFlagsExclusive).
    */
   counterfactualRemembersFloor?: number
+  /**
+   * COUNTERFACTUAL probe only — SEVERING PROBE (Q9, decision input for D23
+   * Spirit Severing): EFFECT-ablation of ONE candidate severable. The actor's
+   * policy still ACQUIRES and USES the piece exactly as in the base run (same
+   * decision rules, same acquisition points — attribution-before-action:
+   * decision-ablation would confound the piece's value with policy drift);
+   * only the piece's EFFECT is nullified from the moment of acquisition
+   * onward. base − ablated = the piece's live felt-hours contribution.
+   * Nullification is sim-side store state only (engine untouched):
+   * - 'soulAspect': the bind fires normally, then body.soulAspect is cleared
+   *   (the acquisition is remembered sim-side so the policy never re-binds).
+   * - 'stance': the toggle INTENTS still fire per the base decision rule, but
+   *   the stance never engages (dao.activeStance stays ''), nullifying both
+   *   its ×0.7 qi and ×2 Insight sides.
+   * - 'profession': swallowed gathering pills keep their base timer cadence
+   *   but their timedQiMult reads identity (active-pill key swapped to a
+   *   non-timed recipe); clarity charges are still crafted/held/CONSUMED on
+   *   the base rule but never boost a prestige gain (see simPrestige). The
+   *   warding pill's tribulation-pool effect is never drawn (runs stop at
+   *   s320), so there is nothing to nullify there.
+   * - 'extraordinaryMeridians': each buy is mirrored sim-side (same unlock
+   *   gate, cost ladder, payback rule, and Qi spent) while
+   *   body.extraordinaryMeridians stays 0 — the track's 1.25^n meridianMult
+   *   never applies.
+   * Mutually exclusive with every other counterfactual probe flag
+   * (assertProbeFlagsExclusive). Observation-only; never asserted on.
+   */
+  counterfactualSeverEffect?: SeverableKey
 }
 
 interface ProfileSummary {
@@ -227,6 +269,18 @@ interface SimState {
   pillsSwallowed: number
   /** Gathering/clarity/warding pills crafted this run. */
   pillsCrafted: number
+  /**
+   * SEVERING PROBE (Q9): the aspect key the policy bound before its effect was
+   * nullified (counterfactualSeverEffect: 'soulAspect' runs only). Doubles as
+   * the "already acquired" latch so the policy never re-binds.
+   */
+  severedAspectKey?: string
+  /**
+   * SEVERING PROBE (Q9): sim-side purchase counter for the mirrored
+   * extraordinary-meridian buys (counterfactualSeverEffect:
+   * 'extraordinaryMeridians' runs only — body.extraordinaryMeridians stays 0).
+   */
+  severedExtraordinaryMeridiansBought?: number
   /** End-state snapshot, captured before the next bootSim swaps the Pinia. */
   summary?: ProfileSummary
 }
@@ -518,7 +572,12 @@ function advanceToQiTicking(target: Decimal, state: SimState): void {
 }
 
 /** Set the Breathing Trance stance (no-op before the lattice reveals). */
-function setBreathingTrance(active: boolean): void {
+function setBreathingTrance(active: boolean, state: SimState): void {
+  // SEVERING PROBE (Q9) 'stance' effect-ablation: the toggle INTENT still
+  // fires here on the exact base decision rule (the `active` argument is
+  // computed identically), but the stance never engages — dao.activeStance
+  // stays '', so both its ×0.7 qi and ×2 Insight sides read identity.
+  if (state.config?.counterfactualSeverEffect === 'stance') return
   const dao = useDaoStore()
   if (!dao.isRevealed()) return
   const currentlyActive = dao.activeStance === 'breathingTrance'
@@ -537,7 +596,7 @@ function advanceBanked(target: Decimal, state: SimState): void {
   // Competent (useBreathingTrance = true) this is byte-identical to the prior
   // unconditional call.
   if (state.config?.useBreathingTrance) {
-    setBreathingTrance(target.toNumber() < COMPETENT_BANKING_QI_THRESHOLD)
+    setBreathingTrance(target.toNumber() < COMPETENT_BANKING_QI_THRESHOLD, state)
   }
   advanceToQiTicking(target, state)
 }
@@ -655,7 +714,29 @@ function simPrestige(realmId: 'q' | 'f' | 'c' | 'n' | 's', state: SimState): voi
   const cBefore = probeCKeep || probePartialCKeep ? realm.stateOf('c') : null
   const keptBest = cBefore ? cBefore.best : ''
   const keptMilestones = cBefore ? [...cBefore.milestones] : []
+  // SEVERING PROBE (Q9) 'profession' effect-ablation: a held clarity charge
+  // must NOT boost this prestige's gain, but its CONSUMPTION must still land
+  // exactly as in the base run (held counts drive the craft-demand decisions,
+  // so they have to keep the base cadence). Zero the aid pills around
+  // realm.prestige — the engine then sees no aid and consumes nothing — then
+  // restore the counts and consume the one charge the base run would have.
+  const severedAidWouldApply =
+    state.config?.counterfactualSeverEffect === 'profession' &&
+    useAlchemyStore().breakthroughGainMult(realmId).gt(1)
+  const severedAidPillSnapshots: { key: PillKey; count: number }[] = []
+  if (severedAidWouldApply) {
+    const alchemy = useAlchemyStore()
+    for (const aidPillKey of SEVERING_AID_PILL_KEYS) {
+      severedAidPillSnapshots.push({ key: aidPillKey, count: alchemy.pillCount(aidPillKey) })
+      alchemy.pills[aidPillKey] = 0
+    }
+  }
   realm.prestige(realmId)
+  if (severedAidWouldApply) {
+    const alchemy = useAlchemyStore()
+    for (const snapshot of severedAidPillSnapshots) alchemy.pills[snapshot.key] = snapshot.count
+    alchemy.consumeBreakthroughAid(realmId)
+  }
   if (probeCKeep) {
     const cAfter = realm.stateOf('c')
     // Restore the keep-rule keys only if the cascade actually wiped them (it
@@ -760,6 +841,7 @@ function buyBodyBuyablesPaybackAware(state: SimState): void {
   const body = useBodyStore()
   const realm = useRealmStore()
   const pipelines = usePipelinesStore()
+  const game = useGameStore()
   const buyTargets: { key: 'primaryMeridian' | 'temper' | 'extraordinaryMeridian'; cap: number }[] = [
     { key: 'primaryMeridian', cap: COMPETENT_MERIDIAN_TARGET },
     { key: 'temper', cap: COMPETENT_TEMPER_TARGET },
@@ -770,8 +852,20 @@ function buyBodyBuyablesPaybackAware(state: SimState): void {
   if (state.config?.buyExtraordinaryMeridians) {
     buyTargets.push({ key: 'extraordinaryMeridian', cap: EXTRAORDINARY_MERIDIAN_TARGET })
   }
+  // SEVERING PROBE (Q9) 'extraordinaryMeridians' effect-ablation: buys are
+  // mirrored sim-side on the identical decision rule (same unlock gate, same
+  // cost ladder read from the same owned-count, same payback bar, same Qi
+  // deduction as body.buyBuyable) while body.extraordinaryMeridians stays 0 —
+  // so the track's 1.25^n meridianMult never applies. Base runs read exactly
+  // body.buyableAmount (the sim counter is only set under the flag).
+  const severExtraordinaryMeridians =
+    state.config?.counterfactualSeverEffect === 'extraordinaryMeridians'
+  const ownedCountOf = (key: 'primaryMeridian' | 'temper' | 'extraordinaryMeridian'): number =>
+    key === 'extraordinaryMeridian' && severExtraordinaryMeridians
+      ? (state.severedExtraordinaryMeridiansBought ?? 0)
+      : body.buyableAmount(key)
   for (const buyTarget of buyTargets) {
-    while (body.buyableAmount(buyTarget.key) < buyTarget.cap) {
+    while (ownedCountOf(buyTarget.key) < buyTarget.cap) {
       // The ext-meridian track is gated; skip (don't burn Qi advancing to a cost
       // we cannot spend) until all 12 primary are open and q hits 10th Level.
       if (
@@ -783,11 +877,17 @@ function buyBodyBuyablesPaybackAware(state: SimState): void {
       ) {
         break
       }
-      const cost = body.buyableCost(buyTarget.key, body.buyableAmount(buyTarget.key))
+      const cost = body.buyableCost(buyTarget.key, ownedCountOf(buyTarget.key))
       const paybackBudget = pipelines.qiPerSecond.times(COMPETENT_PAYBACK_SECONDS)
       if (cost.gt(paybackBudget)) break
       advanceToQiTicking(cost, state)
-      if (!body.buyBuyable(buyTarget.key)) break
+      if (buyTarget.key === 'extraordinaryMeridian' && severExtraordinaryMeridians) {
+        if (game.points.lt(cost)) break // mirror buyBuyable's affordability bail
+        game.points = game.points.sub(cost).max(0)
+        state.severedExtraordinaryMeridiansBought = (state.severedExtraordinaryMeridiansBought ?? 0) + 1
+      } else if (!body.buyBuyable(buyTarget.key)) {
+        break
+      }
     }
   }
 }
@@ -833,6 +933,35 @@ function buyTechniquesCheapestFirst(): void {
 }
 
 /**
+ * SEVERING PROBE (Q9): has this run acquired its soul aspect — either bound
+ * live in the store, or bound-then-nullified under the 'soulAspect'
+ * effect-ablation? Every policy "is the aspect chosen yet?" check routes
+ * through here so the ablated run never re-binds. Base runs read exactly
+ * body.soulAspectChosen (severedAspectKey is only ever set under the flag).
+ */
+function soulAspectAcquired(state: SimState): boolean {
+  return useBodyStore().soulAspectChosen || state.severedAspectKey !== undefined
+}
+
+/**
+ * All policy soul-aspect binds route through here. Base path is a literal
+ * body.setSoulAspect. Under SEVERING PROBE (Q9) 'soulAspect' ablation, the
+ * bind fires normally (same gate verification, same decision point) and the
+ * effect is then nullified by clearing body.soulAspect — pipelines read
+ * identity from an empty key — while the acquisition is remembered sim-side
+ * (state.severedAspectKey) so the policy treats the aspect as chosen.
+ */
+function simBindSoulAspect(aspectKey: string, requiresCondition: Condition, state: SimState): boolean {
+  const body = useBodyStore()
+  const bound = body.setSoulAspect(aspectKey, requiresCondition)
+  if (bound && state.config?.counterfactualSeverEffect === 'soulAspect') {
+    state.severedAspectKey = aspectKey
+    body.soulAspect = '' // COUNTERFACTUAL: acquired, effect nullified
+  }
+  return bound
+}
+
+/**
  * Try to bind an ELEMENT soul aspect (qi-leaning elements preferred) once
  * Nascent Soul exists. Each aspect's daoElementTier gate is live-verified by
  * setSoulAspect itself. Formless is deliberately NOT taken here — it is the
@@ -840,15 +969,14 @@ function buyTechniquesCheapestFirst(): void {
  * runCompetent) so a slightly-late Seed doesn't lock the run out of ×1.5.
  */
 function tryPickElementAspect(state: SimState): void {
-  const body = useBodyStore()
   const realm = useRealmStore()
-  if (body.soulAspectChosen) return
+  if (soulAspectAcquired(state)) return
   if (!realm.stateOf('n').unlocked) return
   const preference = state.config?.aspectPreference ?? COMPETENT_ASPECT_PREFERENCE
   const aspects = findRealm('n').soulAspect!.aspects
   for (const preferredKey of preference) {
     const aspect = aspects.find((a) => a.key === preferredKey)
-    if (aspect && body.setSoulAspect(aspect.key, aspect.requires)) return
+    if (aspect && simBindSoulAspect(aspect.key, aspect.requires, state)) return
   }
 }
 
@@ -857,6 +985,19 @@ function tryPickElementAspect(state: SimState): void {
 // Held-pill targets (sim policy, this file's constant style). ⟨tune⟩
 const PILL_CLARITY_HOLD_TARGET = 2 // clarity charges banked ahead of n/s prestiges
 const PILL_WARDING_HOLD_TARGET = 1 // one Heaven-Warding pill carried (pool effect untested — sim stops at s320)
+
+// SEVERING PROBE (Q9) — profession effect-ablation plumbing (data-derived).
+// A non-timed recipe key: swapping the active pill's key to it makes
+// activeTimedRecipe() read null (identity qi factor) while the pill TIMER
+// keeps ticking on the base cadence, so re-swallow decisions stay base-shaped.
+const SEVERING_NULL_EFFECT_PILL_KEY = ALCHEMY_DATA.recipes.find(
+  (recipe) => recipe.effect.type !== 'timedQiMult',
+)!.key
+// Every breakthrough-aid (clarity-shaped) pill key — zeroed around a severed
+// prestige so the gain boost never applies, then restored + consumed manually.
+const SEVERING_AID_PILL_KEYS: readonly PillKey[] = ALCHEMY_DATA.recipes
+  .filter((recipe) => recipe.effect.type === 'breakthroughAid')
+  .map((recipe) => recipe.key)
 
 /**
  * Does the site's dropped material still have unmet recipe demand? spiritHerb is
@@ -923,7 +1064,20 @@ function engagePillActions(state: SimState): void {
   // Keep a Qi-Gathering pill burning (×2 Qi/sec). One active timed pill at a
   // time; re-swallow only once the prior lapses.
   if (!alchemy.activePill && alchemy.pillCount('gatheringPill') > 0) {
-    if (alchemy.activatePill('gatheringPill')) state.pillsSwallowed++
+    if (alchemy.activatePill('gatheringPill')) {
+      state.pillsSwallowed++
+      // SEVERING PROBE (Q9) 'profession' effect-ablation: the swallow just
+      // happened on the base rule (pill count decremented, timer started);
+      // swap the active key to a non-timed recipe so activePillQiMult reads
+      // identity while alchemy.update ticks the SAME remaining-seconds down —
+      // the re-swallow cadence stays base-shaped, only the effect is gone.
+      // (Fresh store read: the enclosing !activePill check narrows the outer
+      // alias to null, but activatePill just replaced the pill.)
+      const swallowedPill: ActivePill | null = useAlchemyStore().activePill
+      if (state.config?.counterfactualSeverEffect === 'profession' && swallowedPill) {
+        alchemy.activePill = { ...swallowedPill, key: SEVERING_NULL_EFFECT_PILL_KEY }
+      }
+    }
   }
 }
 
@@ -1043,15 +1197,15 @@ function runSpine(state: SimState): void {
     // counterfactual probes (SectFocused* / PillFocused*) instead force-grant the
     // metal element aspect here, bypassing the daoElementTier Seed gate — NOT
     // game-legal play, a sim probe isolating the Formless-vs-element delta.
-    if (!body.soulAspectChosen) {
+    if (!soulAspectAcquired(state)) {
       tryPickElementAspect(state)
-      if (!body.soulAspectChosen) {
+      if (!soulAspectAcquired(state)) {
         if (state.config?.counterfactualForceMetalAspect) {
           const metalSoul = findRealm('n').soulAspect!.aspects.find((a) => a.key === 'metalSoul')!
-          body.setSoulAspect(metalSoul.key, {}) // {} == unconditional: gate bypass
+          simBindSoulAspect(metalSoul.key, {}, state) // {} == unconditional: gate bypass
         } else {
           const formlessAspect = findRealm('n').soulAspect!.aspects.find((a) => a.key === 'formless')!
-          body.setSoulAspect(formlessAspect.key, formlessAspect.requires)
+          simBindSoulAspect(formlessAspect.key, formlessAspect.requires, state)
         }
       }
     }
@@ -1145,21 +1299,24 @@ const MERIDIAN_PROBE_CONFIG: SpineConfig = {
 }
 
 /**
- * The three c-churn counterfactuals answer different questions on different
- * mechanics († full keep, ‡ milestones-only keep, r clock compression) —
- * stacking them has no defined meaning, so a config carrying more than one is
- * a probe-construction bug worth failing loudly at runner build time.
+ * The counterfactual probes answer different questions on different mechanics
+ * († full keep, ‡ milestones-only keep, r clock compression, ⊘ severing
+ * effect-ablation) — stacking them has no defined meaning, so a config
+ * carrying more than one is a probe-construction bug worth failing loudly at
+ * runner build time.
  */
 function assertProbeFlagsExclusive(config: SpineConfig): void {
   const flagsSet = [
     config.counterfactualCKeep === true,
     config.counterfactualPartialCKeep === true,
     config.counterfactualCoreRemembers !== undefined,
+    config.counterfactualSeverEffect !== undefined,
   ].filter(Boolean).length
   if (flagsSet > 1) {
     throw new Error(
-      'counterfactualCKeep (†), counterfactualPartialCKeep (‡), and ' +
-        'counterfactualCoreRemembers (r) are mutually exclusive probes — pick one',
+      'counterfactualCKeep (†), counterfactualPartialCKeep (‡), ' +
+        'counterfactualCoreRemembers (r), and counterfactualSeverEffect (⊘) ' +
+        'are mutually exclusive probes — pick one',
     )
   }
   if (
@@ -1308,14 +1465,13 @@ function realisticBankedPrestige(realmId: 'q' | 'f' | 'c' | 'n' | 's', state: Si
 
 /** Bind an aspect once Nascent Soul exists: element if a Seed happened to land, else Formless. */
 function ensureRealisticAspect(state: SimState): void {
-  const body = useBodyStore()
   const realm = useRealmStore()
-  if (body.soulAspectChosen) return
+  if (soulAspectAcquired(state)) return
   if (!realm.stateOf('n').unlocked) return
   tryPickElementAspect(state)
-  if (!body.soulAspectChosen) {
+  if (!soulAspectAcquired(state)) {
     const formless = findRealm('n').soulAspect!.aspects.find((a) => a.key === 'formless')!
-    body.setSoulAspect(formless.key, formless.requires)
+    simBindSoulAspect(formless.key, formless.requires, state)
   }
 }
 
@@ -1618,6 +1774,87 @@ function flatDiscountCheck(
   }
 }
 
+// ---- SEVERING PROBE (Q9) helpers (decision input for D23 Spirit Severing) ----
+
+/**
+ * End-of-run rate shares for the SEVERING PROBE (Q9). OBSERVATION-ONLY:
+ * measured at the final (trib-trigger) state of a BASE run while its Pinia is
+ * still live. For each candidate severable, m = qiPerSecond with the piece's
+ * effect ON ÷ with it OFF — the multiplier magnitude a transcendent severance
+ * multiplier must cover. Each "off" read is a temporary store mutation,
+ * restored immediately; an identity re-read at the end verifies the measured
+ * state came back exact (a restore bug throws loudly — that is probe hygiene,
+ * not a pacing assertion). Nothing is printed here; the caller stores the
+ * numbers and the SEVERING PROBE section prints them, so the base-profile
+ * output stays bit-identical.
+ */
+interface SeveringRateShares {
+  soulAspect: number
+  stance: number
+  profession: number
+  extraordinaryMeridians: number
+  boundAspectKey: string
+  activePillKey: string | null
+  extraordinaryMeridiansOwned: number
+}
+
+function measureSeveringRateShares(): SeveringRateShares {
+  const pipelines = usePipelinesStore()
+  const body = useBodyStore()
+  const dao = useDaoStore()
+  const alchemy = useAlchemyStore()
+  const rateWithEffectOn = pipelines.qiPerSecond
+  const shareWithEffectOff = (nullify: () => void, restore: () => void): number => {
+    nullify()
+    const rateWithEffectOff = pipelines.qiPerSecond
+    restore()
+    return rateWithEffectOff.lte(0) ? Number.NaN : rateWithEffectOn.div(rateWithEffectOff).toNumber()
+  }
+  const priorAspectKey = body.soulAspect
+  const soulAspectShare = shareWithEffectOff(
+    () => { body.soulAspect = '' },
+    () => { body.soulAspect = priorAspectKey },
+  )
+  const priorStanceKey = dao.activeStance
+  const stanceShare = shareWithEffectOff(
+    () => { dao.activeStance = '' },
+    () => { dao.activeStance = priorStanceKey },
+  )
+  const priorActivePill = alchemy.activePill
+  const professionShare = shareWithEffectOff(
+    () => { alchemy.activePill = null },
+    () => { alchemy.activePill = priorActivePill },
+  )
+  const priorExtraordinaryCount = body.extraordinaryMeridians
+  const extraordinaryShare = shareWithEffectOff(
+    () => { body.extraordinaryMeridians = 0 },
+    () => { body.extraordinaryMeridians = priorExtraordinaryCount },
+  )
+  if (!pipelines.qiPerSecond.eq(rateWithEffectOn)) {
+    throw new Error(
+      'measureSeveringRateShares failed to restore the measured end-state exactly — probe bug',
+    )
+  }
+  return {
+    soulAspect: soulAspectShare,
+    stance: stanceShare,
+    profession: professionShare,
+    extraordinaryMeridians: extraordinaryShare,
+    boundAspectKey: priorAspectKey || 'none',
+    activePillKey: priorActivePill?.key ?? null,
+    extraordinaryMeridiansOwned: priorExtraordinaryCount,
+  }
+}
+
+// SEVERING PROBE (Q9) — Part 2 model grid. ⟨tune⟩ The transcendent multiplier
+// starts at c·m and ramps geometrically per severance-ritual completion to a
+// cap of k·m; growth is derived so the cap is reached exactly at step
+// SEVERING_RITUAL_STEP_COUNT — mirroring Act I's 12-re-climb resolution at
+// Realistic cadence (D2/D21). A MODEL, not a measurement.
+const SEVERING_RAMP_START_FRACTIONS = [0.25, 0.5, 0.75] as const // c: start = c·m
+const SEVERING_RAMP_CAP_FACTORS = [1.2, 1.5, 2.0] as const // k: cap = k·m (k>1 = D23's superset rule)
+const SEVERING_RITUAL_STEP_COUNT = 12
+
 function runProfile(name: string, fn: (state: SimState) => void): SimState {
   bootSim()
   const state: SimState = {
@@ -1765,11 +2002,18 @@ export function runPacingSim(): void {
   // ---- Focused profiles: ONE horizontal grammar each -----------------------
   // (All run AFTER the competent reads above — bootSim swaps the Pinia.)
   const latticeRun = runProfile('LatticeFocused', spineRunner(LATTICE_CONFIG))
+  // SEVERING PROBE (Q9): silent end-state rate-share reads, taken while each
+  // base run's Pinia is still live (the next runProfile boots a fresh one).
+  // Pure store reads with exact restores — prints nothing here; the numbers
+  // surface in the SEVERING PROBE section far below.
+  const latticeSeveringShares = measureSeveringRateShares()
   const sectRun = runProfile('SectFocused', spineRunner(SECT_CONFIG))
   const pillRun = runProfile('PillFocused', spineRunner(PILL_CONFIG))
+  const pillSeveringShares = measureSeveringRateShares()
 
   // ---- MeridianProbe: spine + ext-meridian track, no horizontals (#14) ------
   const meridianRun = runProfile('MeridianProbe', spineRunner(MERIDIAN_PROBE_CONFIG))
+  const meridianSeveringShares = measureSeveringRateShares()
 
   // ---- Counterfactual aspect probes (force-grant metal, bypass the Seed gate)
   const sectCounterfactualRun = runProfile(
@@ -1783,6 +2027,7 @@ export function runPacingSim(): void {
 
   // ---- Realistic: the experience-target actor (calibration) ----------------
   const realisticRun = runProfile('Realistic', runRealistic)
+  const realisticSeveringShares = measureSeveringRateShares() // SEVERING PROBE (Q9) — silent read
 
   // ---- C-keep counterfactuals († runs): the churn-decomposition probes ------
   // Same policies as Competent/Realistic, but c.best + c.milestones are force-
@@ -2242,6 +2487,202 @@ export function runPacingSim(): void {
       `VANISHED tail (full-keep with extra steps) → [${labelsWithVerdict('VANISHES')}] | ` +
       `HEAVY tail (not yet a ritual) → [${labelsWithVerdict('HEAVY')}]`,
   )
+
+  // ---- SEVERING PROBE (Q9 — decision input for D23 Spirit Severing; no assertion) ----
+  // COUNTERFACTUAL / SEVERING PROBE (Q9). Part 1 measures each Act-I candidate
+  // severable's LIVE contribution by EFFECT-ablation (⊘ runs: the policy still
+  // acquires and uses the piece exactly as in the base run; only its effect is
+  // nullified from acquisition onward). Part 2 is an analytic breakeven-timing
+  // MODEL over candidate ramp parameters — clearly a model, not a measurement.
+  // Observation-only throughout: never asserted on, no FAIL lines, and the
+  // PINNED BANDS section below is untouched.
+  console.log('\n=== SEVERING PROBE (Q9 — Spirit Severing decision input; COUNTERFACTUAL, no assertion) ===')
+  console.log('  Part 1 — effect-ablation (⊘): the policy still acquires + uses the piece on the base decision')
+  console.log('  rules; the piece\'s EFFECT is nullified from acquisition onward (attribution before action —')
+  console.log('  decision-ablation would confound the piece\'s value with policy drift). deltaH = base − ablated:')
+  console.log('  negative = the ablated run is SLOWER, i.e. the piece contributes that many felt hours.')
+  console.log('  m = end-of-run rate share (qi/sec with the piece\'s effect on ÷ off, at the base run\'s final state).')
+  console.log('  GAP: the lattice Manifestation tier (a D23 candidate severable) does not exist in data yet —')
+  console.log('  not measured, not faked. NOTE: "meridian set bonuses" also do not exist as a distinct effect;')
+  console.log('  the measurable analog is the extraordinary-meridian TRACK (a set of 8 × 1.25 each), probed here.')
+
+  // The ⊘ ablation runs (quiet). Leaning actor per severable, verified against
+  // the policies above: soul aspect → LatticeFocused (element aspects gate on
+  // lattice Seeds; Sect/Pill are Formless-locked); stance → LatticeFocused
+  // (useBreathingTrance; Competent shares the stance play but is the pinned
+  // floor, so the focused actor carries the probe); profession → PillFocused;
+  // ext-meridian track → MeridianProbe. Realistic runs every ablation as the
+  // experience-target counterpart — its stance and ext-meridian ablations are
+  // structural no-ops (its policy never enters a stance and never buys an
+  // extraordinary meridian), included as measured zeros, not asserted ones.
+  const latticeSeverAspectRun = runProfileQuiet(
+    spineRunner({ ...LATTICE_CONFIG, counterfactualSeverEffect: 'soulAspect' }),
+  )
+  const realisticSeverAspectRun = runProfileQuiet(
+    realisticRunner({ ...REALISTIC_CONFIG, counterfactualSeverEffect: 'soulAspect' }),
+  )
+  const latticeSeverStanceRun = runProfileQuiet(
+    spineRunner({ ...LATTICE_CONFIG, counterfactualSeverEffect: 'stance' }),
+  )
+  const realisticSeverStanceRun = runProfileQuiet(
+    realisticRunner({ ...REALISTIC_CONFIG, counterfactualSeverEffect: 'stance' }),
+  )
+  const pillSeverProfessionRun = runProfileQuiet(
+    spineRunner({ ...PILL_CONFIG, counterfactualSeverEffect: 'profession' }),
+  )
+  const realisticSeverProfessionRun = runProfileQuiet(
+    realisticRunner({ ...REALISTIC_CONFIG, counterfactualSeverEffect: 'profession' }),
+  )
+  const meridianSeverExtRun = runProfileQuiet(
+    spineRunner({ ...MERIDIAN_PROBE_CONFIG, counterfactualSeverEffect: 'extraordinaryMeridians' }),
+  )
+  const realisticSeverExtRun = runProfileQuiet(
+    realisticRunner({ ...REALISTIC_CONFIG, counterfactualSeverEffect: 'extraordinaryMeridians' }),
+  )
+
+  const severingContributionRow = (
+    severable: string,
+    actor: string,
+    baseSeconds: number,
+    ablatedRun: SimState,
+    endRateShare: number,
+    acquiredUnderAblation: string,
+  ): Record<string, string> => ({
+    severable,
+    actor,
+    baseH: (baseSeconds / 3600).toFixed(2),
+    ablatedH: (ablatedRun.simSeconds / 3600).toFixed(2),
+    deltaH: ((baseSeconds - ablatedRun.simSeconds) / 3600).toFixed(2),
+    endRateShareM: Number.isNaN(endRateShare) ? '—' : `${endRateShare.toFixed(3)}×`,
+    acquiredUnderAblation,
+  })
+  console.log('\n  -- Part 1: live-contribution measurement (⊘ effect-ablation vs base) --')
+  console.table([
+    severingContributionRow(
+      'soul aspect', 'LatticeFocused', latticeRun.simSeconds, latticeSeverAspectRun,
+      latticeSeveringShares.soulAspect,
+      `bound ${latticeSeverAspectRun.severedAspectKey ?? 'none'}, nullified`,
+    ),
+    severingContributionRow(
+      'soul aspect', 'Realistic', realisticRun.simSeconds, realisticSeverAspectRun,
+      realisticSeveringShares.soulAspect,
+      `bound ${realisticSeverAspectRun.severedAspectKey ?? 'none'}, nullified`,
+    ),
+    severingContributionRow(
+      'stance', 'LatticeFocused', latticeRun.simSeconds, latticeSeverStanceRun,
+      latticeSeveringShares.stance, 'trance intents fire, never engage',
+    ),
+    severingContributionRow(
+      'stance', 'Realistic', realisticRun.simSeconds, realisticSeverStanceRun,
+      realisticSeveringShares.stance, 'no-op: policy never enters a stance',
+    ),
+    severingContributionRow(
+      'profession', 'PillFocused', pillRun.simSeconds, pillSeverProfessionRun,
+      pillSeveringShares.profession,
+      `${pillSeverProfessionRun.pillsSwallowed} pills swallowed, effects nullified`,
+    ),
+    severingContributionRow(
+      'profession', 'Realistic', realisticRun.simSeconds, realisticSeverProfessionRun,
+      realisticSeveringShares.profession,
+      `${realisticSeverProfessionRun.pillsSwallowed} pills swallowed, effects nullified`,
+    ),
+    severingContributionRow(
+      'ext-meridian track', 'MeridianProbe', meridianRun.simSeconds, meridianSeverExtRun,
+      meridianSeveringShares.extraordinaryMeridians,
+      `${meridianSeverExtRun.severedExtraordinaryMeridiansBought ?? 0}/${EXTRAORDINARY_MERIDIAN_TARGET} bought, effect nullified`,
+    ),
+    severingContributionRow(
+      'ext-meridian track', 'Realistic', realisticRun.simSeconds, realisticSeverExtRun,
+      realisticSeveringShares.extraordinaryMeridians,
+      'no-op: policy never buys the track',
+    ),
+  ])
+  console.log('  Multiplier-shape read per severable (is m a clean multiplier a severance can cover?):')
+  console.log(
+    `  - soul aspect: CLEAN always-on multiplier once bound — m is the aspect's data qiMult directly ` +
+      `(Lattice end-state: ${latticeSeveringShares.boundAspectKey} ${latticeSeveringShares.soulAspect.toFixed(2)}×, ` +
+      `Realistic: ${realisticSeveringShares.boundAspectKey} ${realisticSeveringShares.soulAspect.toFixed(2)}×). ` +
+      'Its insightMult side is ALSO nullified in the ⊘ run (deltaH includes both axes).',
+  )
+  console.log(
+    '  - stance: NOT a clean multiplier — toggled, with a qi factor <= 1 while active (Breathing Trance ×0.7 qi / ×2 Insight);',
+  )
+  console.log(
+    `    end-of-run m = ${latticeSeveringShares.stance.toFixed(2)}× because banking runs trance-OFF. Its effect domain is the ` +
+      'INSIGHT axis + the toggle privilege; a qi-rate severance multiplier does not fit it.',
+  )
+  console.log(
+    `  - profession: NOT clean — a duty-cycle ×2 (gathering-pill uptime) + episodic ×1.5 n/s gain (clarity) + an ` +
+      `untested tribulation-pool bonus. End-of-run m (${pillSeveringShares.profession.toFixed(2)}× Pill / ` +
+      `${realisticSeveringShares.profession.toFixed(2)}× Realistic) only sees whether a pill was burning at the final state;`,
+  )
+  console.log('    deltaH is the honest contribution number for this one.')
+  console.log(
+    `  - ext-meridian track: CLEAN multiplier once complete (1.25^${meridianSeveringShares.extraordinaryMeridiansOwned} = ` +
+      `${meridianSeveringShares.extraordinaryMeridians.toFixed(2)}× at MeridianProbe's end state), but it RAMPS IN across ` +
+      'the run as meridians are bought — m is end-state, not lifetime-average.',
+  )
+
+  // Part 2 — the analytic breakeven-timing MODEL (printed, never simulated:
+  // Act II does not exist, so units are RITUAL STEPS, not wall-clock).
+  console.log('\n  -- Part 2: breakeven-timing MODEL (analytic — a MODEL, not a measurement) --')
+  console.log(
+    '  Transcendent multiplier: starts at c·m, grows geometrically per severance-ritual completion, caps at k·m.',
+  )
+  console.log(
+    `  ASSUMPTION ⟨tune⟩: growth g = (k/c)^(1/${SEVERING_RITUAL_STEP_COUNT - 1}) so the cap lands exactly at step ` +
+      `${SEVERING_RITUAL_STEP_COUNT} — mirroring Act I's ${SEVERING_RITUAL_STEP_COUNT}-re-climb resolution at Realistic cadence (D2/D21).`,
+  )
+  console.log(
+    '  n* = first step whose multiplier >= m (the felt weakness window closes); lifetimeNet = mean over the',
+  )
+  console.log(
+    `  ${SEVERING_RITUAL_STEP_COUNT} steps of (multiplier ÷ m) vs the never-severing baseline (1.0). Both are m-INDEPENDENT — the`,
+  )
+  console.log(
+    '  breakeven threshold and the ramp scale with m together — so ONE grid serves every severable; m only',
+  )
+  console.log(
+    '  sets the absolute start (c·m) and cap (k·m). Units are ritual STEPS; Act II wall-clock does not exist.',
+  )
+  const severingModelRows: Record<string, string | number>[] = []
+  for (const startFraction of SEVERING_RAMP_START_FRACTIONS) {
+    for (const capFactor of SEVERING_RAMP_CAP_FACTORS) {
+      const growthPerStep = (capFactor / startFraction) ** (1 / (SEVERING_RITUAL_STEP_COUNT - 1))
+      let breakevenStep: number | null = null
+      let rampSum = 0
+      for (let step = 1; step <= SEVERING_RITUAL_STEP_COUNT; step++) {
+        const rampValue = Math.min(startFraction * growthPerStep ** (step - 1), capFactor)
+        rampSum += rampValue
+        if (breakevenStep === null && rampValue >= 1) breakevenStep = step
+      }
+      const lifetimeNetRatio = rampSum / SEVERING_RITUAL_STEP_COUNT
+      severingModelRows.push({
+        c: startFraction,
+        k: capFactor,
+        growthPerStep: growthPerStep.toFixed(3),
+        breakevenStep: breakevenStep ?? `>${SEVERING_RITUAL_STEP_COUNT}`,
+        lifetimeNet: lifetimeNetRatio.toFixed(3),
+        verdict: lifetimeNetRatio >= 1 ? 'net-positive' : 'net-NEGATIVE over the ramp',
+      })
+    }
+  }
+  console.table(severingModelRows)
+  console.log('  Absolute coverage per measured clean m (cap k·m must cover the severed m — k>1 makes that definitional):')
+  const severingAbsoluteLine = (label: string, rateShare: number): void => {
+    const startMin = SEVERING_RAMP_START_FRACTIONS[0] * rateShare
+    const startMax = SEVERING_RAMP_START_FRACTIONS[SEVERING_RAMP_START_FRACTIONS.length - 1]! * rateShare
+    const capMin = SEVERING_RAMP_CAP_FACTORS[0] * rateShare
+    const capMax = SEVERING_RAMP_CAP_FACTORS[SEVERING_RAMP_CAP_FACTORS.length - 1]! * rateShare
+    console.log(
+      `    ${label}: m=${rateShare.toFixed(2)}× → start c·m ∈ [${startMin.toFixed(2)}, ${startMax.toFixed(2)}]×, ` +
+        `cap k·m ∈ [${capMin.toFixed(2)}, ${capMax.toFixed(2)}]×`,
+    )
+  }
+  severingAbsoluteLine(`soul aspect (${latticeSeveringShares.boundAspectKey})`, latticeSeveringShares.soulAspect)
+  severingAbsoluteLine('ext-meridian track (complete)', meridianSeveringShares.extraordinaryMeridians)
+  console.log('    (stance + profession: not clean multipliers — bracket them by deltaH, not by m; see Part 1 notes.)')
+  console.log('  (SEVERING PROBE ends — everything above is observation/model input for Q9; the pins below are the only assertions.)')
 
   // ---- PINNED BANDS (Gate-D: calibration reviewed, signed off by Wes 2026-07-02) ----
   // Three bands, three jobs. These are the ONLY hard pacing pins in the sim;

@@ -80,6 +80,63 @@ includes interleaved work/idle): a real r=0.7-style mechanic lands Competent
 1.284× (wide → pin a range). Banking column identical throughout — the dead
 knob finding.
 
+## The severing k-probe (decision input for Q9/D23, 2026-07-02)
+
+**Part 1 — live contribution (⊘ effect-ablation: the policy still acquires
+and uses the piece; its effect is nullified from acquisition onward):**
+
+| severable | actor | base → ablated | contribution | end rate share m |
+|---|---|---|---|---|
+| soul aspect | LatticeFocused | 28.71 → 41.04h | **12.33h** | 1.50× (clean) |
+| soul aspect | Realistic | 53.25 → 59.25h | **6.00h** | 1.50× (clean) |
+| stance | LatticeFocused | 28.71 → **21.59h** | **−7.12h (ablated FASTER)** | 1.00× |
+| profession | PillFocused | 30.72 → 57.32h | **26.60h** | not clean |
+| profession | Realistic | 53.25 → 83.75h | **30.50h** | not clean |
+| ext-meridian track | MeridianProbe | 30.45 → 57.37h | **26.92h** | 5.96× (clean, 1.25⁸) |
+
+Realistic never acquires the stance or the ext track (measured structural
+zeros). Findings that reshape the D23 candidate list:
+
+- **The stance inversion:** severing Breathing Trance's effect makes the
+  focused lattice actor 7.12h *faster* — the trance is net-negative on
+  total time at current data (×0.7 qi cost outweighs what ×2 Insight buys
+  back for that policy). Severing it would be a pure buff with no weakness
+  window: **stance does not fit the severance shape on the qi axis as-is.**
+  (Separate rule-0.1 question flagged: is the trance itself a trap for
+  qi-focused play, or is the sim policy just using it badly?)
+- **"Meridian set bonuses" don't exist as a distinct effect** —
+  `meridianMult` is a smooth per-meridian product; the severable analog is
+  the extraordinary-meridian **track** (whole set of 8, 5.96×).
+- **Manifestation gap:** the lattice Manifestation tier isn't in data yet —
+  not measured, not faked.
+- **Availability is build-dependent:** for the experience-target actor only
+  soul aspect and profession are live severables today — three sequential
+  severances need ≥3 live options per viable build (a sim assertion the
+  mechanic must ship with).
+- Profession is the largest Realistic contributor (30.5h) but is a
+  duty-cycle + episodic composite, not a clean multiplier — bracket it by
+  felt hours, not by m. The ext track's 5.96× is end-state, not
+  lifetime-average (it ramps in across the run).
+
+**Part 2 — breakeven-timing MODEL** (analytic; ritual steps, not Act II
+wall-clock; ramp starts at c·m, grows geometrically, caps at k·m by step 12
+— mirroring Act I's 12-re-climb resolution): breakeven step n\* and
+in-window lifetime net are **m-independent**, so one grid serves every
+severable:
+
+| c | k | breakeven step | net over the 12-step ramp |
+|---|---|---|---|
+| 0.25 | 1.2–2.0 | 9–11 | 0.62–0.87 (negative) |
+| 0.50 | 1.2 / 1.5 / **2.0** | 10 / 8 / **7** | 0.80 / 0.92 / **1.10** |
+| 0.75 | 1.2 / **1.5** / **2.0** | 8 / **6** / **5** | 0.96 / **1.09** / **1.28** |
+
+Only three cells are net-positive *within* the ramp window; c = 0.25 never
+recovers inside it. If D23's lifetime-net-positive must hold by ramp end,
+the viable corner is **c ≥ 0.5 with k ≥ 1.5–2.0** (post-cap steps then
+compound the surplus). Probe flag: `counterfactualSeverEffect` (⊘), in
+`assertProbeFlagsExclusive`; base-profile output verified pure-insertion vs
+pre-change capture; sim wall-time 50.3 → ~65s (+28%).
+
 ## Methods (reusable)
 
 - **Attribution before action** — counterfactual-probe the suspected cause
