@@ -30,6 +30,7 @@ import { decimalOne, decimalZero } from '@/engine/decimal'
 import { meets } from '@/engine/meets'
 import { buildGameState } from '@/engine/state'
 import { ALCHEMY_DATA, findRecipe } from '@/data/alchemy'
+import { useSeveringStore } from './severing'
 import type { MaterialKey, PillKey, ProfessionKey, RealmId } from '@/engine/types'
 
 export interface ActivePill {
@@ -84,6 +85,12 @@ export const useAlchemyStore = defineStore('alchemy', () => {
 
   /** Qi/sec factor from the active timed pill (identity when none). */
   const activePillQiMult = computed<Decimal>(() => {
+    // Slice 9 nullification seam: a severed profession brews nothing — the
+    // pill effect is void even if a pill was mid-burn at sever time (D25).
+    // Deferred store lookup (the state.ts circular-import pattern). The
+    // severing implementer extends this to the OTHER profession effects
+    // (breakthrough aid, tribulation warding); this seam covers the pipeline.
+    if (useSeveringStore().isSevered('profession')) return decimalOne()
     const recipe = activeTimedRecipe()
     if (!recipe || recipe.effect.type !== 'timedQiMult') return decimalOne()
     return new Decimal(recipe.effect.mult)

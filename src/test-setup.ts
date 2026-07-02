@@ -21,6 +21,8 @@ import { useAlchemyStore } from '@/stores/alchemy'
 import { useHeartDemonsStore } from '@/stores/heartDemons'
 import { useSeclusionStore } from '@/stores/seclusion'
 import { useAchievementsStore } from '@/stores/achievements'
+import { useSoulStore } from '@/stores/soul'
+import { useSeveringStore } from '@/stores/severing'
 
 /** Boot a fresh Pinia + register all stores (like main.ts, without Vue/loop). */
 export function bootTestStores(): void {
@@ -45,6 +47,8 @@ export function bootTestStores(): void {
   const heartDemons = useHeartDemonsStore()
   const seclusion = useSeclusionStore()
   const achievements = useAchievementsStore()
+  const soul = useSoulStore()
+  const severing = useSeveringStore()
 
   game.registerSliceProvider({ id: 'b', save: body.save, load: body.load, fresh: body.fresh })
   game.registerSliceProvider({ id: 'realms', save: realm.save, load: realm.load, fresh: realm.fresh })
@@ -60,6 +64,8 @@ export function bootTestStores(): void {
   game.registerSliceProvider({ id: 'demons', save: heartDemons.save, load: heartDemons.load, fresh: heartDemons.fresh })
   game.registerSliceProvider({ id: 'seclusion', save: seclusion.save, load: seclusion.load, fresh: seclusion.fresh })
   game.registerSliceProvider({ id: 'ach', save: achievements.save, load: achievements.load, fresh: achievements.fresh })
+  game.registerSliceProvider({ id: 'soul', save: soul.save, load: soul.load, fresh: soul.fresh })
+  game.registerSliceProvider({ id: 'severing', save: severing.save, load: severing.load, fresh: severing.fresh })
 
   game.registerUpdater({ id: 'body', update: body.update })
   game.registerUpdater({ id: 'dao', update: dao.update })
@@ -77,6 +83,7 @@ export function bootTestStores(): void {
   game.registerUpdater({ id: 'alchemy', update: alchemy.update })
   game.registerUpdater({ id: 'heartDemons', update: heartDemons.update })
   game.registerUpdater({ id: 'achievements', update: achievements.update })
+  game.registerUpdater({ id: 'severing', update: severing.update })
 
   game.registerAutomation({ id: 'automation', automate: automation.automate })
 
@@ -89,6 +96,7 @@ export function bootTestStores(): void {
     'realms.c.points', 'realms.c.best', 'realms.c.total',
     'realms.n.points', 'realms.n.best', 'realms.n.total',
     'realms.s.points', 'realms.s.best', 'realms.s.total',
+    'realms.x.points', 'realms.x.best', 'realms.x.total',
     'dao.insight',
     'sect.contribution', 'sect.best',
     'forge.refinementProgress',

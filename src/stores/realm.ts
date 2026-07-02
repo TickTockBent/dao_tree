@@ -19,6 +19,7 @@ import { useBodyStore } from './body'
 import { useSectStore } from './sect'
 import { useAlchemyStore } from './alchemy'
 import { useHeartDemonsStore } from './heartDemons'
+import { useSoulStore } from './soul'
 import type { RealmId } from '@/engine/types'
 
 // ---- State shape ----------------------------------------------------------
@@ -38,7 +39,11 @@ export interface RealmSlice {
   c: RealmState
   n: RealmState
   s: RealmState
+  x: RealmState
 }
+
+/** Every realm id in climb order — the single iteration list for this store. */
+const ALL_REALM_IDS: readonly RealmId[] = ['q', 'f', 'c', 'n', 's', 'x']
 
 function freshRealmState(unlocked: boolean): RealmState {
   return { points: '0', best: '0', total: '0', unlocked, resetTime: 0, milestones: [] }
@@ -51,6 +56,7 @@ export function freshRealmSlice(): RealmSlice {
     c: freshRealmState(false),
     n: freshRealmState(false),
     s: freshRealmState(false),
+    x: freshRealmState(false), // slice 9: Spirit Severing (Act II)
   }
 }
 
@@ -111,6 +117,7 @@ export const useRealmStore = defineStore('realm', () => {
   const body = useBodyStore()
   const alchemy = useAlchemyStore()
   const heartDemons = useHeartDemonsStore()
+  const soul = useSoulStore()
 
   const slice = ref<RealmSlice>(freshRealmSlice())
 
@@ -178,6 +185,10 @@ export const useRealmStore = defineStore('realm', () => {
     // Alchemy breakthrough aid (slice 7): folded HERE so the shown gain matches
     // the landed gain while a clarity charge is held; identity otherwise.
     gain = gain.times(alchemy.breakthroughGainMult(id))
+    // "The core remembers" (slice 9, D2/D21): the c re-climb accelerates
+    // across ascents. Identity until the keep-rule agent activates it with
+    // the pin migration (same commit — Gate-D).
+    gain = gain.times(soul.reclimbGainMult(id))
     gain = gain.pow(1) // TMT gainExp field is the constant 1.
     return gain.floor().max(0)
   }
@@ -190,6 +201,7 @@ export const useRealmStore = defineStore('realm', () => {
     // The alchemy aid factor is part of gainMult so the shown nextAt stays honest while a charge is held.
     let gainMult = r.graded ? foundationGradeMult(body) : decimalOne()
     gainMult = gainMult.times(alchemy.breakthroughGainMult(id))
+    gainMult = gainMult.times(soul.reclimbGainMult(id)) // keep nextAt honest (slice 9)
     return nextGain.div(gainMult).root(r.gainExp).times(r.reqBase).max(r.reqBase).ceil()
   }
 
@@ -258,12 +270,19 @@ export const useRealmStore = defineStore('realm', () => {
 
   /** Run the doReset cascade over all tree-scoped layers below the resetter. */
   function runDoResetCascade(resettingId: RealmId): void {
-    const REALM_IDS: RealmId[] = ['q', 'f', 'c', 'n', 's']
-    for (const targetId of REALM_IDS) {
+    for (const targetId of ALL_REALM_IDS) {
       if (targetId === resettingId) continue
       const keepKeys = treeResetKeepKeys(targetId, resettingId, hasMilestone)
       if (keepKeys === null) continue // not reset (different scope/tree/row)
+      const hadProgress = new Decimal(stateOf(targetId).points).gt(0)
       resetRealm(targetId, keepKeys)
+      // Slice 9 (D2): an n/s cascade wiping live c progress begins a new
+      // ascent — the counter the "core remembers" curve compounds over.
+      // (Wiping an already-empty c is not a re-climb; mirrors the sim's
+      // segment definition. The keep-rule agent owns any refinement.)
+      if (targetId === 'c' && hadProgress && (resettingId === 'n' || resettingId === 's')) {
+        soul.recordAscent()
+      }
     }
   }
 
@@ -307,7 +326,7 @@ export const useRealmStore = defineStore('realm', () => {
   // ---- Update hook (called each tick) ------------------------------------
   function update(diff: number): void {
     // Reset-time accrual + best maintenance for unlocked realms.
-    for (const id of ['q', 'f', 'c', 'n', 's'] as RealmId[]) {
+    for (const id of ALL_REALM_IDS) {
       const s = stateOf(id)
       if (!s.unlocked) continue
       const newResetTime = s.resetTime + diff
@@ -321,7 +340,7 @@ export const useRealmStore = defineStore('realm', () => {
       }
     }
     // Latch milestones for all unlocked realms (sub-stage done() re-evaluated).
-    for (const id of ['q', 'f', 'c', 'n', 's'] as RealmId[]) {
+    for (const id of ALL_REALM_IDS) {
       if (stateOf(id).unlocked) latchMilestones(id)
     }
   }
@@ -338,6 +357,7 @@ export const useRealmStore = defineStore('realm', () => {
       c: { ...freshRealmState(false), ...loaded.c },
       n: { ...freshRealmState(false), ...loaded.n },
       s: { ...freshRealmState(false), ...loaded.s },
+      x: { ...freshRealmState(false), ...loaded.x }, // absent in pre-slice-9 saves → fresh
     }
   }
   function fresh(): Record<string, unknown> {

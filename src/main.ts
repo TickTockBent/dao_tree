@@ -27,6 +27,8 @@ import { useAlchemyStore } from '@/stores/alchemy'
 import { useHeartDemonsStore } from '@/stores/heartDemons'
 import { useSeclusionStore } from '@/stores/seclusion'
 import { useAchievementsStore } from '@/stores/achievements'
+import { useSoulStore } from '@/stores/soul'
+import { useSeveringStore } from '@/stores/severing'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -52,6 +54,8 @@ const alchemy = useAlchemyStore()
 const heartDemons = useHeartDemonsStore()
 const seclusion = useSeclusionStore()
 const achievements = useAchievementsStore()
+const soul = useSoulStore()
+const severing = useSeveringStore()
 const nav = useNavStore()
 
 // Slice providers (each store owns its save slice; game store assembles).
@@ -69,6 +73,8 @@ game.registerSliceProvider({ id: 'alchemy', save: alchemy.save, load: alchemy.lo
 game.registerSliceProvider({ id: 'demons', save: heartDemons.save, load: heartDemons.load, fresh: heartDemons.fresh })
 game.registerSliceProvider({ id: 'seclusion', save: seclusion.save, load: seclusion.load, fresh: seclusion.fresh })
 game.registerSliceProvider({ id: 'ach', save: achievements.save, load: achievements.load, fresh: achievements.fresh })
+game.registerSliceProvider({ id: 'soul', save: soul.save, load: soul.load, fresh: soul.fresh })
+game.registerSliceProvider({ id: 'severing', save: severing.save, load: severing.load, fresh: severing.fresh })
 
 // System updaters (forward pass, in dependency order: body before realm, etc.).
 game.registerUpdater({ id: 'body', update: body.update })
@@ -87,6 +93,7 @@ game.registerUpdater({ id: 'secretRealm', update: secretRealm.update })
 game.registerUpdater({ id: 'alchemy', update: alchemy.update })
 game.registerUpdater({ id: 'heartDemons', update: heartDemons.update })
 game.registerUpdater({ id: 'achievements', update: achievements.update })
+game.registerUpdater({ id: 'severing', update: severing.update })
 
 // Automation reverse-pass hook.
 game.registerAutomation({ id: 'automation', automate: automation.automate })
@@ -104,6 +111,7 @@ registerDecimalPaths([
   'realms.c.points', 'realms.c.best', 'realms.c.total',
   'realms.n.points', 'realms.n.best', 'realms.n.total',
   'realms.s.points', 'realms.s.best', 'realms.s.total',
+  'realms.x.points', 'realms.x.best', 'realms.x.total',
   'dao.insight',
   'sect.contribution', 'sect.best',
   'forge.refinementProgress',

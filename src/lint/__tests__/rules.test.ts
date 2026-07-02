@@ -79,6 +79,7 @@ function syntheticEmptyState(): GameState {
     corruption: 0,
     daoHeartStacks: 0,
     seclusionRungs: 0,
+    tribulationPassed: false,
   }
 }
 
@@ -326,7 +327,7 @@ describe('§7 automation data', () => {
 describe('§9.3 completability', () => {
   it('every realm unlock references only earlier realms or body state', () => {
     // A realm's unlock must not require itself or a later realm.
-    const realmOrder = ['q', 'f', 'c', 'n', 's']
+    const realmOrder = ['q', 'f', 'c', 'n', 's', 'x']
     for (const realm of REALM_DATA) {
       const realmIdx = realmOrder.indexOf(realm.id)
       if (realm.unlock && 'realm' in realm.unlock) {

@@ -32,6 +32,7 @@ import { useScarStore } from './scar'
 import { useLegacyStore } from './legacy'
 import { useAlchemyStore } from './alchemy'
 import { useHeartDemonsStore } from './heartDemons'
+import { useSeveringStore } from './severing'
 
 export const usePipelinesStore = defineStore('pipelines', () => {
   const body = useBodyStore()
@@ -44,6 +45,7 @@ export const usePipelinesStore = defineStore('pipelines', () => {
   const legacy = useLegacyStore()
   const alchemy = useAlchemyStore()
   const heartDemons = useHeartDemonsStore()
+  const severing = useSeveringStore()
 
   // ---- Dao/stance/aspect/technique/legacy factors (identity until their slice lands) ----
 
@@ -93,8 +95,9 @@ export const usePipelinesStore = defineStore('pipelines', () => {
     return new Decimal(stance.modifiers.insightMult)
   })
 
-  /** Soul aspect qiMult (1 if unchosen). */
+  /** Soul aspect qiMult (1 if unchosen, or if the aspect is severed — slice 9). */
   const soulAspectQiMult = computed<Decimal>(() => {
+    if (severing.isSevered('soulAspect')) return decimalOne()
     const aspectKey = body.soulAspect
     if (!aspectKey) return decimalOne()
     const realm = realmWithSoulAspect()
@@ -104,8 +107,9 @@ export const usePipelinesStore = defineStore('pipelines', () => {
     return new Decimal(aspect.effect.qiMult)
   })
 
-  /** Soul aspect insightMult (1 if unchosen). */
+  /** Soul aspect insightMult (1 if unchosen, or if the aspect is severed — slice 9). */
   const soulAspectInsightMult = computed<Decimal>(() => {
+    if (severing.isSevered('soulAspect')) return decimalOne()
     const aspectKey = body.soulAspect
     if (!aspectKey) return decimalOne()
     const realm = realmWithSoulAspect()
@@ -167,7 +171,10 @@ export const usePipelinesStore = defineStore('pipelines', () => {
       .times(legacyQiMult.value)
       .times(alchemy.activePillQiMult)
       .times(heartDemons.trialQiMult)
-      .times(heartDemons.daoHeartQiMult),
+      .times(heartDemons.daoHeartQiMult)
+      // Slice 9: the severing transcendent multiplier (identity until a
+      // severance exists — D23/D25; ramp math in stores/severing.ts).
+      .times(severing.transcendentQiMult),
   )
 
   // ---- Insight/sec pipeline (M4 wires the dao trickle; stances/techniques compound it) ----
@@ -179,6 +186,7 @@ export const usePipelinesStore = defineStore('pipelines', () => {
       .times(stanceInsightMult.value)
       .times(soulAspectInsightMult.value)
       .times(techniqueInsightMult.value)
+      .times(severing.transcendentInsightMult) // slice 9 (identity until severed)
   })
 
   return { qiPerSecond, insightPerSecond }

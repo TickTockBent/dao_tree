@@ -75,6 +75,13 @@ export interface ConditionClauses {
   daoHeartStacks: number
   /** Deep Meditation rungs purchased >= N (slice 8.5). */
   seclusionRungs: number
+  /**
+   * The first tribulation has been passed (slice 9). PROMOTED from the hint
+   * shadow grammar to the core grammar — Spirit Severing's realm unlock is
+   * the first non-hint consumer (the shadow-growth debt note said the next
+   * grammar touch should shrink the shadow set, not grow it).
+   */
+  tribulationPassed: true
 }
 
 /** A condition object: any subset of clauses, AND-combined. Empty = always true. */
@@ -100,8 +107,8 @@ export interface HintClauses extends ConditionClauses {
   tribulationReady: true
   /** An unhealed scar is active. */
   scarActive: true
-  /** The tribulation has been passed. */
-  tribulationPassed: true
+  // (tribulationPassed was a shadow key through slice 8.5; promoted to the
+  // core grammar in slice 9 — it now arrives via ConditionClauses.)
   /** At least one scar depth has been healed. */
   scarHealed: true
   /**
@@ -163,6 +170,8 @@ export interface GameState {
   daoHeartStacks: number
   /** Deep Meditation rungs purchased (slice 8.5). */
   seclusionRungs: number
+  /** The first tribulation has been passed (slice 9; promoted core clause). */
+  tribulationPassed: boolean
 }
 
 // ---- Evaluation ------------------------------------------------------------
@@ -245,6 +254,8 @@ function clauseHolds<K extends keyof ConditionClauses>(
       return state.daoHeartStacks >= (value as number)
     case 'seclusionRungs':
       return state.seclusionRungs >= (value as number)
+    case 'tribulationPassed':
+      return state.tribulationPassed
     default:
       // Exhaustiveness check — unknown keys should never reach here because
       // the type system rejects them at the call site. This default is
@@ -296,8 +307,6 @@ export interface HintState extends GameState {
   tribulationReady: boolean
   /** True if an unhealed scar is active. */
   scarActive: boolean
-  /** True if the tribulation has been passed. */
-  tribulationPassed: boolean
   /** True if at least one scar depth has been healed. */
   scarHealed: boolean
   /** True if the secret realms are revealed but no expedition was ever cleared. */
@@ -331,9 +340,6 @@ export function evaluateHintCondition(condition: HintCondition, state: HintState
         break
       case 'scarActive':
         if (!state.scarActive) return false
-        break
-      case 'tribulationPassed':
-        if (!state.tribulationPassed) return false
         break
       case 'scarHealed':
         if (!state.scarHealed) return false

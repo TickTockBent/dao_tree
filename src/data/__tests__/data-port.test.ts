@@ -24,6 +24,8 @@ import {
   ALCHEMY_DATA,
   HEART_DEMON_DATA,
   SECLUSION_DATA,
+  ACCUMULATOR_DATA,
+  SEVERING_DATA,
   findDemonTrial,
   findRealm,
   substageLabelAtBest,
@@ -41,9 +43,9 @@ describe('FACTORY_NUMERICS', () => {
 })
 
 describe('REALM_DATA', () => {
-  it('has exactly the 5 Act I realms in order', () => {
-    expect(REALM_DATA.map((r) => r.id)).toEqual(['q', 'f', 'c', 'n', 's'])
-    expect(REALM_DATA.map((r) => r.row)).toEqual([0, 1, 2, 3, 4])
+  it('has the 5 Act I realms + Spirit Severing in order', () => {
+    expect(REALM_DATA.map((r) => r.id)).toEqual(['q', 'f', 'c', 'n', 's', 'x'])
+    expect(REALM_DATA.map((r) => r.row)).toEqual([0, 1, 2, 3, 4, 5])
   })
 
   it('qi condensation tuned values match', () => {
@@ -86,6 +88,19 @@ describe('REALM_DATA', () => {
     expect(findRealm('s').setpiece).toBe('firstTribulation')
   })
 
+  it('spirit severing (slice 9) gates on the passed tribulation and carries the severance setpiece', () => {
+    const x = findRealm('x')
+    expect(x.row).toBe(5)
+    expect(x.reveal).toEqual({ tribulationPassed: true })
+    expect(x.unlock).toEqual({ tribulationPassed: true })
+    expect(x.substages.map((s) => s.label)).toEqual([
+      'The Past Lies Severed',
+      'The Present Lies Severed',
+      'The Future Lies Severed',
+    ])
+    expect(x.setpiece).toBe('severance')
+  })
+
   it('substageLabelAtBest resolves named labels correctly', () => {
     const q = findRealm('q')
     expect(substageLabelAtBest(q, 0)).toBeNull()
@@ -121,6 +136,14 @@ describe('SETPIECE_DATA', () => {
     expect(SETPIECE_DATA.scar.debuffQiMultPerDepth).toBe(0.88)
     expect(SETPIECE_DATA.scar.temperedQiMultPerDepth).toBe(1.06)
   })
+
+  it('severance curve constants match the D25 sign-off', () => {
+    // Rule 0.1: these three numbers are SIGNED OFF (D25, k-probe evidence in
+    // docs/calibration.md) — they move only in a deliberate, signed-off commit.
+    expect(SETPIECE_DATA.severance.startFraction).toBe(0.5)
+    expect(SETPIECE_DATA.severance.capRatio).toBe(2.0)
+    expect(SETPIECE_DATA.severance.rampSteps).toBe(12)
+  })
 })
 
 describe('BODY_DATA', () => {
@@ -154,10 +177,15 @@ describe('GATE_DATA', () => {
 })
 
 describe('TREE_DATA', () => {
-  it('has 5 tree-scoped realms + 7 life + 3 eternal', () => {
+  it('has 6 tree-scoped realms across 2 acts + 8 life + 4 eternal', () => {
+    expect(TREE_DATA.trees.map((t) => t.id)).toEqual(['act1', 'act2'])
     const scopes = Object.entries(TREE_DATA.layers).map(([id, e]) => `${id}:${e.scope}`)
     expect(scopes).toEqual([
       'q:tree', 'f:tree', 'c:tree', 'n:tree', 's:tree',
+      // Slice 9: Spirit Severing opens Act II — a SEPARATE tree, so the
+      // cascade can never cross the act boundary (cross-tree keeps are
+      // topological).
+      'x:tree',
       'b:life', 'gate:life', 'dao:life', 'sect:life',
       'journal:eternal', 'legacy:eternal',
       // Slice 7: expeditions + the profession are life-scoped (never cascade-reset).
@@ -166,6 +194,34 @@ describe('TREE_DATA', () => {
       'demons:life',
       // Slice 8.5: Deep Meditation rungs are eternal (QoL is never clawed back).
       'seclusion:eternal',
+      // Slice 9: soul accumulators are eternal-until-Samsara; active
+      // severances are life-scoped (severed things return next life).
+      'soul:eternal',
+      'severing:life',
+    ])
+    expect(TREE_DATA.layers.x).toEqual({ scope: 'tree', tree: 'act2' })
+  })
+})
+
+describe('ACCUMULATOR_DATA (slice 9)', () => {
+  it('pins the two soul instances and the D21 constants', () => {
+    // Rule 0.1: r and f are SIGNED OFF (D21) — the "moment" register and the
+    // optimizer bound in one knob. They move only in a signed-off commit.
+    expect(Object.keys(ACCUMULATOR_DATA)).toEqual(['ascentCounter', 'severanceRitual'])
+    expect(ACCUMULATOR_DATA.ascentCounter).toEqual({
+      key: 'ascentCounter', scope: 'soul', ratio: 0.7, floor: 0.05, persistence: 'never-reset',
+    })
+    expect(ACCUMULATOR_DATA.severanceRitual).toEqual({
+      key: 'severanceRitual', scope: 'soul', persistence: 'never-reset',
+    })
+  })
+})
+
+describe('SEVERING_DATA (slice 9)', () => {
+  it('has the three corpses in severing order and the D25 severable list', () => {
+    expect(SEVERING_DATA.corpses.map((c) => c.key)).toEqual(['past', 'present', 'future'])
+    expect(SEVERING_DATA.severables.map((s) => s.key)).toEqual([
+      'soulAspect', 'profession', 'extraordinaryMeridians', 'manifestation',
     ])
   })
 })

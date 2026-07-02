@@ -14,6 +14,7 @@ import { buildGameState } from '@/engine/state'
 import { BODY_DATA, findBodyBuyable, temperTierForLevel } from '@/data/body'
 import { useGameStore } from './game'
 import { useScarStore } from './scar'
+import { useSeveringStore } from './severing'
 import type { BodyBuyableKey, TemperTierKey } from '@/engine/types'
 
 export interface BodySlice {
@@ -111,7 +112,12 @@ export const useBodyStore = defineStore('body', () => {
     const primary = findBodyBuyable('primaryMeridian')
     const extra = findBodyBuyable('extraordinaryMeridian')
     product = product.times(Decimal.pow(primary.effectBase, primaryMeridians.value))
-    product = product.times(Decimal.pow(extra.effectBase, extraordinaryMeridians.value))
+    // Slice 9 nullification seam: a severed extraordinary track contributes
+    // nothing (the eight channels sealed as if never opened — D25). Deferred
+    // store lookup inside the computed, the state.ts circular-import pattern.
+    if (!useSeveringStore().isSevered('extraordinaryMeridians')) {
+      product = product.times(Decimal.pow(extra.effectBase, extraordinaryMeridians.value))
+    }
     return product
   })
 

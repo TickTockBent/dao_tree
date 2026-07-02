@@ -29,6 +29,7 @@ import { useSecretRealmStore } from '@/stores/secretRealm'
 import { useAlchemyStore } from '@/stores/alchemy'
 import { useHeartDemonsStore } from '@/stores/heartDemons'
 import { useSeclusionStore } from '@/stores/seclusion'
+import { useTribulationStore } from '@/stores/tribulation'
 
 /** Build the GameState snapshot consumed by meets(). */
 export function buildGameState(): GameState {
@@ -43,6 +44,7 @@ export function buildGameState(): GameState {
   const alchemy = useAlchemyStore()
   const heartDemons = useHeartDemonsStore()
   const seclusion = useSeclusionStore()
+  const tribulation = useTribulationStore()
 
   // Realm bests + sub-stage labels + substage thresholds.
   const realmBest = {} as Record<RealmId, Decimal>
@@ -106,6 +108,7 @@ export function buildGameState(): GameState {
     corruption: heartDemons.corruption,
     daoHeartStacks: heartDemons.daoHeartStacks,
     seclusionRungs: seclusion.rungsPurchased,
+    tribulationPassed: tribulation.tribulationPassed,
   }
 }
 

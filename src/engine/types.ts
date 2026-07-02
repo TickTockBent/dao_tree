@@ -8,8 +8,8 @@
 
 // ---- Realm + layer registry ------------------------------------------------
 
-/** The five Act I realm layer ids, in climb order. */
-export type RealmId = 'q' | 'f' | 'c' | 'n' | 's'
+/** The realm layer ids, in climb order: five Act I realms + Spirit Severing (slice 9, Act II). */
+export type RealmId = 'q' | 'f' | 'c' | 'n' | 's' | 'x'
 
 /** Every registered system/layer id (the TREE_DATA.layers registry vocabulary). */
 export type LayerId =
@@ -24,6 +24,8 @@ export type LayerId =
   | 'alchemy' // Alchemy profession (slice 7; the Act I profession slot)
   | 'demons' // Heart Demons + Demon Trials (slice 8; the permanent anti-rush tension)
   | 'seclusion' // Deep Meditation offline-cap rungs (slice 8.5; eternal QoL progression)
+  | 'soul' // Soul-scoped accumulators (slice 9; eternal until Samsara differentiates scopes — D23/D25)
+  | 'severing' // Spirit Severing active severances (slice 9; life-scoped — severed things return next life)
 
 /** All ids that carry a numeric prestige row in the tree (the climb spine). */
 export type RealmLayerId = RealmId
@@ -71,8 +73,22 @@ export type LatticeTierKey = 'glimpse' | 'seed'
 
 export type Scope = 'tree' | 'life' | 'eternal'
 
-/** Tree ids (acts). Currently only Act I. */
-export type TreeId = 'act1'
+/** Tree ids (acts). Act II opens with Spirit Severing (slice 9). */
+export type TreeId = 'act1' | 'act2'
+
+// ---- Accumulators + severing (slice 9) --------------------------------------
+
+/** Typed-accumulator instance keys (docs/architecture.md; both soul-scoped). */
+export type AccumulatorKey = 'ascentCounter' | 'severanceRitual'
+
+/**
+ * The v1 severable list (D25): real build pieces with a legible, isolatable
+ * effect domain. Stance dropped to v2 (probe inversion — no weakness window).
+ */
+export type SeverableKey = 'soulAspect' | 'profession' | 'extraordinaryMeridians' | 'manifestation'
+
+/** The three corpses (canonical three attachments), severed in order. */
+export type CorpseKey = 'past' | 'present' | 'future'
 
 // ---- Body / temper ---------------------------------------------------------
 
@@ -173,7 +189,7 @@ export type JournalEntryKey =
 
 // ---- Set-pieces ------------------------------------------------------------
 
-export type SetpieceKey = 'forge' | 'firstTribulation' | 'scar'
+export type SetpieceKey = 'forge' | 'firstTribulation' | 'scar' | 'severance'
 export type ForgePushKey = 'steady' | 'forceful' | 'reckless'
 export type TribWaveKey =
   | 'gale'

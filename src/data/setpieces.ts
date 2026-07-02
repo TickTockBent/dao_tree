@@ -119,12 +119,35 @@ export interface ScarTable {
   readonly temperedQiMultPerDepth: number
 }
 
+// ---- The Severance (slice 9) ------------------------------------------------
+
+/**
+ * The severing ceremony's curve constants — SIGNED OFF (D25, k-probe evidence
+ * in docs/calibration.md; rule 0.1: these move only with new evidence and
+ * Wes's sign-off). Each severance's transcendent multiplier starts at
+ * startFraction × the severed piece's live contribution, grows geometrically
+ * per severance-ritual completion (growth = (capRatio/startFraction)^(1/(rampSteps−1))),
+ * and caps at capRatio × the contribution by step rampSteps. Breakeven lands
+ * at step 7 — the felt weakness window (D23). Ceremony pacing (charge accrual,
+ * commit gate) is the slice-9 severing implementer's surface, sim-verified.
+ */
+export interface SeveranceConfig {
+  readonly kind: 'severance'
+  /** c — where the ramp starts, as a fraction of the severed contribution. */
+  readonly startFraction: number
+  /** k — the lifetime cap, as a ratio over the severed contribution. */
+  readonly capRatio: number
+  /** Ritual completions from start to cap (mirrors Act I's 12-re-climb resolution). */
+  readonly rampSteps: number
+}
+
 // ---- The aggregate --------------------------------------------------------
 
 export interface SetpieceData {
   readonly forge: ForgeConfig
   readonly firstTribulation: TribulationConfig
   readonly scar: ScarTable
+  readonly severance: SeveranceConfig
 }
 
 export const SETPIECE_DATA: SetpieceData = {
@@ -184,6 +207,13 @@ export const SETPIECE_DATA: SetpieceData = {
     healGoalPerDepth: 240,
     healRatePerSecond: 1,
     temperedQiMultPerDepth: 1.06,
+  },
+  // Slice 9 (D25 signed off — see SeveranceConfig doc above).
+  severance: {
+    kind: 'severance',
+    startFraction: 0.5,
+    capRatio: 2.0,
+    rampSteps: 12,
   },
 }
 

@@ -22,3 +22,5 @@ export { SECRET_REALM_DATA, type SecretRealmData, type SecretRealmSite, type Sec
 export { ALCHEMY_DATA, type AlchemyData, type RecipeRow, type MaterialRow, type PillEffect, findRecipe } from './alchemy'
 export { HEART_DEMON_DATA, type HeartDemonData, type DemonTrialRow, type TrialObjective, type HeartDemonTrialKey, findDemonTrial } from './heart-demons'
 export { SECLUSION_DATA, type SeclusionData, type SeclusionRung, findSeclusionRung } from './seclusion'
+export { ACCUMULATOR_DATA } from './accumulators'
+export { SEVERING_DATA, type SeveringData, type CorpseRow, type SeverableRow, findCorpse, findSeverable } from './severing'

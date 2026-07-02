@@ -45,11 +45,11 @@ describe('meets', () => {
     primaryMeridians: 0,
     primaryMeridiansAll: false,
     temperTier: null,
-    realmBest: { q: decimalZero(), f: decimalZero(), c: decimalZero(), n: decimalZero(), s: decimalZero() },
-    realmSubstageLabel: { q: null, f: null, c: null, n: null, s: null },
+    realmBest: { q: decimalZero(), f: decimalZero(), c: decimalZero(), n: decimalZero(), s: decimalZero(), x: decimalZero() },
+    realmSubstageLabel: { q: null, f: null, c: null, n: null, s: null, x: null },
     realmSubstageThresholds: {
       q: { '1st Level': 1, '6th Level': 90, '7th Level': 170 },
-      f: {}, c: {}, n: {}, s: {},
+      f: {}, c: {}, n: {}, s: {}, x: {},
     },
     daoNodeTier: {} as Record<string, number>,
     daoElementMaxTier: {} as Record<string, number>,
@@ -64,6 +64,7 @@ describe('meets', () => {
     corruption: 0,
     daoHeartStacks: 0,
     seclusionRungs: 0,
+    tribulationPassed: false,
   }
 
   it('empty condition is always true', () => {

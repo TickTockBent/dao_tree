@@ -258,6 +258,33 @@ export const REALM_DATA: readonly RealmRow[] = [
     ],
     setpiece: 'firstTribulation',
   },
+  {
+    // Slice 9 — Act II opens (docs/slice-9.md; tree membership 'act2' in
+    // TREE_DATA, so no Act I realm can cascade-reset it and it cascade-resets
+    // nothing below (cross-tree keeps are topological, not exceptional).
+    // The realm both reveals AND unlocks on the passed tribulation: what
+    // Spirit Severing is actually like stays veiled until the crossing
+    // (D11 — veil the ahead, never the now).
+    // Sub-stage `at` thresholds and qiMults are PLACEHOLDERS <tune> — the
+    // slice-9 content agent calibrates them sim-side; each sub-stage is gated
+    // by its corpse's severance (the severing store enforces the sequence).
+    id: 'x',
+    row: 5,
+    name: 'Spirit Severing',
+    symbol: 'Sever',
+    color: '#b48fe0',
+    resource: 'spirit severing',
+    reqBase: 2e10,
+    gainExp: 0.4,
+    reveal: { tribulationPassed: true },
+    unlock: { tribulationPassed: true },
+    substages: [
+      { label: 'The Past Lies Severed', at: 1, qiMult: 2.0 },
+      { label: 'The Present Lies Severed', at: 25, qiMult: 2.4 },
+      { label: 'The Future Lies Severed', at: 400, qiMult: 2.8 },
+    ],
+    setpiece: 'severance',
+  },
 ]
 
 // ---- Convenience lookups (typed) ------------------------------------------

@@ -22,6 +22,7 @@ import HintBar from '@/components/HintBar.vue'
 import SecretRealmTab from '@/components/SecretRealmTab.vue'
 import AlchemyTab from '@/components/AlchemyTab.vue'
 import AchievementsPanel from '@/components/AchievementsPanel.vue'
+import SeveringPanel from '@/components/SeveringPanel.vue'
 import { useSecretRealmStore } from '@/stores/secretRealm'
 import { useAlchemyStore } from '@/stores/alchemy'
 
@@ -95,6 +96,7 @@ const alchemyTabAvailable = computed(() => alchemy.isRevealed())
           <ForgePanel v-if="r.id === 'c'" />
           <TribulationPanel v-if="r.id === 's'" />
           <LegacyDisplay v-if="r.id === 's'" />
+          <SeveringPanel v-if="r.id === 'x'" />
         </section>
       </div>
 

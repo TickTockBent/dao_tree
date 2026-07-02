@@ -30,13 +30,21 @@ export interface TreeData {
 }
 
 export const TREE_DATA: TreeData = {
-  trees: [{ id: 'act1', name: 'Act I: The Mortal Road' }],
+  trees: [
+    { id: 'act1', name: 'Act I: The Mortal Road' },
+    // Slice 9: Act II opens with Spirit Severing. A separate tree means the
+    // doReset cascade can NEVER cross the act boundary in either direction
+    // (same-tree guard in engine/doReset.ts) — Act I state survives Act II
+    // resets topologically, not by keep-rule exception.
+    { id: 'act2', name: 'Act II: Severing the Mortal' },
+  ],
   layers: {
     q: { scope: 'tree', tree: 'act1' },
     f: { scope: 'tree', tree: 'act1' },
     c: { scope: 'tree', tree: 'act1' },
     n: { scope: 'tree', tree: 'act1' },
     s: { scope: 'tree', tree: 'act1' },
+    x: { scope: 'tree', tree: 'act2' },
     b: { scope: 'life' },
     gate: { scope: 'life' },
     dao: { scope: 'life' },
@@ -57,5 +65,14 @@ export const TREE_DATA: TreeData = {
     // not by cascade and (design intent) not by reincarnation. The soul
     // learned to cultivate unattended; a new body does not unlearn it.
     seclusion: { scope: 'eternal' },
+    // Slice 9: soul-scoped accumulators (ascent counter + severance ritual,
+    // D21/D23/D25). 'eternal' here is the pre-Samsara encoding of the SOUL
+    // accumulator scope (docs/architecture.md) — slice 10's differentiation
+    // audit (open-questions Q6) assigns it explicitly.
+    soul: { scope: 'eternal' },
+    // Slice 9: active severances are LIFE-scoped — severed things return next
+    // life (D23). The severance HISTORY (three-lives transcendence, D24)
+    // lives on the soul slice, not here.
+    severing: { scope: 'life' },
   },
 }
