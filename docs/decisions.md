@@ -195,3 +195,20 @@ from day one (schema now, content later), and the Steam-readiness checklist
 gains a hard item: **Steam launch must postdate transcendence
 implementation**, not merely Act II content. Fine on itch, not fine on
 Steam.
+
+## D25 — Severing numbers + slice-9 entry: signed off
+
+*2026-07-02, closes Q9; k-probe evidence in
+[calibration.md](calibration.md).* The transcendent multiplier ramps from
+**c = 0.5** of the severed contribution to a cap of **k = 2.0**, geometric,
+reaching cap by ritual step 12 — breakeven at step 7, in-window net 1.10:
+the deepest cut that still honors lifetime-net-positive. **The ramp driver
+is the severance ritual** (D23's second soul accumulator): mastering the
+severance is what crosses breakeven — the weakness window and the second
+mountain are one mechanic with one clock. **v1 severable list, final:**
+soul aspect, profession, extraordinary-meridian track, lattice
+Manifestation. Stance drops to v2 pending redesign (probe inversion:
+severing its effect made the lattice build 7.1h *faster* — no weakness
+window, no severance). Ships with the assertion that every viable build
+has ≥3 live severables. The full slice design is
+[slice-9.md](slice-9.md), signed off same day.

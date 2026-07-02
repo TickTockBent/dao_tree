@@ -66,14 +66,16 @@ loot-never-gate assertion (zero-rare Competent stays in band). Scoped in
 knob wakes when this lands, and the band re-derives rather than silently
 widening (the pin's FAIL text says so).
 
-## Q9 — Severing numbers: k, ramp shape, breakeven timing, final severable list *(trigger: k-probe results in hand)*
+*(Q9 — severing numbers — decided 2026-07-02, moved to
+[decisions.md](decisions.md) D25: c = 0.5, k = 2.0, ramp driver = the
+severance ritual; stance to v2.)*
 
-D23 fixed the *shape* (sequential set-pieces; ramped multiplier; lifetime
-net-positive with a felt weakness window; breakeven timing as the tuning
-lever). The numbers await the k-probe: each candidate severable's live
-contribution per build (felt-hours delta + end-of-run rate share), and
-breakeven-timing brackets across candidate (k, start-fraction, ramp-horizon)
-triples. Wes signs off the numbers per rule 0.1. **Lean on the ramp driver:**
-the severance ritual (D23's second soul accumulator) carries the multiplier
-— *mastering the severance* is what crosses breakeven, unifying the ramp and
-the second-mountain ritual into one mechanic instead of two clocks.
+## Q10 — Is Breathing Trance a trap for qi-focused play? *(trigger: next stance/technique data touch, or a player report)*
+
+The k-probe's side-finding: nullifying the trance's effect made the focused
+lattice actor 7.1h FASTER — its ×0.7 qi cost outweighs what ×2 Insight buys
+back *for that policy at current data*. Either the trance is a trap stance
+(cf. the metalSoul/waterSoul trap-aspect precedent, D1) or the sim policy
+uses it badly (holds it too long / wrong phases). Attribution probe before
+any data change (rule 0.1); no urgency — it is opt-in and its Insight axis
+may be correctly priced for insight-hungry builds.

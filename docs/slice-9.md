@@ -1,9 +1,8 @@
 # Slice 9 — Act II opens: Spirit Severing
 
-**Status: DRAFT for Wes's sign-off — k-probe numbers in
-([calibration.md](calibration.md)); open picks marked ⟨Wes⟩.**
-Scope cut approved 2026-07-02; shape decisions in
-[decisions.md](decisions.md) D21–D24.
+**Status: SIGNED OFF 2026-07-02 (D25).** Scope cut approved 2026-07-02;
+shape decisions in [decisions.md](decisions.md) D21–D25; probe evidence in
+[calibration.md](calibration.md).
 
 ## Scope
 
@@ -70,18 +69,16 @@ superset of the severed piece's effect domain (lint verifies the shape).
 It RAMPS: starts at c·m (felt weakness window), grows with each
 severance-ritual completion, crosses breakeven at step n\*, caps at k·m by
 step 12. The probe's grid says the viable corner is **c ≥ 0.5, k ≥ 1.5–2.0**
-(c = 0.25 never recovers inside the ramp window). ⟨Wes⟩ picks the cell:
-**recommendation c = 0.5, k = 2.0** — breakeven at step 7, in-window net
-1.10, the deepest cut that still honors lifetime-net-positive; alternate
-c = 0.75, k = 1.5 (breakeven step 6, gentler window, net 1.09) if the
-weakness should whisper rather than bite. Sim asserts pacing over sampled
-builds; lint never makes pacing claims.
+(c = 0.25 never recovers inside the ramp window). **Signed off (D25):
+c = 0.5, k = 2.0** — breakeven at step 7, in-window net 1.10, the deepest
+cut that still honors lifetime-net-positive. Sim asserts pacing over
+sampled builds; lint never makes pacing claims.
 
 **The severance ritual — the second mountain.** The ramp's driver is the
 severance ritual, the second soul-scoped accumulator: "you've mastered the
 core; now master the severance." Its own acceleration curve, its own
 mastery arc; one mechanic serves as both the multiplier's clock and Act
-II's ritual content. (Q9 lean, confirm at sign-off.)
+II's ritual content. (Confirmed at sign-off, D25.)
 
 **Recorded from day one (D24):** per-attachment severance history
 (attachment identity, life number) — the three-lives transcendence promise
