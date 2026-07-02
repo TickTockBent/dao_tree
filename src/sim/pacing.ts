@@ -109,6 +109,33 @@ interface SpineConfig {
    * around realm.prestige (see simPrestige), never as an engine change.
    */
   counterfactualCKeep?: boolean
+  /**
+   * COUNTERFACTUAL probe only (slice-9 partial-keep design, the ‡ runs):
+   * on n/s cascades restore c.milestones ONLY — best wipes normally, so the
+   * ×5.25 milestone rate multiplier survives but the sub-stage climb itself
+   * (and c's contribution to unlock gates) must be re-earned. The cheapest
+   * game-legal-SHAPED keep rule; tests the flat-discount prediction (all
+   * three c milestones latch before the first cascade, so a milestones-only
+   * keep should discount every re-climb identically — no curve). Mutually
+   * exclusive with counterfactualCKeep and counterfactualCoreRemembers
+   * (enforced by assertProbeFlagsExclusive in the runner factories).
+   */
+  counterfactualPartialCKeep?: boolean
+  /**
+   * COUNTERFACTUAL probe only ("the core remembers", the ⟨tune⟩ r-sweep):
+   * the sim CLOCK inside c re-climb segment k advances at r^(k−1) of real
+   * dt — re-climbs accelerate with each ascent the core has survived. What
+   * it multiplies, exactly: every dt charged to state.simSeconds while a
+   * re-climb segment is open (see chargeSimClock); the game-state
+   * trajectory (Qi accrual, ticks, decisions, game.timePlayed) is
+   * BIT-IDENTICAL to the base run — only the reported clock is discounted,
+   * i.e. "re-climb work k proceeds 1/r^(k−1)× faster in felt time".
+   * Deterministic; r=1.0 is definitionally the base run. Note the full †
+   * keep is NOT this probe's r→0 limit: † also keeps best, skipping the
+   * re-climb work entirely rather than compressing its clock. Mutually
+   * exclusive with both keep flags.
+   */
+  counterfactualCoreRemembers?: number
 }
 
 interface ProfileSummary {
@@ -133,6 +160,46 @@ interface RealisticParams {
   bankMultiple: number
 }
 
+/**
+ * One completed c re-climb segment (curve instrumentation for the partial-keep
+ * probe). Segment boundary, precisely:
+ * - OPENS at the sim-time of the first n/s prestige that leaves c below full
+ *   restoration (best < C_TOP_SUBSTAGE_AT or any of its substage milestones
+ *   unlatched) — i.e. at the cascade itself, checked AFTER any counterfactual
+ *   keep restore, so a run whose keep rule fully preserves c opens nothing.
+ * - Further n/s cascades landing while a segment is open EXTEND it
+ *   (cascadesSpanned++) rather than opening a new one — Realistic's
+ *   every-other-cascade core lapses make multi-cascade segments routine;
+ *   Competent's restore-after-every-cascade policy keeps them 1:1.
+ * - CLOSES at the sim-time of the prestige that first returns c to full
+ *   restoration (best >= C_TOP_SUBSTAGE_AT AND all substage milestones
+ *   latched — under ‡ the milestones are always latched, so closure reduces
+ *   to the best re-climb, which keeps segments comparable across variants).
+ * The measured duration therefore INCLUDES everything the actor interleaves
+ * inside the window — f restores, n climbs, idle check-ins (Realistic),
+ * horizontal engagement — it is "time from losing the ×5.25 to having it
+ * back", not "time spent exclusively prestiging c". A segment still open when
+ * the run ends at s Great Circle (the final s cascade always wipes c with no
+ * re-climb following) is dropped: no re-climb happened.
+ */
+interface CReclimbSegment {
+  /** 1-based ascent index k, in completion order. */
+  index: number
+  startSeconds: number
+  endSeconds: number
+  durationSeconds: number
+  /** n/s cascades this segment spans (> 1 when the actor lapses between wipes). */
+  cascadesSpanned: number
+}
+
+/** The in-flight (not yet closed) re-climb segment, if any. */
+interface OpenCReclimb {
+  startSeconds: number
+  cascadesSpanned: number
+  /** Sim-clock scale for this segment: r^(k−1) under counterfactualCoreRemembers, else 1. */
+  clockScale: number
+}
+
 interface SimState {
   simSeconds: number
   maxIterations: number
@@ -141,6 +208,10 @@ interface SimState {
   config?: SpineConfig
   /** Realistic knobs (defaulted to the REALISTIC_* constants; swept by the jitter grid). */
   realisticParams?: RealisticParams
+  /** Completed c re-climb segments, in order (partial-keep curve probe). */
+  cReclimbSegments: CReclimbSegment[]
+  /** The currently-open re-climb segment (set by an n/s cascade, cleared at full restore). */
+  cReclimbOpen?: OpenCReclimb
   /** Gathering pills swallowed this run (report column). */
   pillsSwallowed: number
   /** Gathering/clarity/warding pills crafted this run. */
@@ -368,6 +439,9 @@ const Q_TOP_SUBSTAGE_AT = findRealm('q').substages[findRealm('q').substages.leng
 const EXTRAORDINARY_MERIDIAN_TARGET = 8
 const F_GREAT_CIRCLE_AT = findRealm('f').substages.find((s) => s.label === 'Great Circle')!.at
 const C_TOP_SUBSTAGE_AT = findRealm('c').substages[findRealm('c').substages.length - 1]!.at
+// All three c substage milestones (the ×5.25 rate product) — full-restore bar
+// for the re-climb curve probe, data-derived like the thresholds above.
+const C_MILESTONE_COUNT = findRealm('c').substages.length
 const N_APEX_AT = findRealm('n').substages.find((s) => s.label === 'Apex')!.at
 const N_PERFECTED_AT = findRealm('n').substages.find((s) => s.label === 'Perfected')!.at
 const S_GREAT_CIRCLE_AT = findRealm('s').substages.find(
@@ -424,7 +498,7 @@ function advanceToQiTicking(target: Decimal, state: SimState): void {
       game.points = game.points.add(qiPerSec.times(dt))
     }
     game.timePlayed = game.timePlayed + dt
-    state.simSeconds += dt
+    chargeSimClock(dt, state)
     tickSystems(dt, state)
     if (++guard > state.maxIterations) {
       throw new Error('advanceToQiTicking exceeded iteration cap — Qi/sec appears stalled')
@@ -475,6 +549,69 @@ function qiForGain(realmId: 'q' | 'f' | 'c' | 'n' | 's', gain: Decimal): Decimal
   return gain.div(gainMult).root(r.gainExp).times(r.reqBase).max(r.reqBase).ceil()
 }
 
+/** Is c fully restored — top sub-stage re-climbed AND all milestones latched? */
+function cIsFullyRestored(): boolean {
+  const realm = useRealmStore()
+  return (
+    realm.realmBest('c').toNumber() >= C_TOP_SUBSTAGE_AT &&
+    realm.stateOf('c').milestones.length >= C_MILESTONE_COUNT
+  )
+}
+
+/**
+ * Re-climb curve instrumentation (OBSERVATION-ONLY: pure store reads, writes
+ * confined to sim-side state fields — never perturbs a measured run). Called
+ * at the tail of every simPrestige; segment boundary semantics are documented
+ * on the CReclimbSegment interface above. An n/s cascade that leaves c below
+ * full restoration opens (or extends) a segment; any later prestige that
+ * returns c to full restoration closes it at the current sim clock.
+ */
+function trackCReclimbCurve(realmId: 'q' | 'f' | 'c' | 'n' | 's', state: SimState): void {
+  if (realmId === 'n' || realmId === 's') {
+    if (cIsFullyRestored()) return // a full † keep leaves nothing to re-climb
+    if (state.cReclimbOpen) {
+      state.cReclimbOpen.cascadesSpanned++
+    } else {
+      const ascentIndex = state.cReclimbSegments.length + 1
+      const remembersRate = state.config?.counterfactualCoreRemembers
+      state.cReclimbOpen = {
+        startSeconds: state.simSeconds,
+        cascadesSpanned: 1,
+        clockScale: remembersRate === undefined ? 1 : remembersRate ** (ascentIndex - 1),
+      }
+    }
+    return // an n/s cascade can never close a segment
+  }
+  if (state.cReclimbOpen && cIsFullyRestored()) {
+    const open = state.cReclimbOpen
+    state.cReclimbSegments.push({
+      index: state.cReclimbSegments.length + 1,
+      startSeconds: open.startSeconds,
+      endSeconds: state.simSeconds,
+      durationSeconds: state.simSeconds - open.startSeconds,
+      cascadesSpanned: open.cascadesSpanned,
+    })
+    state.cReclimbOpen = undefined
+  }
+}
+
+/**
+ * Sim-clock charge for the ticking/idle advancers. Base path is a literal
+ * `simSeconds += dt` (bit-identical to the pre-probe code); ONLY a run
+ * carrying counterfactualCoreRemembers with a re-climb segment open charges
+ * the discounted r^(k−1)·dt instead ("the core remembers" — the felt clock
+ * compresses while the game-state trajectory stays identical to base).
+ * game.timePlayed is deliberately still charged raw dt by the callers, so
+ * the engine sees an unchanged run.
+ */
+function chargeSimClock(dt: number, state: SimState): void {
+  if (state.config?.counterfactualCoreRemembers !== undefined && state.cReclimbOpen) {
+    state.simSeconds += dt * state.cReclimbOpen.clockScale
+  } else {
+    state.simSeconds += dt
+  }
+}
+
 /**
  * All non-Diligent prestiges route through here. Normally a plain
  * realm.prestige — but when the profile carries the COUNTERFACTUAL
@@ -484,12 +621,19 @@ function qiForGain(realmId: 'q' | 'f' | 'c' | 'n' | 's', gain: Decimal): Decimal
  * survive, banked points do NOT). Sim-side only; the engine's doReset cascade
  * still runs untouched. This is the churn-decomposition probe for deferred-
  * decision #2 (tax-vs-ritual) — labeled COUNTERFACTUAL, not game-legal.
+ *
+ * The ‡ variant (counterfactualPartialCKeep) restores c.milestones ONLY —
+ * best wipes normally — the milestones-only partial keep for the slice-9
+ * probe. The two keep flags are mutually exclusive (assertProbeFlagsExclusive
+ * throws at runner construction). Every call ends in trackCReclimbCurve, the
+ * observation-only re-climb instrumentation.
  */
 function simPrestige(realmId: 'q' | 'f' | 'c' | 'n' | 's', state: SimState): void {
   const realm = useRealmStore()
-  const probeCKeep =
-    state.config?.counterfactualCKeep === true && (realmId === 'n' || realmId === 's')
-  const cBefore = probeCKeep ? realm.stateOf('c') : null
+  const bigCascade = realmId === 'n' || realmId === 's'
+  const probeCKeep = state.config?.counterfactualCKeep === true && bigCascade
+  const probePartialCKeep = state.config?.counterfactualPartialCKeep === true && bigCascade
+  const cBefore = probeCKeep || probePartialCKeep ? realm.stateOf('c') : null
   const keptBest = cBefore ? cBefore.best : ''
   const keptMilestones = cBefore ? [...cBefore.milestones] : []
   realm.prestige(realmId)
@@ -500,7 +644,15 @@ function simPrestige(realmId: 'q' | 'f' | 'c' | 'n' | 's', state: SimState): voi
     if (new Decimal(cAfter.best).lt(new Decimal(keptBest))) {
       realm.slice['c'] = { ...cAfter, best: keptBest, milestones: keptMilestones }
     }
+  } else if (probePartialCKeep) {
+    const cAfter = realm.stateOf('c')
+    // ‡: milestones survive (the ×5.25 rate product), best does NOT — same
+    // defensive wipe check as the † branch above.
+    if (cAfter.milestones.length < keptMilestones.length) {
+      realm.slice['c'] = { ...cAfter, milestones: keptMilestones }
+    }
   }
+  trackCReclimbCurve(realmId, state)
 }
 
 /**
@@ -973,8 +1125,29 @@ const MERIDIAN_PROBE_CONFIG: SpineConfig = {
   buyExtraordinaryMeridians: true,
 }
 
+/**
+ * The three c-churn counterfactuals answer different questions on different
+ * mechanics († full keep, ‡ milestones-only keep, r clock compression) —
+ * stacking them has no defined meaning, so a config carrying more than one is
+ * a probe-construction bug worth failing loudly at runner build time.
+ */
+function assertProbeFlagsExclusive(config: SpineConfig): void {
+  const flagsSet = [
+    config.counterfactualCKeep === true,
+    config.counterfactualPartialCKeep === true,
+    config.counterfactualCoreRemembers !== undefined,
+  ].filter(Boolean).length
+  if (flagsSet > 1) {
+    throw new Error(
+      'counterfactualCKeep (†), counterfactualPartialCKeep (‡), and ' +
+        'counterfactualCoreRemembers (r) are mutually exclusive probes — pick one',
+    )
+  }
+}
+
 /** A spine profile runner: attach the config, then drive the shared spine. */
 function spineRunner(config: SpineConfig): (state: SimState) => void {
+  assertProbeFlagsExclusive(config)
   return (state: SimState) => {
     state.config = config
     runSpine(state)
@@ -1036,7 +1209,7 @@ function advanceIdle(seconds: number, state: SimState): void {
     const qiPerSec = pipelines.qiPerSecond
     if (qiPerSec.gt(0)) game.points = game.points.add(qiPerSec.times(dt))
     game.timePlayed = game.timePlayed + dt
-    state.simSeconds += dt
+    chargeSimClock(dt, state)
     tickSystems(dt, state)
     remaining -= dt
   }
@@ -1209,6 +1382,7 @@ function realisticRunner(
   config: SpineConfig = REALISTIC_CONFIG,
   params: RealisticParams = REALISTIC_DEFAULT_PARAMS,
 ): (state: SimState) => void {
+  assertProbeFlagsExclusive(config)
   return (state: SimState) => {
     state.config = config
     state.realisticParams = params
@@ -1263,6 +1437,7 @@ function runProfileQuiet(fn: (state: SimState) => void): SimState {
     simSeconds: 0,
     maxIterations: 100000,
     marks: {},
+    cReclimbSegments: [],
     pillsSwallowed: 0,
     pillsCrafted: 0,
   }
@@ -1271,12 +1446,139 @@ function runProfileQuiet(fn: (state: SimState) => void): SimState {
   return state
 }
 
+// ---- Partial-keep probe report helpers (slice-9 decision input) --------------
+
+// The "core remembers" sweep grid. ⟨tune⟩ The full three-point sweep is kept —
+// measured wall budget holds (~46s of the 60s cap with all 8 extra runs); if
+// the budget ever breaks, drop 0.85 FIRST and log the cut here — no silent caps.
+const PARTIAL_KEEP_SWEEP_R = [0.85, 0.7, 0.5] as const
+// Curve-table density (designer pass: the read is curve SHAPE at the ENDS —
+// whether a fixed r makes late climbs trivially fast or early ones
+// indistinguishable from full cost; either failure means r must be a function
+// of k, not a constant). Full per-k list at/below the max; above it, every k
+// for the head, then deciles (p10…p90), then the tail.
+const CURVE_PRINT_FULL_MAX = 20
+const CURVE_PRINT_HEAD_ROWS = 5
+const CURVE_PRINT_TAIL_ROWS = 3
+const FLAT_DISCOUNT_SPREAD = 0.05 // ⟨tune⟩ per-k ‡ discount max−min <= this reads as FLAT (no curve)
+// ⟨tune⟩ Fewer Realistic re-climbs than this = too few samples for the curve to
+// be FELT — the pre-named fallback signal (extend the curve into Act II instead).
+const FELT_CURVE_MIN_SAMPLES = 5
+
+/** One curve-table row: `k=3: 512s (8.5m) [spans 2 cascades]`. */
+function reclimbRowText(segment: CReclimbSegment): string {
+  const spans = segment.cascadesSpanned > 1 ? ` [spans ${segment.cascadesSpanned} cascades]` : ''
+  return `k=${segment.index}: ${segment.durationSeconds.toFixed(0)}s (${(segment.durationSeconds / 60).toFixed(1)}m)${spans}`
+}
+
+/** First-vs-last re-climb duration ratio (>1× = later re-climbs are faster). */
+function firstOverLastText(segments: CReclimbSegment[]): string {
+  if (segments.length < 2) return '—'
+  const lastDuration = segments[segments.length - 1]!.durationSeconds
+  if (lastDuration <= 0) return '—'
+  return `${(segments[0]!.durationSeconds / lastDuration).toFixed(2)}×`
+}
+
+/** Compact curve shape: first / mid / last durations + first-vs-last ratio. */
+function curveShapeText(segments: CReclimbSegment[]): string {
+  if (segments.length === 0) return 'no re-climbs'
+  const first = segments[0]!
+  const mid = segments[Math.floor((segments.length - 1) / 2)]!
+  const last = segments[segments.length - 1]!
+  return (
+    `first ${first.durationSeconds.toFixed(0)}s / mid ${mid.durationSeconds.toFixed(0)}s / ` +
+    `last ${last.durationSeconds.toFixed(0)}s | first/last ${firstOverLastText(segments)}`
+  )
+}
+
+/**
+ * Per-k curve table. The re-climb COUNT gets its own line — it is a
+ * RESOLUTION constraint (how complex an acceleration curve can even be
+ * perceived), not just a thin-curve warning. Full per-k list at/below
+ * CURVE_PRINT_FULL_MAX; above it, every k for the first CURVE_PRINT_HEAD_ROWS,
+ * then the p10…p90 deciles, then the last CURVE_PRINT_TAIL_ROWS — dense at the
+ * ends, where a constant-r failure would show (late climbs trivially fast /
+ * early ones indistinguishable from full cost).
+ */
+function printReclimbCurve(label: string, segments: CReclimbSegment[]): void {
+  console.log(`  ${label} — re-climb count: ${segments.length}`)
+  if (segments.length === 0) {
+    console.log('    (c never left full restoration — nothing to re-climb)')
+    return
+  }
+  console.log(`    shape: ${curveShapeText(segments)}`)
+  if (segments.length <= CURVE_PRINT_FULL_MAX) {
+    for (const segment of segments) console.log(`    ${reclimbRowText(segment)}`)
+    return
+  }
+  // Dense-ends sampling: head rows, decile rows (tagged pNN), tail rows.
+  const decileTagByIndex = new Map<number, string>()
+  for (let decile = 1; decile <= 9; decile++) {
+    decileTagByIndex.set(Math.floor((segments.length * decile) / 10) - 1, `p${decile * 10}`)
+  }
+  const pickedIndices = new Set<number>()
+  for (let i = 0; i < CURVE_PRINT_HEAD_ROWS; i++) pickedIndices.add(i)
+  for (const index of decileTagByIndex.keys()) pickedIndices.add(index)
+  for (let i = segments.length - CURVE_PRINT_TAIL_ROWS; i < segments.length; i++) pickedIndices.add(i)
+  const orderedIndices = [...pickedIndices].sort((a, b) => a - b)
+  let previousIndex = -1
+  for (const index of orderedIndices) {
+    if (previousIndex >= 0 && index > previousIndex + 1) console.log('    …')
+    const tag = decileTagByIndex.has(index) ? `  [${decileTagByIndex.get(index)}]` : ''
+    console.log(`    ${reclimbRowText(segments[index]!)}${tag}`)
+    previousIndex = index
+  }
+}
+
+/**
+ * Flat-discount check for ‡: pair base and ‡ segments by k, compute each k's
+ * discount (1 − ‡/base duration), and read the spread. A milestones-only keep
+ * with a truly flat effect leaves the spread ~0 — same relative discount on
+ * every re-climb, no acceleration curve. Counts can misalign when the keep
+ * changes cascade merging (Realistic's check-in grid); reported, not forced.
+ */
+function flatDiscountCheck(
+  label: string,
+  baseSegments: CReclimbSegment[],
+  partialSegments: CReclimbSegment[],
+): { line: string; flat: boolean | null } {
+  if (baseSegments.length === 0 || baseSegments.length !== partialSegments.length) {
+    return {
+      line:
+        `  ${label}: re-climb counts differ (base ${baseSegments.length} vs ‡ ${partialSegments.length}) — ` +
+        'per-k discounts not directly alignable; compare the curve shapes above.',
+      flat: null,
+    }
+  }
+  const perKDiscounts = baseSegments
+    .map((segment, i) => ({
+      baseDuration: segment.durationSeconds,
+      partialDuration: partialSegments[i]!.durationSeconds,
+    }))
+    .filter((pair) => pair.baseDuration > 0)
+    .map((pair) => 1 - pair.partialDuration / pair.baseDuration)
+  if (perKDiscounts.length === 0) {
+    return { line: `  ${label}: every base re-climb is 0s — no discount is measurable.`, flat: null }
+  }
+  const discountMin = Math.min(...perKDiscounts)
+  const discountMax = Math.max(...perKDiscounts)
+  const spread = discountMax - discountMin
+  const flat = spread <= FLAT_DISCOUNT_SPREAD
+  return {
+    line:
+      `  ${label}: per-k ‡ discount min ${(discountMin * 100).toFixed(1)}% / max ${(discountMax * 100).toFixed(1)}% ` +
+      `→ spread ${(spread * 100).toFixed(1)}pts (${flat ? 'FLAT' : 'NOT FLAT'}, bar ${FLAT_DISCOUNT_SPREAD * 100}pts)`,
+    flat,
+  }
+}
+
 function runProfile(name: string, fn: (state: SimState) => void): SimState {
   bootSim()
   const state: SimState = {
     simSeconds: 0,
     maxIterations: 100000,
     marks: {},
+    cReclimbSegments: [],
     pillsSwallowed: 0,
     pillsCrafted: 0,
   }
@@ -1449,6 +1751,21 @@ export function runPacingSim(): void {
     realisticRunner({ ...REALISTIC_CONFIG, counterfactualCKeep: true }),
   )
 
+  // ---- Partial-keep counterfactuals (‡ runs): milestones survive, best wipes -
+  // The cheapest game-legal-SHAPED keep rule (same snapshot/restore machinery
+  // as †, milestones only). Because all three c milestones latch long before
+  // the first cascade, the structural prediction is a FLAT discount — every
+  // re-climb identically cheaper, no acceleration curve. Verified against the
+  // per-re-climb instrumentation in the PARTIAL-KEEP PROBE section below.
+  const competentPartialKeepRun = runProfile(
+    'Competent‡',
+    spineRunner({ ...COMPETENT_CONFIG, counterfactualPartialCKeep: true }),
+  )
+  const realisticPartialKeepRun = runProfile(
+    'Realistic‡',
+    realisticRunner({ ...REALISTIC_CONFIG, counterfactualPartialCKeep: true }),
+  )
+
   // ---- Structural assertions: focused builds inherit the competent spine ---
   // Each must terminate at the tribulation trigger AND beat Diligent by >= 4×
   // (they share the rate-restoring spine, so this MUST hold — a failure is a
@@ -1509,6 +1826,8 @@ export function runPacingSim(): void {
     markRow('Realistic', realisticRun),
     markRow('Competent†', competentCKeepRun),
     markRow('Realistic†', realisticCKeepRun),
+    markRow('Competent‡', competentPartialKeepRun),
+    markRow('Realistic‡', realisticPartialKeepRun),
   ])
 
   // ---- BUILD DIVERSITY (calibration — bands await sign-off) -----------------
@@ -1681,6 +2000,180 @@ export function runPacingSim(): void {
       ? `  Interpretation: NARROW swing (< ${SWEEP_NARROW_SWING_RATIO}×) — the headline is a number; pin the experience band on it.`
       : `  Interpretation: WIDE swing (>= ${SWEEP_NARROW_SWING_RATIO}×) — pin a RANGE [${sweepMin.toFixed(1)}h … ${sweepMax.toFixed(1)}h], not a point.`,
   )
+
+  // ---- PARTIAL-KEEP PROBE (decision input for slice-9) ----------------------
+  // Wes's ruling on tax-vs-ritual: both pure options are off the table; the
+  // direction is a partial keep — "the core remembers" — where re-climbs STAY
+  // but ACCELERATE across ascents, the acceleration curve itself being the felt
+  // Act-I progression. His requirement: report the CURVE, not just the total
+  // ("a partial-keep that lands at 14h by making every re-climb uniformly 30%
+  // cheaper is worse than one that lands at 16h by making them accelerate —
+  // same hours, opposite design"). Three variants against the instrumented
+  // baselines: ‡ (milestones-only keep — the flat-discount prediction test),
+  // the r-sweep ("the core remembers" clock compression), and † as a reference
+  // endpoint only — † also keeps best, so it is NOT the r→0 limit (r→0
+  // compresses the re-climb clock; † removes the re-climb work entirely).
+  console.log('\n=== PARTIAL-KEEP PROBE (decision input for slice-9 keep design — no assertion) ===')
+  console.log(
+    '  Segment = n/s cascade → c fully restored (best >= top sub-stage + all milestones re-latched);',
+  )
+  console.log(
+    '  duration includes interleaved work (f restores, n climbs, idle check-ins) — see CReclimbSegment.',
+  )
+
+  console.log('\n  -- Baseline curves (the felt re-climb tax today) --')
+  printReclimbCurve('Competent (base)', competentRun.cReclimbSegments)
+  printReclimbCurve('Realistic (base)', realisticRun.cReclimbSegments)
+  const realisticReclimbCount = realisticRun.cReclimbSegments.length
+  console.log(
+    `\n  REALISTIC RE-CLIMB COUNT: ${realisticReclimbCount} felt re-climb segments in Act I ` +
+      `(spanning ${realisticRun.cReclimbSegments.reduce((sum, s) => sum + s.cascadesSpanned, 0)} cascades).`,
+  )
+  console.log(
+    realisticReclimbCount < FELT_CURVE_MIN_SAMPLES
+      ? `  SIGNAL (pre-named fallback): fewer than ${FELT_CURVE_MIN_SAMPLES} samples — too few re-climbs for an ` +
+          'acceleration curve to be FELT in Act I; the mechanic would need Act II to extend the curve.'
+      : `  Curve sample count OK (>= ${FELT_CURVE_MIN_SAMPLES}): enough re-climbs for an acceleration curve to be felt in Act I.`,
+  )
+
+  console.log('\n  -- ‡ milestones-only keep (the flat-discount prediction test) --')
+  printReclimbCurve('Competent‡', competentPartialKeepRun.cReclimbSegments)
+  printReclimbCurve('Realistic‡', realisticPartialKeepRun.cReclimbSegments)
+  const competentFlatCheck = flatDiscountCheck(
+    'Competent',
+    competentRun.cReclimbSegments,
+    competentPartialKeepRun.cReclimbSegments,
+  )
+  const realisticFlatCheck = flatDiscountCheck(
+    'Realistic',
+    realisticRun.cReclimbSegments,
+    realisticPartialKeepRun.cReclimbSegments,
+  )
+  console.log(competentFlatCheck.line)
+  console.log(realisticFlatCheck.line)
+  // The single verdict line Wes asked for. Carried by Competent (the clean
+  // actor — Realistic's check-in grid can shuffle its cascade merging).
+  const flatVerdictText =
+    competentFlatCheck.flat === null
+      ? 'INCONCLUSIVE on strict per-k alignment — judge from the first/last ratios above'
+      : competentFlatCheck.flat
+        ? 'HELD — every re-climb discounted near-identically; a milestones-only keep produces NO acceleration curve (the real mechanic needs an explicit compounding term, variant 3)'
+        : 'REFUTED — the ‡ discount varies across k; a milestones-only keep already bends the curve'
+  console.log(`  FLAT-DISCOUNT PREDICTION (‡): ${flatVerdictText}.`)
+
+  // ---- "The core remembers" sweep (quiet runs; r=1.0 IS the base run) -------
+  console.log(`\n  -- "The core remembers" sweep: re-climb k clock ×r^(k−1), r ∈ {${PARTIAL_KEEP_SWEEP_R.join(', ')}} ⟨tune⟩ --`)
+  console.log('  (r=1.0 is definitionally the base run — not re-run. Full 3-point sweep ran; nothing dropped.)')
+  const remembersRuns: { profile: string; r: number; run: SimState; baseSeconds: number }[] = []
+  for (const remembersRate of PARTIAL_KEEP_SWEEP_R) {
+    remembersRuns.push({
+      profile: 'Competent',
+      r: remembersRate,
+      run: runProfileQuiet(spineRunner({ ...COMPETENT_CONFIG, counterfactualCoreRemembers: remembersRate })),
+      baseSeconds: competentRun.simSeconds,
+    })
+    remembersRuns.push({
+      profile: 'Realistic',
+      r: remembersRate,
+      run: runProfileQuiet(realisticRunner({ ...REALISTIC_CONFIG, counterfactualCoreRemembers: remembersRate })),
+      baseSeconds: realisticRun.simSeconds,
+    })
+  }
+  for (const { profile, r, run } of remembersRuns) {
+    printReclimbCurve(`${profile} r=${r} (${(run.simSeconds / 3600).toFixed(2)}h total)`, run.cReclimbSegments)
+  }
+
+  // ---- Summary: profile × variant (totals + churn share + curve ratio) ------
+  // Same shape as the C-CHURN DECOMPOSITION table above, extended with the
+  // curve columns Wes asked for (re-climb count + first-vs-last ratio).
+  const probeSummaryRow = (
+    profile: string,
+    variant: string,
+    baseSeconds: number,
+    run: SimState,
+  ): Record<string, string | number> => ({
+    profile,
+    variant,
+    baseHours: (baseSeconds / 3600).toFixed(2),
+    withVariant: (run.simSeconds / 3600).toFixed(2),
+    taxVsBaseH: ((baseSeconds - run.simSeconds) / 3600).toFixed(2),
+    taxShare: `${(((baseSeconds - run.simSeconds) / baseSeconds) * 100).toFixed(1)}%`,
+    reclimbs: run.cReclimbSegments.length,
+    firstVsLast: firstOverLastText(run.cReclimbSegments),
+  })
+  console.log('\n  -- Summary (taxVsBase = base − variant; firstVsLast > 1× = re-climbs accelerate) --')
+  console.table([
+    probeSummaryRow('Competent', 'base (r=1.0)', competentRun.simSeconds, competentRun),
+    probeSummaryRow('Competent', '‡ milestones', competentRun.simSeconds, competentPartialKeepRun),
+    ...remembersRuns
+      .filter((row) => row.profile === 'Competent')
+      .map((row) => probeSummaryRow('Competent', `r=${row.r}`, row.baseSeconds, row.run)),
+    probeSummaryRow('Competent', '† full keep', competentRun.simSeconds, competentCKeepRun),
+    probeSummaryRow('Realistic', 'base (r=1.0)', realisticRun.simSeconds, realisticRun),
+    probeSummaryRow('Realistic', '‡ milestones', realisticRun.simSeconds, realisticPartialKeepRun),
+    ...remembersRuns
+      .filter((row) => row.profile === 'Realistic')
+      .map((row) => probeSummaryRow('Realistic', `r=${row.r}`, row.baseSeconds, row.run)),
+    probeSummaryRow('Realistic', '† full keep', realisticRun.simSeconds, realisticCKeepRun),
+  ])
+  console.log(
+    '  († is a reference endpoint only: it also keeps best — 0 re-climbs by construction — so it is',
+  )
+  console.log('  NOT the r→0 limit of the remembers sweep. COUNTERFACTUAL probes throughout; no game rule exists.)')
+
+  // ---- PINNED BANDS (Gate-D: calibration reviewed, signed off by Wes 2026-07-02) ----
+  // Three bands, three jobs. These are the ONLY hard pacing pins in the sim;
+  // they move only with a deliberate, signed-off retune (update the constants
+  // in the same commit as the data change that moves them — see ledger #13).
+  // NOTE: slice 9's keep-rule work ("the core remembers") is EXPECTED to move
+  // the Competent floor (probe brackets it at ~6.6–10.3h) — that update is the
+  // deliberate kind, re-pinned when the real rule lands.
+  const COMPETENT_FLOOR_PINNED_SECONDS = 74041 // pinned at 1s resolution (the underlying analytic clock is fractional but deterministic)
+  const REALISTIC_BAND_MIN_HOURS = 48.5 // jitter-sweep min (0.8× cadence), rounded out
+  const REALISTIC_BAND_MAX_HOURS = 62.4 // jitter-sweep max (1.2× cadence), rounded out
+  const CLUSTER_RATIO_PINNED_MAX = 1.5 // observed 1.418 raw — focused builds must stay clustered
+  console.log('\n=== PINNED BANDS (Gate-D: signed off 2026-07-02) ===')
+  if (Math.round(competentRun.simSeconds) === COMPETENT_FLOOR_PINNED_SECONDS) {
+    console.log(`PASS: Competent regression floor — ${COMPETENT_FLOOR_PINNED_SECONDS}s (${competentHours.toFixed(2)}h)`)
+  } else {
+    console.error(
+      `FAIL: Competent regression floor moved — ${Math.round(competentRun.simSeconds)}s vs pinned ` +
+        `${COMPETENT_FLOOR_PINNED_SECONDS}s. Either an unintended regression or an unpinned retune: ` +
+        'no game-data change ships without updating this pin in the same signed-off commit.',
+    )
+  }
+  const realisticSweepInBand =
+    sweepMin >= REALISTIC_BAND_MIN_HOURS - 0.1 && sweepMax <= REALISTIC_BAND_MAX_HOURS + 0.1
+  if (realisticHours >= REALISTIC_BAND_MIN_HOURS && realisticHours <= REALISTIC_BAND_MAX_HOURS && realisticSweepInBand) {
+    console.log(
+      `PASS: Realistic experience band — ${realisticHours.toFixed(2)}h within [${REALISTIC_BAND_MIN_HOURS}h … ` +
+        `${REALISTIC_BAND_MAX_HOURS}h] AT 24–36min late-game check-in cadence (the band is cadence-shaped: ` +
+        'the banking knob is dead at current mechanics and wakes with bankable events — ledger #13).',
+    )
+    console.log(
+      '      (Band WIDTH is a feature, not tolerance: it is the spread between a twice-a-day checker ' +
+        'and an every-few-hours checker, both finishing.)',
+    )
+  } else {
+    console.error(
+      `FAIL: Realistic experience band — headline ${realisticHours.toFixed(2)}h / sweep ` +
+        `[${sweepMin.toFixed(2)}h … ${sweepMax.toFixed(2)}h] vs pinned [${REALISTIC_BAND_MIN_HOURS}h … ` +
+        `${REALISTIC_BAND_MAX_HOURS}h] at 24–36min cadence. If a mechanic now interacts with banking ` +
+        'discipline, the cadence assumption changed — re-derive the band, do not widen the pin silently.',
+    )
+  }
+  if (clusterRatio <= CLUSTER_RATIO_PINNED_MAX) {
+    console.log(
+      `PASS: build-diversity cluster — ratio ${clusterRatio.toFixed(3)} <= ${CLUSTER_RATIO_PINNED_MAX} ` +
+        '(focused grammars stay viable relative to each other).',
+    )
+  } else {
+    console.error(
+      `FAIL: build-diversity cluster — ratio ${clusterRatio.toFixed(3)} > ${CLUSTER_RATIO_PINNED_MAX}. ` +
+        'A focused grammar fell out of the cluster: attribute before retuning (counterfactual probe first, ' +
+        'and check the tortoise rule — trailing AND owning nothing distinct = under-tuned; ledger #1).',
+    )
+  }
 }
 
 // Executed via `npm run sim` (tsx src/sim/pacing.ts). Nothing else imports
