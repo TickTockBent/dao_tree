@@ -73,6 +73,16 @@ describe('meets', () => {
     expect(meets({ qi: 50 }, s)).toBe(true)
     expect(meets({ qi: 51 }, s)).toBe(false)
   })
+  it('temperTier clause is reached-or-above, never equality (the 0.3.0 forge soft-lock)', () => {
+    // A cultivator at Bones has passed Tendons: the tendon gate must hold.
+    expect(meets({ temperTier: 'tendon' }, { ...baseState, temperTier: 'bone' })).toBe(true)
+    // Exactly at the required tier also holds.
+    expect(meets({ temperTier: 'tendon' }, { ...baseState, temperTier: 'tendon' })).toBe(true)
+    // Below the required tier does not.
+    expect(meets({ temperTier: 'tendon' }, { ...baseState, temperTier: 'flesh' })).toBe(false)
+    // Untempered (null) never passes.
+    expect(meets({ temperTier: 'skin' }, baseState)).toBe(false)
+  })
   it('realm clause with named label checks best >= label threshold', () => {
     // 6th Level at:90. best=100 → reached 6th Level (and beyond).
     const s = { ...baseState, realmBest: { ...baseState.realmBest, q: new Decimal(100) } }

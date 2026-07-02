@@ -3,7 +3,44 @@
 All notable changes to **Dao Tree**. Versions track the itch.io releases;
 **0.2** was the first public release, so earlier development is folded into it.
 
-## 0.2.2 — unreleased
+## 0.4.0 — 2026-07-02 — realms beyond, the cauldron, and the heart's price
+
+### Fixed
+- **Over-tempering can no longer lock you out of the forge.** Temper-tier
+  requirements (like Core Formation's "Tendons") were checked as *exactly at*
+  that tier, so tempering to Bones before reaching Foundation's Great Circle
+  made the forge permanently unreachable. Tier requirements now mean
+  *reached-or-above*, the way a body that only ever hardens deserves.
+
+### Added
+- **Secret Realms ("Realms Beyond").** Once your core is forged, hidden pocket
+  worlds reveal themselves — three sites on a rotating cadence, each with its own
+  rule: the Verdant Hollow feeds on your Qi flow, the Inverted Spirit Land answers
+  only to Insight, and the Shattered Star Vault yields to nothing but time (and
+  hides a Dao Glimpse for its first conqueror). Expeditions are timed runs; what
+  you carry out — spirit herbs, essence crystals, beast cores, surges of Insight —
+  is permanently yours. Entirely optional: an accelerant, never a requirement.
+- **The Alchemy profession.** The Act I profession slot opens with your core
+  (Artifice and Formations stay sealed for later acts). The cauldron turns realm
+  materials into three pills: a Qi-Gathering Pill (double gathering, ten minutes),
+  the Pill of Still Clarity (your next Nascent Soul or Soul Formation breakthrough
+  lands half again as hard), and the Heaven-Warding Pill (carried into a
+  tribulation, it dissolves into your preparedness pool).
+- **Heart Demons.** Rushing now has a price that outlives the forge: weak-graded
+  Foundation breakthroughs, forceful or reckless forge pushes, and bloody
+  tribulation outcomes all feed a corruption that orthodox practice only slowly
+  bleeds. Cross a threshold and a Demon Trial takes hold — an involuntary stance
+  that debuffs your cultivation until you see its objective through. Trials cannot
+  be failed, only endured; each one cleared hardens into a permanent Dao Heart.
+- **New guidance and journal beats** for all three systems, including the demon's
+  own voice while a trial holds you.
+
+## 0.3.0 — 2026-07-01 — the engine rebuilt
+
+The whole game was ported off The Modding Tree onto a purpose-built engine
+(Vue 3 + TypeScript + Pinia): typed data tables, a real test suite, a headless
+pacing simulation, and honest save handling. Everything below (previously staged
+as 0.2.2) shipped inside it.
 
 ### Fixed
 - **Forge fuel is labeled correctly.** The forge push options showed their fuel cost

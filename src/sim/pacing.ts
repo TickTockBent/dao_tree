@@ -20,8 +20,12 @@ import { usePipelinesStore } from '@/stores/pipelines'
 import { useSecretRealmStore } from '@/stores/secretRealm'
 import { useAlchemyStore } from '@/stores/alchemy'
 import { useHeartDemonsStore } from '@/stores/heartDemons'
+import { useDaoStore } from '@/stores/dao'
+import { useSectStore } from '@/stores/sect'
 import { findRealm } from '@/data/realms'
 import { SETPIECE_DATA } from '@/data/setpieces'
+import { LATTICE_DATA } from '@/data/lattice'
+import { TECHNIQUE_DATA } from '@/data/techniques'
 
 // ---- Pinned budgets (from the old pacing sim, pass-3 tune) ------------------
 // Pinned budgets from the old pacing sim (reference targets for future parity pins).
@@ -47,9 +51,20 @@ export const PACING_BUDGETS = {
 
 // ---- Sim state --------------------------------------------------------------
 
+/** First-crossing timestamps (sim seconds) for the report table. */
+interface ProfileMarks {
+  fFirst?: number
+  forge?: number
+  nFirst?: number
+  nPerfected?: number
+  sFirst?: number
+  sGreatCircle?: number
+}
+
 interface SimState {
   simSeconds: number
   maxIterations: number
+  marks: ProfileMarks
 }
 
 /**
@@ -96,14 +111,38 @@ function advanceToQi(target: Decimal, state: SimState): number {
   return dt
 }
 
+/**
+ * Latch first-crossing marks for the report table. PURE READS — safe to call
+ * from the shared helpers without perturbing either profile's behavior.
+ * Realm bests only move at prestiges and the core grade at the forge, so
+ * checking at prestige boundaries captures every crossing.
+ */
+function recordMarks(state: SimState): void {
+  const realm = useRealmStore()
+  const body = useBodyStore()
+  const marks = state.marks
+  const now = state.simSeconds
+  if (marks.fFirst === undefined && realm.realmBest('f').gte(1)) marks.fFirst = now
+  if (marks.forge === undefined && body.coreGrade >= 0) marks.forge = now
+  if (marks.nFirst === undefined && realm.realmBest('n').gte(1)) marks.nFirst = now
+  if (marks.nPerfected === undefined && realm.realmBest('n').gte(N_PERFECTED_AT)) marks.nPerfected = now
+  if (marks.sFirst === undefined && realm.realmBest('s').gte(1)) marks.sFirst = now
+  if (marks.sGreatCircle === undefined && realm.realmBest('s').gte(S_GREAT_CIRCLE_AT)) marks.sGreatCircle = now
+}
+
 /** Prestige a realm, advancing Qi to the threshold first. */
 function prestigeRealm(realmId: 'q' | 'f' | 'c' | 'n' | 's', state: SimState): void {
   const game = useGameStore()
   const realm = useRealmStore()
   const r = findRealm(realmId)
+  // Mark check at entry catches changes made BETWEEN prestiges (the diligent
+  // forge fires right before a c prestige — this stamps it at forge time, not
+  // after the first c bank). Read-only; diligent behavior is untouched.
+  recordMarks(state)
   advanceToQi(new Decimal(r.reqBase), state)
   game.points = new Decimal(r.reqBase)
   realm.prestige(realmId)
+  recordMarks(state)
 }
 
 /**
@@ -187,11 +226,411 @@ function runDiligent(state: SimState): void {
   prestigeUntil('s', () => realm.realmBest('s').toNumber() >= 320, state)
 }
 
+// ---- Competent profile (choice-viability run) --------------------------------
+//
+// Diligent (above) is deliberately spine-only — it doubles as the §6.6
+// zero-touch proof and must stay untouched. Competent models a player who
+// engages the horizontal systems and — THE KEY BEHAVIOR — re-climbs the lower
+// realms after every n/s prestige cascade wipes them, so the big banks always
+// run with the f/c/n sub-stage multipliers restored. Everything in this
+// section is SIM POLICY (player behavior), never game data: if the run lands
+// off budget that is a finding to report, not a license to retune src/data/**.
+//
+// NOT modeled, by design:
+// - The First Tribulation set-piece: the run STOPS at s Great Circle (320),
+//   the tribulation trigger — the smoke tests cover the set-piece itself.
+// - Extraordinary meridians (brief scope is the 12 primary; their ×1.25-each
+//   track is reported as known additional headroom, not engaged).
+// - Secret realms, alchemy, heart-demon trials, gate achievements: their
+//   stores are never engaged and never ticked. Not ticking heartDemons is
+//   FAITHFUL here, not a fidelity gap: its passive bleed only DECAYS
+//   corruption (never accrues it), and both profiles avoid every corruption
+//   source (Steady forges, strong-band breakthroughs) — so corruption stays
+//   0 either way, which the §6.6 zero-touch assertion below pins.
+
+// Policy constants (player-behavior knobs, in this file's policy-constant style).
+const COMPETENT_PAYBACK_SECONDS = 180 // buy a body upgrade when cost <= ~3 min of current Qi/sec
+const COMPETENT_BANKING_QI_THRESHOLD = 1e6 // waits at/above this are "banking" — Breathing Trance OFF
+const COMPETENT_MAX_EVENT_STEP_SECONDS = 600 // re-sample rates + tick systems at least this often
+const COMPETENT_MERIDIAN_TARGET = 12
+// HISTORY: this policy originally capped temper at 14 pre-core because meets()'
+// temperTier clause was an EQUALITY check — tempering past Tendons before Core
+// Formation latched left c.unlock permanently unmeetable (the 0.3.0 forge
+// soft-lock, found BY this sim). The clause is now reached-or-above (engine
+// fix in meets.ts), so the cap is gone and the policy tempers straight to
+// target — which doubles as the regression proof that over-tempering no
+// longer locks the forge.
+const COMPETENT_TEMPER_TARGET = 20 // Marrow
+const COMPETENT_SEED_TARGET = 8 // Dao Seeds held (lattice tier-2 nodes)
+const COMPETENT_NASCENT_RECLIMB_PRE_KEEP = 30 // Peak NS — n restoration depth before the s keep rule lands
+const COMPETENT_SECT_ARCHETYPE = 'azureSword' // the first archetype in SECT_DATA
+const COMPETENT_ASPECT_PREFERENCE = ['fireSoul', 'woodSoul', 'earthSoul', 'metalSoul', 'waterSoul'] as const
+
+// Data-derived thresholds (read from src/data/realms.ts, never retuned here).
+const Q_SIXTH_LEVEL_AT = findRealm('q').substages.find((s) => s.label === '6th Level')!.at
+const Q_TOP_SUBSTAGE_AT = findRealm('q').substages[findRealm('q').substages.length - 1]!.at
+const F_GREAT_CIRCLE_AT = findRealm('f').substages.find((s) => s.label === 'Great Circle')!.at
+const C_TOP_SUBSTAGE_AT = findRealm('c').substages[findRealm('c').substages.length - 1]!.at
+const N_APEX_AT = findRealm('n').substages.find((s) => s.label === 'Apex')!.at
+const N_PERFECTED_AT = findRealm('n').substages.find((s) => s.label === 'Perfected')!.at
+const S_GREAT_CIRCLE_AT = findRealm('s').substages.find(
+  (s) => s.label === 'Great Circle of Soul Formation',
+)!.at
+// KEEP_RULES 'soulCarriesTheClimb' is granted by s milestone 2 ('Late Soul
+// Formation', at 16): once earned, s prestiges keep n.best + n.milestones.
+const S_KEEP_MILESTONE_INDEX = findRealm('s').substages.findIndex(
+  (s) => s.label === 'Late Soul Formation',
+)
+
+/**
+ * Tick the system stores across a competent wait, mirroring game.tick's
+ * forward pass (alphabetical updater order). This is what advanceToQi
+ * deliberately does NOT do — the diligent zero-touch proof depends on the
+ * horizontal systems staying starved there. Contribution, Insight, and forge
+ * refinement all accrue through here.
+ */
+function tickSystems(dt: number): void {
+  useBodyStore().update(dt)
+  useDaoStore().update(dt)
+  useForgeStore().update(dt)
+  useRealmStore().update(dt)
+  useSectStore().update(dt)
+}
+
+/**
+ * Competent advance: event-stepped like advanceToQi, but re-samples Qi/sec in
+ * bounded chunks and ticks the system stores across the wait. Chunking keeps
+ * the analytic step honest when a rate-changing latch fires mid-wait (sect
+ * stipend, forge refinement completing) — any residual error is conservative
+ * (overestimates time).
+ */
+function advanceToQiTicking(target: Decimal, state: SimState): void {
+  const game = useGameStore()
+  const pipelines = usePipelinesStore()
+  let guard = 0
+  while (game.points.lt(target)) {
+    const qiPerSec = pipelines.qiPerSecond
+    if (qiPerSec.lte(0)) return
+    const remainingSeconds = target.sub(game.points).div(qiPerSec).toNumber()
+    const dt = Math.min(remainingSeconds, COMPETENT_MAX_EVENT_STEP_SECONDS)
+    if (dt >= remainingSeconds) {
+      game.points = target
+    } else {
+      game.points = game.points.add(qiPerSec.times(dt))
+    }
+    game.timePlayed = game.timePlayed + dt
+    state.simSeconds += dt
+    tickSystems(dt)
+    if (++guard > state.maxIterations) {
+      throw new Error('advanceToQiTicking exceeded iteration cap — Qi/sec appears stalled')
+    }
+  }
+}
+
+/** Set the Breathing Trance stance (no-op before the lattice reveals). */
+function setBreathingTrance(active: boolean): void {
+  const dao = useDaoStore()
+  if (!dao.isRevealed()) return
+  const currentlyActive = dao.activeStance === 'breathingTrance'
+  if (currentlyActive !== active) dao.toggleStance('breathingTrance')
+}
+
+/**
+ * Advance with the stance policy: Breathing Trance ON for small targets
+ * (harvest Insight at ×2 for ×0.7 Qi), OFF while banking a big pile — the
+ * §6.1 opportunity cost, played deliberately.
+ */
+function advanceBanked(target: Decimal, state: SimState): void {
+  setBreathingTrance(target.toNumber() < COMPETENT_BANKING_QI_THRESHOLD)
+  advanceToQiTicking(target, state)
+}
+
+/**
+ * Qi needed for a single prestige to land `gain` points — the nextAt()
+ * inversion generalized to an arbitrary gain (same formula: graded realms
+ * multiply by the stored Foundation band's fMult; the alchemy aid factor is
+ * included for parity though this policy never holds a charge).
+ */
+function qiForGain(realmId: 'q' | 'f' | 'c' | 'n' | 's', gain: Decimal): Decimal {
+  const r = findRealm(realmId)
+  let gainMult = new Decimal(1)
+  if (r.graded) {
+    const body = useBodyStore()
+    const band = body.foundationGrade >= 0 ? r.grade!.bands[body.foundationGrade] : undefined
+    if (band) gainMult = gainMult.times(band.fMult)
+  }
+  gainMult = gainMult.times(useAlchemyStore().breakthroughGainMult(realmId))
+  return gain.div(gainMult).root(r.gainExp).times(r.reqBase).max(r.reqBase).ceil()
+}
+
+/**
+ * Competent prestige at the realm's reqBase — the minimum-gain prestige,
+ * time-optimal for sub-linear gainExp (gain/time ∝ points^(gainExp−1) falls
+ * with banking). Engages the horizontal systems at the decision point.
+ */
+function prestigeRealmTicking(realmId: 'q' | 'f' | 'c' | 'n' | 's', state: SimState): void {
+  const game = useGameStore()
+  const realm = useRealmStore()
+  const r = findRealm(realmId)
+  advanceBanked(new Decimal(r.reqBase), state)
+  if (game.points.lt(r.reqBase)) game.points = new Decimal(r.reqBase)
+  realm.prestige(realmId)
+  engageHorizontals(state)
+}
+
+/**
+ * Re-climb a wiped realm to a target best with BANKED prestiges: one big
+ * breakthrough instead of `target` minimum ones. Costs somewhat more Qi than
+ * min-prestiging (gain is sub-linear), but re-climbs run at restored rates
+ * where that Qi is cheap, and it keeps the event count bounded. These are
+ * real realm.prestige calls — cascades, keep rules, and milestones all fire
+ * authentically; the loop tops up if flooring undershoots.
+ */
+function climbRealmChunked(
+  realmId: 'q' | 'f' | 'c' | 'n' | 's',
+  targetBest: number,
+  state: SimState,
+): void {
+  const realm = useRealmStore()
+  let iterations = 0
+  while (realm.realmBest(realmId).toNumber() < targetBest) {
+    const bankedPoints = new Decimal(realm.stateOf(realmId).points)
+    const gainNeeded = new Decimal(targetBest).sub(bankedPoints).max(1)
+    advanceBanked(qiForGain(realmId, gainNeeded), state)
+    realm.prestige(realmId)
+    engageHorizontals(state)
+    if (++iterations > state.maxIterations) {
+      throw new Error(`climbRealmChunked('${realmId}') exceeded ${state.maxIterations} iterations`)
+    }
+  }
+}
+
+/**
+ * THE KEY BEHAVIOR — rate restoration. After an n/s prestige wipes the lower
+ * spine, re-climb c to its top sub-stage and f to Great Circle BEFORE banking
+ * the next big pile: their sub-stage qiMults multiply the banking rate.
+ * Order matters: c prestiges cascade-wipe f (no keep rule targets f on a c
+ * reset), so c climbs first and f re-chunks last. This also means the
+ * foundationSurvivesNascentSoul keep rule, once it emerges, is immediately
+ * re-wiped by the per-cycle c climbs — emergent, observed, left as-is.
+ * q has no keep rule below n/s either; its bigger re-climb is done separately,
+ * only ahead of s-scale banks (see runCompetent).
+ */
+function restoreFoundationAndCore(state: SimState): void {
+  const realm = useRealmStore()
+  let iterations = 0
+  while (realm.realmBest('c').toNumber() < C_TOP_SUBSTAGE_AT) {
+    prestigeRealmTicking('c', state)
+    if (++iterations > state.maxIterations) {
+      throw new Error('restoreFoundationAndCore exceeded iteration cap on the c climb')
+    }
+  }
+  climbRealmChunked('f', F_GREAT_CIRCLE_AT, state)
+}
+
+/**
+ * Climb Nascent Soul stepwise (minimum-gain prestiges), restoring f/c after
+ * EVERY n breakthrough — each n prestige cascade-wipes them (f until the
+ * Late-NS keep rule latches; c always, nothing ever keeps c below n).
+ */
+function climbNascentWithRestoration(targetBest: number, state: SimState): void {
+  const realm = useRealmStore()
+  let iterations = 0
+  while (realm.realmBest('n').toNumber() < targetBest) {
+    prestigeRealmTicking('n', state)
+    restoreFoundationAndCore(state)
+    if (++iterations > state.maxIterations) {
+      throw new Error('climbNascentWithRestoration exceeded iteration cap')
+    }
+  }
+}
+
+/** Payback-aware body buys: a track is bought while cost <= ~3 min of Qi/sec. */
+function buyBodyBuyablesPaybackAware(state: SimState): void {
+  const body = useBodyStore()
+  const realm = useRealmStore()
+  const pipelines = usePipelinesStore()
+  void realm
+  const buyTargets: { key: 'primaryMeridian' | 'temper'; cap: number }[] = [
+    { key: 'primaryMeridian', cap: COMPETENT_MERIDIAN_TARGET },
+    { key: 'temper', cap: COMPETENT_TEMPER_TARGET },
+  ]
+  for (const buyTarget of buyTargets) {
+    while (body.buyableAmount(buyTarget.key) < buyTarget.cap) {
+      const cost = body.buyableCost(buyTarget.key, body.buyableAmount(buyTarget.key))
+      const paybackBudget = pipelines.qiPerSecond.times(COMPETENT_PAYBACK_SECONDS)
+      if (cost.gt(paybackBudget)) break
+      advanceToQiTicking(cost, state)
+      if (!body.buyBuyable(buyTarget.key)) break
+    }
+  }
+}
+
+/** Buy lattice node tiers cheapest-first from banked Insight, toward 8 held Seeds. */
+function buyLatticeNodesCheapestFirst(): void {
+  const dao = useDaoStore()
+  if (!dao.revealed) return
+  while (dao.heldDaoSeedCount() < COMPETENT_SEED_TARGET) {
+    let cheapestNodeKey: (typeof LATTICE_DATA.nodes)[number]['key'] | null = null
+    let cheapestCost: Decimal | null = null
+    for (const node of LATTICE_DATA.nodes) {
+      if (!dao.canAffordNode(node.key)) continue
+      const cost = dao.nodeCost(node.key)
+      if (cheapestCost === null || cost.lt(cheapestCost)) {
+        cheapestNodeKey = node.key
+        cheapestCost = cost
+      }
+    }
+    if (cheapestNodeKey === null) return // nothing affordable — Insight accrues during waits
+    if (!dao.buyNodeTier(cheapestNodeKey)) return
+  }
+}
+
+/** Buy techniques cheapest-first as banked Contribution allows. */
+function buyTechniquesCheapestFirst(): void {
+  const sect = useSectStore()
+  if (!sect.joined) return
+  for (;;) {
+    let cheapestIndex = -1
+    let cheapestCost: Decimal | null = null
+    for (let index = 0; index < TECHNIQUE_DATA.length; index++) {
+      if (!sect.canAffordTechnique(index)) continue
+      const cost = sect.techniqueCost(index)
+      if (cheapestCost === null || cost.lt(cheapestCost)) {
+        cheapestIndex = index
+        cheapestCost = cost
+      }
+    }
+    if (cheapestIndex < 0) return
+    if (!sect.buyTechnique(cheapestIndex)) return
+  }
+}
+
+/**
+ * Try to bind an ELEMENT soul aspect (qi-leaning elements preferred) once
+ * Nascent Soul exists. Each aspect's daoElementTier gate is live-verified by
+ * setSoulAspect itself. Formless is deliberately NOT taken here — it is the
+ * fallback of last resort, bound just before the first s prestige (see
+ * runCompetent) so a slightly-late Seed doesn't lock the run out of ×1.5.
+ */
+function tryPickElementAspect(): void {
+  const body = useBodyStore()
+  const realm = useRealmStore()
+  if (body.soulAspectChosen) return
+  if (!realm.stateOf('n').unlocked) return
+  const aspects = findRealm('n').soulAspect!.aspects
+  for (const preferredKey of COMPETENT_ASPECT_PREFERENCE) {
+    const aspect = aspects.find((a) => a.key === preferredKey)
+    if (aspect && body.setSoulAspect(aspect.key, aspect.requires)) return
+  }
+}
+
+/** All horizontal-system engagement at a decision point (idempotent, cheap). */
+function engageHorizontals(state: SimState): void {
+  const sect = useSectStore()
+  if (!sect.joined && sect.isRevealGateMet()) sect.joinSect(COMPETENT_SECT_ARCHETYPE)
+  buyBodyBuyablesPaybackAware(state)
+  buyLatticeNodesCheapestFirst()
+  buyTechniquesCheapestFirst()
+  tryPickElementAspect()
+  recordMarks(state)
+}
+
+/**
+ * Competent policy: everything Diligent does, plus horizontal engagement and
+ * rate restoration. Stops at s Great Circle (320) — the tribulation trigger;
+ * the set-piece itself is smoke-test territory, not modeled here.
+ */
+function runCompetent(state: SimState): void {
+  const body = useBodyStore()
+  const realm = useRealmStore()
+  const forge = useForgeStore()
+
+  // Phase 1: bootstrap Qi Condensation to 6th Level. The sect joins at reveal
+  // (q 2nd Level) and meridians/temper accrete payback-aware via the
+  // engageHorizontals call inside every prestige.
+  engageHorizontals(state)
+  while (realm.realmBest('q').toNumber() < Q_SIXTH_LEVEL_AT) {
+    prestigeRealmTicking('q', state)
+  }
+
+  // Phase 2: Heaven-grade prep, then Foundation. Force meridians to 12 and
+  // temper to the pre-core cap BEFORE the first graded f prestige:
+  // gradeScore = 0.4×(12/12) + 0.4×(14/20) + 0.2×(6/6) = 0.88 >= 0.85 —
+  // the first breakthrough stores a Heaven-grade Foundation (fMult 3.5,
+  // core ceiling Perfect). The payback gate is deliberately bypassed here;
+  // this is pre-breakthrough prep, the same shape as Diligent's phase 2.
+  while (body.primaryMeridians < COMPETENT_MERIDIAN_TARGET) {
+    advanceToQiTicking(body.buyableCost('primaryMeridian', body.primaryMeridians), state)
+    if (!body.buyBuyable('primaryMeridian')) break
+  }
+  while (body.temperLevel < COMPETENT_TEMPER_TARGET) {
+    advanceToQiTicking(body.buyableCost('temper', body.temperLevel), state)
+    if (!body.buyBuyable('temper')) break
+  }
+  // First f prestige at reqBase stores the grade (computed live, pre-cascade);
+  // the ×3.5 fMult then makes the chunked climb to Great Circle cheap. The
+  // chunk also latches Peak Foundation (milestone 3) BEFORE its own cascade,
+  // activating the qiInsightSurvivesFoundation keep rule in the same stroke.
+  prestigeRealmTicking('f', state)
+  climbRealmChunked('f', F_GREAT_CIRCLE_AT, state)
+
+  // Phase 3: the forge. f.points sits at Great Circle (45) >= max(forgeReq,
+  // Great Circle) here, and c's unlock is live-met (f Great Circle + Tendons).
+  const producedCoreGradeIndex = forge.performForge('steady')
+  if (producedCoreGradeIndex < 0) {
+    throw new Error('Competent forge failed — availability gate unmet (policy bug)')
+  }
+  // Refinement choice: warm to the Foundation ceiling. For a Heaven-grade
+  // Foundation that is Upper -> Perfect, one 100-unit bar at 1/sec — ~100s of
+  // warming, ticked through tickSystems during ordinary waits. Trivially
+  // cheap for a permanent ×8 (vs ×6) core mult, so the policy always warms.
+  forge.toggleWarming()
+  recordMarks(state)
+
+  // Phase 4: Core Formation to its top sub-stage. The first c prestige
+  // latches c.unlocked, lifting the temper cap (see the equality-gate note);
+  // the c climbs wipe f, so f re-chunks after, and temper tops out to Marrow.
+  while (realm.realmBest('c').toNumber() < C_TOP_SUBSTAGE_AT) {
+    prestigeRealmTicking('c', state)
+  }
+  climbRealmChunked('f', F_GREAT_CIRCLE_AT, state)
+  while (body.temperLevel < COMPETENT_TEMPER_TARGET) {
+    advanceToQiTicking(body.buyableCost('temper', body.temperLevel), state)
+    if (!body.buyBuyable('temper')) break
+  }
+
+  // Phases 5+6: the n/s climb with rate restoration. Every round: restore
+  // c+f (the previous s prestige wiped them), re-climb n (depth depends on
+  // whether the soulCarriesTheClimb keep rule has emerged), re-climb q last
+  // (nothing protects q from c/n prestiges, so it goes on top of a fully
+  // restored spine), then bank the s pile trance-off.
+  while (realm.realmBest('s').toNumber() < S_GREAT_CIRCLE_AT) {
+    restoreFoundationAndCore(state)
+    const nKeepRuleEarned = realm.hasMilestone('s', S_KEEP_MILESTONE_INDEX)
+    let nascentTarget = nKeepRuleEarned ? N_PERFECTED_AT : COMPETENT_NASCENT_RECLIMB_PRE_KEEP
+    // The FIRST s prestige needs n Apex live (s.unlock latches after it).
+    if (!realm.stateOf('s').unlocked) nascentTarget = Math.max(nascentTarget, N_APEX_AT)
+    climbNascentWithRestoration(nascentTarget, state)
+    climbRealmChunked('q', Q_TOP_SUBSTAGE_AT, state)
+    // Aspect fallback of last resort: if no element gate ever landed, take
+    // Formless now rather than entering Soul Formation aspectless.
+    if (!body.soulAspectChosen) {
+      tryPickElementAspect()
+      if (!body.soulAspectChosen) {
+        const formlessAspect = findRealm('n').soulAspect!.aspects.find((a) => a.key === 'formless')!
+        body.setSoulAspect(formlessAspect.key, formlessAspect.requires)
+      }
+    }
+    prestigeRealmTicking('s', state)
+  }
+}
+
 // ---- Main -------------------------------------------------------------------
 
-function runProfile(name: string, fn: (state: SimState) => void): void {
+function runProfile(name: string, fn: (state: SimState) => void): SimState {
   bootSim()
-  const state: SimState = { simSeconds: 0, maxIterations: 100000 }
+  const state: SimState = { simSeconds: 0, maxIterations: 100000, marks: {} }
   const start = Date.now()
   fn(state)
   const elapsed = Date.now() - start
@@ -211,13 +650,14 @@ function runProfile(name: string, fn: (state: SimState) => void): void {
   console.log(`Temper: ${body.temperLevel}`)
   console.log(`Core grade: ${body.coreGrade}`)
   console.log(`Soul aspect: ${body.soulAspect}`)
+  return state
 }
 
 export function runPacingSim(): void {
   console.log('=== Dao Tree Pacing Simulation (new engine) ===\n')
 
   // Run the diligent profile.
-  runProfile('Diligent', runDiligent)
+  const diligentRun = runProfile('Diligent', runDiligent)
 
   // Structural assertion: the diligent profile should reach Soul Formation.
   const realm = useRealmStore()
@@ -267,6 +707,75 @@ export function runPacingSim(): void {
   } else {
     console.log('PASS: diligent policy reached Soul Formation with zero heart-demon corruption')
   }
+
+  // ---- Competent profile run + choice-viability assertions -----------------
+  // (Runs AFTER the diligent §6.6 blocks above — bootSim swaps the active
+  // Pinia, so those must finish reading the diligent stores first.)
+  const competentRun = runProfile('Competent', runCompetent)
+  const competentRealm = useRealmStore()
+  const competentBody = useBodyStore()
+  const competentDao = useDaoStore()
+  const competentSect = useSectStore()
+  const competentCoreGradeLabel =
+    SETPIECE_DATA.forge.grades.find((g) => g.ceilingIndex === competentBody.coreGrade)?.label ??
+    'unforged'
+  console.log(`Seeds held: ${competentDao.heldDaoSeedCount()}`)
+  console.log(`Techniques owned: ${competentSect.techniques.length}`)
+  console.log(`Core grade label: ${competentCoreGradeLabel}`)
+
+  // Structural assertion: competent reaches the tribulation trigger.
+  if (competentRealm.realmBest('s').toNumber() < S_GREAT_CIRCLE_AT) {
+    console.error(
+      `\nFAIL: Competent profile did not reach s Great Circle ` +
+        `(s.best=${competentRealm.realmBest('s').toNumber()}, need ${S_GREAT_CIRCLE_AT})`,
+    )
+  } else {
+    console.log(`\nPASS: Competent profile reached s.best >= ${S_GREAT_CIRCLE_AT} (tribulation trigger)`)
+  }
+
+  // FIRST CHOICE-VIABILITY ASSERTION (project directive "keep all values and
+  // choices in range"): engaging the horizontal systems + rate restoration
+  // must be DECISIVELY worth it — competent under a quarter of diligent's
+  // time. A failure here is a FINDING about the engine/data balance, never a
+  // license to retune src/data/** from this file.
+  const diligentHours = diligentRun.simSeconds / 3600
+  const competentHours = competentRun.simSeconds / 3600
+  if (competentRun.simSeconds < diligentRun.simSeconds / 4) {
+    console.log(
+      `PASS: choice viability — competent ${competentHours.toFixed(1)}h < ` +
+        `diligent/4 (${(diligentHours / 4).toFixed(1)}h of ${diligentHours.toFixed(1)}h)`,
+    )
+  } else {
+    console.error(
+      `FAIL (FINDING — report, do not retune): choice viability broken. ` +
+        `Competent ${competentHours.toFixed(1)}h >= diligent/4 ` +
+        `(${(diligentHours / 4).toFixed(1)}h of ${diligentHours.toFixed(1)}h) — horizontal ` +
+        `engagement + rate restoration is not decisively worth it on current data.`,
+    )
+  }
+
+  // Budget reference (the pinned 120h tribulation-ready target).
+  const budgetHours = PACING_BUDGETS.diligent.toTribulation / 3600
+  console.log(
+    `Budget reference: competent ${competentHours.toFixed(1)}h vs ` +
+      `${budgetHours.toFixed(0)}h PACING_BUDGETS.diligent.toTribulation ` +
+      `(${((competentRun.simSeconds / PACING_BUDGETS.diligent.toTribulation) * 100).toFixed(0)}% of budget)`,
+  )
+
+  // Marks table (hours to each first crossing; '—' = never reached).
+  const hoursOrDash = (seconds: number | undefined): string =>
+    seconds === undefined ? '—' : (seconds / 3600).toFixed(2)
+  const markRow = (profileName: string, run: SimState): Record<string, string> => ({
+    profile: profileName,
+    totalHours: (run.simSeconds / 3600).toFixed(2),
+    fFirst: hoursOrDash(run.marks.fFirst),
+    forge: hoursOrDash(run.marks.forge),
+    nFirst: hoursOrDash(run.marks.nFirst),
+    nPerfected: hoursOrDash(run.marks.nPerfected),
+    sFirst: hoursOrDash(run.marks.sFirst),
+    s320: hoursOrDash(run.marks.sGreatCircle),
+  })
+  console.table([markRow('Diligent', diligentRun), markRow('Competent', competentRun)])
 }
 
 // Executed via `npm run sim` (tsx src/sim/pacing.ts). Nothing else imports

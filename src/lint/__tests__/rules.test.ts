@@ -34,7 +34,7 @@ import { AUTOMATION_DATA } from '@/data/automation'
 import { SECRET_REALM_DATA } from '@/data/secret-realm'
 import { ALCHEMY_DATA } from '@/data/alchemy'
 import { HEART_DEMON_DATA, findDemonTrial } from '@/data/heart-demons'
-import { meets } from '@/engine/meets'
+import { meets, TEMPER_TIER_ORDER } from '@/engine/meets'
 import type { GameState } from '@/engine/meets'
 import type { MaterialKey } from '@/engine/types'
 
@@ -95,6 +95,13 @@ describe('§9.2 no dead multipliers', () => {
     for (const tier of BODY_DATA.temperTiers) {
       expect(tier.qiBonus, `${tier.label} has no qiBonus`).toBeDefined()
     }
+  })
+
+  it('BODY_DATA temper tiers match the meets() ladder order (reached-or-above semantics)', () => {
+    // meets.ts keeps TEMPER_TIER_ORDER as pure vocabulary so the engine never
+    // imports data; this pin is what makes that safe — the data ladder and the
+    // clause ladder can never drift apart.
+    expect(BODY_DATA.temperTiers.map((t) => t.key)).toEqual([...TEMPER_TIER_ORDER])
   })
 
   it('every forge grade declares a globalMult', () => {

@@ -34,7 +34,14 @@ export interface ConditionClauses {
   meridians: number
   /** All 12 primary meridians opened. */
   primaryMeridiansAll: true
-  /** Temper tier reached (skin/flesh/tendon/bone/marrow). */
+  /**
+   * Temper tier REACHED-OR-ABOVE by ladder order (skin < flesh < tendon <
+   * bone < marrow). Reached-or-above, NOT equality: temper only rises, so an
+   * equality gate on a monotone stat soft-locks any player who climbs past
+   * the required tier before the gate latches (the 0.3.0 forge soft-lock —
+   * over-temper to Bones before f Great Circle and Core Formation could
+   * never unlock).
+   */
   temperTier: TemperTierKey
   /**
    * Realm reached. Second element is either a numeric `best` threshold or a
@@ -156,6 +163,20 @@ export interface GameState {
 
 // ---- Evaluation ------------------------------------------------------------
 
+/**
+ * The temper-tier ladder in ascending order. This is VOCABULARY order (the
+ * closed TemperTierKey union's intrinsic ordering), not tunable data — a lint
+ * test pins BODY_DATA.temperTiers to this exact sequence so the two can never
+ * drift. Kept here so meets() stays pure (no data-table import).
+ */
+export const TEMPER_TIER_ORDER: readonly TemperTierKey[] = [
+  'skin',
+  'flesh',
+  'tendon',
+  'bone',
+  'marrow',
+]
+
 /** True if a single clause holds against the state. */
 function clauseHolds<K extends keyof ConditionClauses>(
   key: K,
@@ -169,8 +190,15 @@ function clauseHolds<K extends keyof ConditionClauses>(
       return state.primaryMeridians >= (value as number)
     case 'primaryMeridiansAll':
       return state.primaryMeridiansAll
-    case 'temperTier':
-      return state.temperTier === value
+    case 'temperTier': {
+      // Reached-or-above by ladder order (see the ConditionClauses doc — an
+      // equality gate on the monotone temper stat was the 0.3.0 forge
+      // soft-lock).
+      if (state.temperTier === null) return false
+      const reached = TEMPER_TIER_ORDER.indexOf(state.temperTier)
+      const required = TEMPER_TIER_ORDER.indexOf(value as TemperTierKey)
+      return reached >= required
+    }
     case 'realm': {
       const [realmId, threshold] = value as [RealmId, number | string]
       const best = state.realmBest[realmId]
