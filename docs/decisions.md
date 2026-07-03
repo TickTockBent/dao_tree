@@ -306,3 +306,26 @@ sim evidence (rule 0.1); Act I bands must stay byte-identical (realm x is
 statically unreachable by sim actors). Side payoffs: builds Q2's
 spend-path hooks; gives future Act II actors an analytically tractable
 offering policy (§6).
+
+## D29 — Breathing Trance is not a trap; the sim policy was (Q10 closed)
+
+*2026-07-03, executes the Q10 probe ruling as pre-stated by Wes.* The
+attribution probe (⊕, observation-only, live sim): the base Lattice
+actor held the trance **77.6%** of its run — including after all Seeds
+were bought and during pure qi-banking, where the ×0.7 qi cost buys
+nothing. A smart policy (engage ONLY while insight is the binding
+constraint: a wanted node unaffordable; disengage while qi-banking) cut
+engagement to **22.9%** and closed **85.2%** of the inversion gap
+(threshold 70%): base 15.97h → smart 13.15h vs ⊘ ablation 12.66h.
+**Verdict: POLICY ERROR — the stance data is fine; no data change**
+(rule 0.1 satisfied by evidence; the D1 trap-fix precedent does not
+apply). Numbers are live post-keep-mechanic (the ledger's 28.71/21.59h
+were pre-migration; the inversion is same-signed either way).
+
+Two follow-ups deliberately NOT taken now: (a) smartening the pinned
+LatticeFocused actor's own trance policy would move the pinned cluster —
+that is a Gate-D re-pin, deferred to the next deliberate calibration
+pass; (b) the finding suggests a PLAYER-facing lesson (the trance
+punishes always-on use) — whether the game should teach it (a hint, a
+journal beat) is a content question for the narrative-spine pass, not a
+balance fix.

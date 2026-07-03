@@ -105,6 +105,24 @@ includes interleaved work/idle): a real r=0.7-style mechanic lands Competent
 1.284× (wide → pin a range). Banking column identical throughout — the dead
 knob finding.
 
+## The Q10 trance attribution probe (⊕, 2026-07-03)
+
+Closed Q10 → D29. Method: a smart-trance Lattice variant engaging
+Breathing Trance ONLY while insight is the binding constraint (a wanted
+node unaffordable; OFF while qi-banking). Live post-keep-mechanic
+numbers: base LatticeFocused 15.97h at **77.6% trance-engaged** →
+smart 13.15h at 22.9% → ⊘ ablation 12.66h. Gap closure **85.2%**
+(threshold 70%) → **POLICY ERROR**: the base heuristic held the trance
+through qi-banking and after all Seeds were bought (pure ×0.7 qi cost,
+no insight benefit). The stance data is fine; no data change. The ⊕
+probe run stays in the sim (observation-only, pure insertion); the
+pinned LatticeFocused policy is deliberately untouched (smartening it
+is a Gate-D cluster re-pin, deferred). Note the actor-roster hours in
+this file predate the keep-mechanic migration for the focused builds —
+the pinned instruments (Competent seconds, Realistic band, cluster
+ratio) are current; per-build hours re-record at the next calibration
+pass.
+
 ## The severing k-probe (decision input for Q9/D23, 2026-07-02)
 
 **Part 1 — live contribution (⊘ effect-ablation: the policy still acquires

@@ -189,6 +189,19 @@ interface SpineConfig {
    * (assertProbeFlagsExclusive). Observation-only; never asserted on.
    */
   counterfactualSeverEffect?: SeverableKey
+  /**
+   * Q10 TRANCE ATTRIBUTION PROBE (⊕, retirable) — POLICY VARIANT, not a
+   * counterfactual (nothing about the game is nullified; only the actor's
+   * stance-timing rule changes). When set, advanceBanked engages Breathing
+   * Trance ONLY while insight is the binding constraint (a still-wanted lattice
+   * node the actor cannot yet afford) instead of the base "small qi target"
+   * heuristic — so the trance harvests its ×2 Insight exactly when insight
+   * gates progress and stays off during pure qi-banking (its ×0.7 qi cost with
+   * no offsetting benefit). Requires useBreathingTrance. Only the Q10 probe run
+   * sets it; every pinned/base profile leaves it undefined, so their
+   * advanceBanked path is byte-identical. Observation-only; never asserted on.
+   */
+  smartTrancePolicy?: boolean
 }
 
 interface ProfileSummary {
@@ -281,6 +294,15 @@ interface SimState {
    * 'extraordinaryMeridians' runs only — body.extraordinaryMeridians stays 0).
    */
   severedExtraordinaryMeridiansBought?: number
+  /**
+   * Q10 TRANCE ATTRIBUTION PROBE (⊕, retirable): sim-seconds spent with
+   * Breathing Trance actually engaged (dao.activeStance === 'breathingTrance'),
+   * accumulated in advanceToQiTicking. A PURE observation counter — never read
+   * by any decision, never printed for base profiles — so accumulating it is
+   * output-invariant. The Q10 section reports it as a trance-engaged time share
+   * (this ÷ simSeconds) for the base vs smart-trance lattice policies.
+   */
+  tranceEngagedSeconds?: number
   /** End-state snapshot, captured before the next bootSim swaps the Pinia. */
   summary?: ProfileSummary
 }
@@ -564,6 +586,12 @@ function advanceToQiTicking(target: Decimal, state: SimState): void {
     }
     game.timePlayed = game.timePlayed + dt
     chargeSimClock(dt, state)
+    // Q10 TRANCE ATTRIBUTION PROBE (⊕, retirable): pure observation — tally the
+    // wall-time this wait ran with the trance actually engaged. A read + a
+    // write to a never-decision-read, never-base-printed field; output-invariant.
+    if (useDaoStore().activeStance === 'breathingTrance') {
+      state.tranceEngagedSeconds = (state.tranceEngagedSeconds ?? 0) + dt
+    }
     tickSystems(dt, state)
     if (++guard > state.maxIterations) {
       throw new Error('advanceToQiTicking exceeded iteration cap — Qi/sec appears stalled')
@@ -585,6 +613,28 @@ function setBreathingTrance(active: boolean, state: SimState): void {
 }
 
 /**
+ * Q10 TRANCE ATTRIBUTION PROBE (⊕, retirable): is insight the binding
+ * constraint right now for the lattice grammar? TRUE iff the actor still has a
+ * planned insight purchase (a wanted Dao node — heldDaoSeedCount below target)
+ * that it CANNOT yet afford (no node affordable from banked Insight). In that
+ * state the ×2 Insight side of Breathing Trance directly accelerates the piece
+ * gating build progress, so the ×0.7 qi hit buys something; otherwise (all
+ * Seeds held, or the next node is already affordable and the wait is pure
+ * qi-banking) the trance is pure cost and the smart policy holds it OFF. This
+ * is exactly Wes's 2026-07-03 definition: engage only during insight-starved
+ * phases, disengage during qi-banking. Pure reads; never mutates game state.
+ */
+function insightIsBindingConstraint(): boolean {
+  const dao = useDaoStore()
+  if (!dao.isRevealed()) return false
+  if (dao.heldDaoSeedCount() >= COMPETENT_SEED_TARGET) return false // no planned insight purchase left
+  for (const node of LATTICE_DATA.nodes) {
+    if (dao.canAffordNode(node.key)) return false // next node affordable — qi/banking is the constraint, not insight
+  }
+  return true // wants a node it cannot yet afford → insight-starved
+}
+
+/**
  * Advance with the stance policy: Breathing Trance ON for small targets
  * (harvest Insight at ×2 for ×0.7 Qi), OFF while banking a big pile — the
  * §6.1 opportunity cost, played deliberately.
@@ -596,7 +646,15 @@ function advanceBanked(target: Decimal, state: SimState): void {
   // Competent (useBreathingTrance = true) this is byte-identical to the prior
   // unconditional call.
   if (state.config?.useBreathingTrance) {
-    setBreathingTrance(target.toNumber() < COMPETENT_BANKING_QI_THRESHOLD, state)
+    // Q10 TRANCE ATTRIBUTION PROBE (⊕, retirable): the smart-trance policy
+    // variant swaps the base "small qi target" heuristic for the insight-binding
+    // test. smartTrancePolicy is set ONLY on the Q10 probe run; for every base/
+    // pinned profile it is undefined and this reduces to the exact prior call,
+    // so their output stays byte-identical.
+    const engageTrance = state.config?.smartTrancePolicy
+      ? insightIsBindingConstraint()
+      : target.toNumber() < COMPETENT_BANKING_QI_THRESHOLD
+    setBreathingTrance(engageTrance, state)
   }
   advanceToQiTicking(target, state)
 }
@@ -2420,6 +2478,101 @@ export function runPacingSim(): void {
   severingAbsoluteLine('ext-meridian track (complete)', meridianSeveringShares.extraordinaryMeridians)
   console.log('    (stance + profession: not clean multipliers — bracket them by deltaH, not by m; see Part 1 notes.)')
   console.log('  (SEVERING PROBE ends — everything above is observation/model input for Q9; the pins below are the only assertions.)')
+
+  // ---- Q10 TRANCE ATTRIBUTION PROBE (⊕, retirable) ----------------------------
+  // Q9's k-probe side-finding: severing Breathing Trance's EFFECT made the
+  // focused lattice actor FASTER — the trance is net-negative on total time for
+  // that policy at current data. Q10 asks whether that is the STANCE'S fault
+  // (a trap on the qi axis — data fix, D1 lint-pin precedent) or the SIM
+  // POLICY'S fault (it holds the trance in the wrong phases). Method (Wes,
+  // 2026-07-03): a smart-trance variant of the SAME Lattice actor that engages
+  // the trance ONLY when insight is the binding constraint (a wanted node it
+  // cannot yet afford) and holds it OFF during pure qi-banking. Compare three
+  // totals — base policy, smart policy, and the ⊘ stance-effect ablation
+  // (latticeSeverStanceRun, computed above) — and read the gap the smart policy
+  // closes toward the ablation. Observation-only; NEVER asserted on; the base
+  // profiles and the pins below are untouched (smartTrancePolicy is set on this
+  // one quiet run alone). Retire with the Q10 decision.
+  const latticeSmartTranceRun = runProfileQuiet(
+    spineRunner({ ...LATTICE_CONFIG, smartTrancePolicy: true }),
+  )
+  const q10BaseSeconds = latticeRun.simSeconds
+  const q10SmartSeconds = latticeSmartTranceRun.simSeconds
+  const q10AblationSeconds = latticeSeverStanceRun.simSeconds
+  const q10TranceShare = (run: SimState): string => {
+    if (run.simSeconds <= 0) return '—'
+    return `${(((run.tranceEngagedSeconds ?? 0) / run.simSeconds) * 100).toFixed(1)}%`
+  }
+  // Inversion gap = how much FASTER the ⊘ ablation runs than the base policy
+  // (positive = the trance is net-negative for the base policy — the finding
+  // Q10 investigates). Closure = how much of that gap the smart policy erases.
+  const q10InversionGapSeconds = q10BaseSeconds - q10AblationSeconds
+  const q10GapClosedSeconds = q10BaseSeconds - q10SmartSeconds
+  const q10ClosurePct =
+    q10InversionGapSeconds !== 0 ? (q10GapClosedSeconds / q10InversionGapSeconds) * 100 : Number.NaN
+  // "Most of the gap" is a computed threshold, not a vibe: >= this % closed (or
+  // the smart policy beating the ablation outright) reads as POLICY ERROR.
+  const Q10_MOST_OF_GAP_PCT = 70
+  console.log('\n=== Q10 TRANCE ATTRIBUTION PROBE (observation-only; no assertion) ===')
+  console.log(
+    '  Is Breathing Trance a trap for qi-focused lattice play (data wrong), or does the sim policy just use it badly?',
+  )
+  console.log(
+    '  Method: a smart-trance Lattice variant — engage ONLY when insight is the binding constraint',
+  )
+  console.log(
+    '  (a wanted Dao node the actor cannot yet afford: heldSeeds < target AND no node affordable), OFF while qi-banking.',
+  )
+  console.log(
+    `  NOTE: the ledger cites 28.71h/21.59h from the PRE-keep-mechanic calibration; the LIVE sim now runs faster,`,
+  )
+  console.log(
+    `  but the inversion is what matters and it is read here from live numbers (base vs ⊘ ablation).`,
+  )
+  console.table([
+    {
+      policy: 'base LatticeFocused (small-target heuristic)',
+      totalH: (q10BaseSeconds / 3600).toFixed(2),
+      tranceEngagedShare: q10TranceShare(latticeRun),
+      note: 'PINNED base run (untouched)',
+    },
+    {
+      policy: 'LatticeSmartTrance (insight-binding only)',
+      totalH: (q10SmartSeconds / 3600).toFixed(2),
+      tranceEngagedShare: q10TranceShare(latticeSmartTranceRun),
+      note: 'the ⊕ policy variant',
+    },
+    {
+      policy: '⊘ ablation reference (trance effect nullified)',
+      totalH: (q10AblationSeconds / 3600).toFixed(2),
+      tranceEngagedShare: q10TranceShare(latticeSeverStanceRun),
+      note: 'trance intents fire, never engage (share ~0)',
+    },
+  ])
+  console.log(
+    `  Inversion gap (base − ablation): ${(q10InversionGapSeconds / 3600).toFixed(2)}h ` +
+      `(positive ⇒ trance is net-negative for the base policy — the Q9 finding).`,
+  )
+  console.log(
+    `  Smart closes (base − smart): ${(q10GapClosedSeconds / 3600).toFixed(2)}h of that gap ` +
+      `= ${Number.isNaN(q10ClosurePct) ? '—' : q10ClosurePct.toFixed(1) + '%'} closure ` +
+      `(threshold for "most of the gap": ${Q10_MOST_OF_GAP_PCT}%).`,
+  )
+  let q10Verdict: string
+  if (q10InversionGapSeconds <= 0) {
+    q10Verdict =
+      'INDETERMINATE: the base policy is not slower than the ⊘ ablation in live data — the inversion this probe ' +
+      'investigates is not present here; re-establish it before ruling on the stance.'
+  } else if (q10ClosurePct >= Q10_MOST_OF_GAP_PCT) {
+    q10Verdict =
+      'POLICY ERROR: the sim used the trance badly; the stance data is fine; no data change.'
+  } else {
+    q10Verdict =
+      'TRAP: the stance is net-negative for this build even used optimally — data fix is on the table ' +
+      '(D1 lint-pin precedent), Wes decides.'
+  }
+  console.log(`  VERDICT (${q10ClosurePct >= Q10_MOST_OF_GAP_PCT ? 'closed ≥ threshold' : 'gap survives'}): ${q10Verdict}`)
+  console.log('  (Q10 PROBE ends — observation input for the trap-vs-policy call; the pins below are the only assertions.)')
 
   // ---- PINNED BANDS (Gate-D: re-pinned 2026-07-02 with the keep mechanic live) ----
   // Three bands, three jobs. These are the ONLY hard pacing pins in the sim;

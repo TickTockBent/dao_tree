@@ -70,20 +70,7 @@ widening (the pin's FAIL text says so).
 [decisions.md](decisions.md) D25: c = 0.5, k = 2.0, ramp driver = the
 severance ritual; stance to v2.)*
 
-## Q10 — Is Breathing Trance a trap for qi-focused play? *(PROBE ORDERED 2026-07-03 — run before the 0.5.0 itch release)*
-
-The k-probe's side-finding: nullifying the trance's effect made the focused
-lattice actor 7.1h FASTER — its ×0.7 qi cost outweighs what ×2 Insight buys
-back *for that policy at current data*. Either the trance is a trap stance
-(cf. the metalSoul/waterSoul trap-aspect precedent, D1) or the sim policy
-uses it badly (holds it too long / wrong phases).
-
-**Probe method (Wes, 2026-07-03):** give the Lattice actor a smarter
-trance policy — engage only during insight-starved phases, disengage
-during qi-banking. If the smart policy still shows the inversion → the
-stance is a trap; fix the data (metalSoul precedent, D1's lint pin: no
-earned option punishes the default grammar). If the smart policy erases
-the inversion → sim policy error, no data change. Attribution before any
-data change (rule 0.1); **timing: before itch 0.5.0** — shipping a
-known-possible trap with the tools to diagnose it in hand contradicts
-the trap-aspect principle.
+*(Q10 — Breathing Trance trap? — probe run and closed 2026-07-03, moved to
+[decisions.md](decisions.md) D29: POLICY ERROR, the stance data is fine —
+the sim's always-on trance usage caused the inversion, 85.2% of the gap
+closed by insight-binding-only engagement. No data change.)*
