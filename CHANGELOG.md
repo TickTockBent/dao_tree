@@ -3,7 +3,7 @@
 All notable changes to **Dao Tree**. Versions track the itch.io releases;
 **0.2** was the first public release, so earlier development is folded into it.
 
-## 0.5.0 — unreleased — the second road
+## 0.5.0 — 2026-07-03 — the second road
 
 ### Added
 - **Act II opens: Spirit Severing.** Pass the First Tribulation and a sixth
@@ -24,8 +24,18 @@ All notable changes to **Dao Tree**. Versions track the itch.io releases;
   accelerates: each ascent compounds the re-climb's prestige gain (up to
   20×), so the mountain you've mastered yields faster with every return.
   The ritual never vanishes — it becomes a breath.
+- **The Offering.** Spirit Severing's breakthroughs are not a climb — they
+  are sacrifices. Each ritual step consumes an offering of Qi and Insight,
+  colored by the corpse whose rite it is: the Past takes the body's memory,
+  the Present takes the life you live (an active pill eases it), the Future
+  takes comprehension itself. Offerings grow costlier as a severance ramps —
+  and cheaper, forever, as your mastery of the ritual deepens.
+- **The core remembers, visibly.** Core Formation now shows its memory:
+  how many times the core has been re-tempered, and what that mastery
+  multiplies. The wound of the ascent was always paying you back; now you
+  can watch it do so.
 
-## 0.4.2 — unreleased
+## 0.4.2 — 2026-07-03
 
 ### Added
 - **Achievements — the eternal record.** A trophy shelf in the Journal tab:
