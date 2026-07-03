@@ -1,9 +1,13 @@
 # Slice 9 — Act II opens: Spirit Severing
 
-**Status: CORE BUILT 2026-07-03 (overnight pipeline).** Signed off
-2026-07-02 (D25); scope cut approved 2026-07-02; shape decisions in
-[decisions.md](decisions.md) D21–D25; probe evidence in
-[calibration.md](calibration.md).
+**Status: COMPLETE 2026-07-03 (D21–D35).** Signed off 2026-07-02 (D25);
+core built overnight 2026-07-03; calibrated, retuned, and closed the same
+day (D26–D35: keep-rule legibility, severance-spine rework, the Offering
++ corpse-just-cut billing, substage-qiMult strip, insight retune, the
+Flowing Form + principle #35). Shape decisions in
+[decisions.md](decisions.md); probe evidence + tune record in
+[calibration.md](calibration.md); released as 0.5.0 on itch (post-0.5.0
+balance/features pending next tag).
 
 Built (commits `6b0a94d`/`12f159b` skeleton+seams, `f7a7812` keep rule +
 pin migration, `f8bb2ba` severing system, `e215a64` medium lattice):
@@ -12,21 +16,16 @@ pin migration, `f8bb2ba` severing system, `e215a64` medium lattice):
 §4 medium lattice (25 nodes, Manifestation, conflict binding, Act I
 provably untouched). 320 tests, all gates green, Pages serving current.
 
-**Remaining from this spec — sequenced by Wes (2026-07-03): §5 → §3 → §6.**
-§5 cross-tree lint FIRST (structural safety net, smallest, no design
-questions — every subsequent Act II addition gets checked automatically);
-§3 scar-on-entry second (self-contained, reuses the shipped scar system,
-produces the entry grade §6's actors will want; confirm no band
-interaction — one-time event at a threshold, not before it); §6 LAST —
-the only one with a real blocker (today's actors never pass the
-tribulation). Do not rush actors into existence against moving data:
-express the three mechanical assertions (lifetime net ≥ 1, bounded
-weakness window, ≥3 live severables) as **lint-shape checks on the data
-tables now**; dynamic sim assertions wait for Act II actors + stable
-severing content; the ⊘ rate-share model bridges analytically. Also
-queued by D27: rework realm-x substages to severance-gated (the corpse
-names already assume it) + a ritual-step design proposal for sign-off.
-Watch Q5 (meets negation) — it may fire if §3 or §5 touches hint grammar.
+**All spec scope built (2026-07-03):** §5 cross-tree lint (CROSS_TREE_KEEPS,
+12 declared reads); §3 scar-on-entry (guaranteed scar + actTwoEntryGrade);
+§6 interim lint-shape assertions + Act II sim actors (spine + roster) with
+the three mechanical checks in PREVIEW form — **hardening them into
+FAIL-able assertions is the one open Gate-D step** (tune settled, all
+green today; needs Wes's go). Also landed beyond the original spec: D27/D28
+(severance-spine substages + the Offering), D30 (corpse-just-cut billing),
+D33 (substage qiMults stripped — the dip is real), D34 (insight retune),
+D35 (the Flowing Form + principle #35; both roster coverage breaches
+closed). Act II spread instrument-pin deferred to the almanac era (D34 #4).
 
 ## Scope
 

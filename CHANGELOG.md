@@ -3,6 +3,30 @@
 All notable changes to **Dao Tree**. Versions track the itch.io releases;
 **0.2** was the first public release, so earlier development is folded into it.
 
+## Unreleased
+
+### Added
+- **Sever the Flowing Form.** A fifth severance: wear a stance and the knife
+  can make it flesh — permanent, involuntary, its costs and gifts ramping
+  from a deep weakness (×0.35 Qi at the cut) through recovery to surplus
+  (×1.4 Qi, ×4 Insight at full mastery). Other forms still layer on top:
+  the lock is a floor, not a cage. Forms too lopsided to survive as flesh
+  (the Sword Trance) are honestly refused, with the reason shown.
+- **The recovery math is visible before the knife.** Every severance
+  candidate now shows its breakeven timeline — how many ritual turnings,
+  and what each will cost — restated one last time at the confirm.
+
+### Changed
+- **Offerings bill at the corpse just cut.** You sever the Past, you pay
+  the Past's qi-heavy rite while mastering that loss — the resource you
+  burn matches the thing you gave up.
+- **The severance trough is real now.** Spirit Severing's sub-stages no
+  longer grant qi bonuses; the transcendent ramp is the only road back.
+  You cut, you are weaker, you do the work, you recover and surpass.
+- **Act II's insight economy breathes.** Manifestation-tier lattice costs
+  halved; offering insight bases rebalanced so a rite feels like burning
+  incense, not buying a house.
+
 ## 0.5.0 — 2026-07-03 — the second road
 
 ### Added
