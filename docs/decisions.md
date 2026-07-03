@@ -270,3 +270,39 @@ verb-change. Rework queued: substage index derives from severance count
 concrete design proposal brought back for sign-off (rule 0.1) before any
 data changes — the "new configuration" of familiar systems is a design
 choice, not an implementation detail.
+
+## D28 — The Offering: ritual steps are sacrifices (signed off)
+
+*2026-07-03, implements D27's shape; approved without notes.* A severance
+ritual step completes when the player makes an **offering** — a basket of
+existing resources, consumed. Not a qi threshold crossed, not a standalone
+counter: the Act I engine's output, burned. The verb is sacrifice all the
+way down.
+
+**Corpse-colored baskets.** Each corpse's rite weights its basket
+differently: the Past (the body's memory) leans **qi**; the Present (the
+life being lived) leans **consumables** — an active pill discounts the
+offering; the Future (the promise) leans **insight** — comprehension
+itself, the lattice's currency. Any basket is fillable by any build (qi
+and insight are universal); each corpse's rite is *cheaper* for the build
+that speaks its language — build diversity as which offerings come easy,
+never as which are possible (counter-monopoly inside the realm).
+
+**The second mountain, mechanically.** Offering costs grow geometrically
+per step within a severance; the soul-scoped severance-ritual accumulator
+— never reset — discounts all future offerings as it grows, on the SAME
+typed-accumulator math as the ascent counter (cost scale
+max(r^rituals, f), r/f ⟨tune⟩ on ACCUMULATOR_DATA.severanceRitual — the
+accumulator finally carries its own acceleration curve, exactly D23's
+staging intent). First severance: expensive, slow. Third: practiced.
+
+**Plumbing consequences:** prestige('x') becomes the offering action
+(canReset = basket affordable; consumes qi/insight explicitly; the
+existing recordSeveranceRitual hook is unchanged). Realm-x's qi reqBase,
+gainExp, and points-based substages RETIRE — substages derive from
+severance count (the corpse names already assumed it, D27). Realm-x
+points retire for honesty. All new numbers ⟨tune⟩-flagged pending Act II
+sim evidence (rule 0.1); Act I bands must stay byte-identical (realm x is
+statically unreachable by sim actors). Side payoffs: builds Q2's
+spend-path hooks; gives future Act II actors an analytically tractable
+offering policy (§6).
