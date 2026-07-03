@@ -270,9 +270,17 @@ export const useSeveringStore = defineStore('severing', () => {
   // ascentCounter; soul.reclimbGainMult mirrors the GAIN-side reciprocal.
   const OFFERING_ACC = ACCUMULATOR_DATA.severanceRitual
 
-  /** The corpse whose rite the next offering serves (nextCorpse; last once all cut, D28). */
+  /**
+   * The corpse whose rite the next offering serves (D30): the MOST RECENT
+   * severance's corpse — you pay the rite of the thing you just gave up, for
+   * the twelve turnings of mastering that loss. Pre-first-cut practice offerings
+   * bill at the FIRST corpse (the Past — qi-heavy, universally affordable, the
+   * on-ramp being practiced toward); post-third-cut offerings stay at the last
+   * cut (the most recent severance is still the last one — the ?? never fires
+   * once anything is cut, so the Future rite is held to cap by construction).
+   */
   const offeringCorpse = computed<CorpseKey>(
-    () => nextCorpse.value ?? SEVERING_DATA.corpses[SEVERING_DATA.corpses.length - 1]!.key,
+    () => severances.value[severances.value.length - 1]?.corpse ?? SEVERING_DATA.corpses[0]!.key,
   )
 
   /**
@@ -297,8 +305,8 @@ export const useSeveringStore = defineStore('severing', () => {
 
   /**
    * The exact qi + insight cost of the NEXT offering (D28, D11 — exact
-   * numbers): basket base for the current corpse × growth^stepsInto ×
-   * mastery discount × (pill discount if a pill is active).
+   * numbers): basket base for the offering corpse (D30 — the corpse just cut) ×
+   * growth^stepsInto × mastery discount × (pill discount if a pill is active).
    */
   function offeringCost(): { qi: Decimal; insight: Decimal } {
     const basket = findOfferingBasket(offeringCorpse.value)

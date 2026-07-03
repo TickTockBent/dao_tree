@@ -2199,9 +2199,11 @@ function runActIISpine(): Act2Result {
     let severQiSacrificed = new Decimal(0)
     let severInsightSacrificed = new Decimal(0)
     let rampSumToBreakeven = 0
-    // The offering corpse is nextCorpse ?? last (severing store) — after cutting
-    // corpse N the rite performed is corpse N+1's (last once all three are cut).
-    const offeringCorpseIndex = Math.min(severIndex + 1, corpses.length - 1)
+    // D30: the offering corpse is the corpse JUST CUT (severances[last].corpse in
+    // the store) — after cutting corpse N you pay corpse N's own rite for the
+    // twelve turnings of mastering that loss. (Pre-first-cut practice offerings
+    // bill at the Past; the spine never makes any — it severs on entry.)
+    const offeringCorpseIndex = Math.min(severIndex, corpses.length - 1)
     const offeringCorpseKey = corpses[offeringCorpseIndex]!.key
     const basket = findOfferingBasket(offeringCorpseKey)
 
@@ -2405,17 +2407,19 @@ function printActIISpine(result: Act2Result, pinnedCompetentSeconds: number): vo
   // --- ⟨tune⟩ observations (mispricings the Act II model surfaces) ------------
   console.log('\n  -- ⟨tune⟩ observations (Act II numbers that look mispriced) --')
   console.log(
-    '  ⟨tune⟩ INSIGHT IS THE ACT II BOTTLENECK: the offering INSIGHT bases (Future basket 24,000, growing ' +
-      `×1.5/step) and the ring-3 manifestation node costs (6k–50k) both draw the SAME lattice insight ` +
-      `trickle (~${result.baseInsight.toNumber().toFixed(2)}/s). Act II runs ${(result.actIISeconds / 3600).toFixed(0)}h ` +
-      'almost entirely insight-starved — qi is oversupplied by orders of magnitude (offerings never bind on qi).',
+    '  ⟨tune⟩ INSIGHT IS STILL THE ACT II BOTTLENECK (post-D30): the offering INSIGHT bases (Future basket ' +
+      `24,000, growing ×1.5/step) and the ring-3 manifestation node costs (6k–50k) both draw the SAME lattice ` +
+      `insight trickle (~${result.baseInsight.toNumber().toFixed(2)}/s). Act II runs ${(result.actIISeconds / 3600).toFixed(0)}h ` +
+      '(pre-D30: 67h) with insight the binding axis for the large majority of the wait; qi is oversupplied ' +
+      'except on the qi-heavy Past rite (2e10 base), the one basket D30 now lets bind on qi.',
   )
   console.log(
-    '  ⟨tune⟩ CORPSE-BASKET / NEXT-CORPSE MISMATCH: the severing store bills offerings at nextCorpse ?? last, ' +
-      'so living-with the PAST cut is billed at the PRESENT basket, and the FUTURE (insight-heavy) basket is ' +
-      'billed for 12 of the 18 offerings. The qi-heavy PAST basket is only reachable via pre-severance ' +
-      'practice offerings the optimal spine never makes. D27 already flags realm-x as a placeholder — this is ' +
-      'the concrete pricing symptom.',
+    '  ⟨tune⟩ CORPSE-BASKET BILLING — RESOLVED BY D30: offerings now bill at the corpse JUST CUT (was ' +
+      `nextCorpse ?? last), so the spine's 18 offerings redistribute to Past/Present/Future at 6 each (was ` +
+      `Present×6 + Future×12). The qi-heavy Past basket is now reached; total insight sacrificed drops to ` +
+      `${result.totalInsightSacrificed.toExponential(3)} (pre-D30: 3.964e+5) and Act II to ` +
+      `${(result.actIISeconds / 3600).toFixed(2)}h (pre-D30: 67.06h). The billing artifact is separated ` +
+      '(rule 0.1); the residual insight pressure above is the real pricing question, now measured clean.',
   )
   console.log(
     '  ⟨tune⟩ THE PRESENT PILL DISCOUNT IS DEAD FOR THIS BUILD: OFFERING_DATA.pillDiscount (0.8) only fires ' +
@@ -2775,9 +2779,9 @@ function runActIIActor(policy: Act2ActorPolicy): Act2ActorResult {
     let stepsSince = 0
     let severQiSacrificed = new Decimal(0)
     let severInsightSacrificed = new Decimal(0)
-    // Offering corpse = nextCorpse ?? last (the severing store bills the NEXT rite).
+    // D30: offering corpse = the corpse JUST CUT (the store bills severances[last].corpse).
     const corpseCutIndex = Math.min(severIndex, corpses.length - 1)
-    const offeringCorpseIndex = Math.min(severIndex + 1, corpses.length - 1)
+    const offeringCorpseIndex = corpseCutIndex
     const basket = findOfferingBasket(corpses[offeringCorpseIndex]!.key)
 
     while (stepsSince < ACT2_RAW_BREAKEVEN_STEPS) {
@@ -3007,15 +3011,19 @@ function printActIIRoster(actors: Act2ActorResult[], spine: Act2Result): void {
   console.log('\n=== ACT II TUNE-PASS INPUTS (for Gate-D sign-off) ===')
   console.log('  Numbered ⟨tune⟩ questions for Wes\'s ruling — chunk A\'s four (spine) + the roster\'s, evidence inline.')
   console.log(
-    `  1. ⟨tune⟩ INSIGHT IS THE ACT II BOTTLENECK (spine + roster): the Future insight base (24,000, ×1.5/step) + ring-3 ` +
-      `manifestation costs (6k–50k) both draw the lattice insight trickle. Roster insight-bound share of waited time: ` +
-      `Realistic ${insBoundPct(realistic)}%, Meridian ${insBoundPct(meridian)}%, Lattice ${insBoundPct(lattice)}% — ` +
-      'rebalance offering insight bases DOWN or lattice insight rates UP?',
+    `  1. ⟨tune⟩ INSIGHT IS STILL THE ACT II BOTTLENECK, POST-D30 (spine + roster): the Future insight base (24,000, ×1.5/step) + ring-3 ` +
+      `manifestation costs (6k–50k) both draw the lattice insight trickle. Roster insight-bound share of waited time (re-measured under D30): ` +
+      `Realistic ${insBoundPct(realistic)}%, Meridian ${insBoundPct(meridian)}%, Lattice ${insBoundPct(lattice)}% (pre-D30: 98.4/99.9/100.0%). ` +
+      'D30 shed the billing artifact (durations collapsed, insight totals ~halved — see #2) yet insight still binds 94–100% of the wait: ' +
+      'the bottleneck SURVIVES the fix. Rebalance offering insight bases DOWN or lattice insight rates UP?',
   )
   console.log(
-    '  2. ⟨tune⟩ CORPSE-BASKET / NEXT-CORPSE MISMATCH (spine): offerings bill at nextCorpse ?? last, so 12 of 18 spine ' +
-      'offerings pay the FUTURE (insight-heavy) basket; the qi-heavy PAST basket is never reached by the optimal spine. ' +
-      'D27 flags realm-x as placeholder — re-color the baskets to the corpse actually being lived-with?',
+    `  2. ⟨tune⟩ CORPSE-BASKET BILLING — RESOLVED BY D30 (spine + roster): offerings now bill at the corpse JUST CUT (was ` +
+      `nextCorpse ?? last), redistributing the spine's 18 offerings to Past/Present/Future at 6 each (was Present×6 + Future×12). ` +
+      `Re-measured: spine insight sacrificed ${spine.totalInsightSacrificed.toExponential(3)} (pre-D30: 3.964e+5), Act II ` +
+      `${(spine.actIISeconds / 3600).toFixed(2)}h (pre-D30: 67.06h); roster durations collapsed ` +
+      `(Meridian ${meridian ? (meridian.actIISeconds / 3600).toFixed(2) : 'n/a'}h vs pre-D30 110.37h, its ext cut no longer paying the Future rite). ` +
+      'The qi-heavy Past basket is now reached; the artifact is off the table — #1 is the residual, real insight-pricing question.',
   )
   console.log(
     `  3. ⟨tune⟩ THE PRESENT PILL DISCOUNT IS A NON-ALCHEMIST GAP (spine + roster): pillDiscount (${OFFERING_DATA.pillDiscount}) fires ONLY ` +

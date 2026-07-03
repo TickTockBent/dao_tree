@@ -322,7 +322,7 @@ describe('the offering (D28)', () => {
     expect(cost.insight.div(basket('past').insightBase).toNumber()).toBeCloseTo(1, 9)
   })
 
-  it('the offering corpse follows nextCorpse, and holds at the last corpse once all cut', () => {
+  it('the offering corpse follows the corpse JUST CUT (D30), holding at the last once all cut', () => {
     const severing = useSeveringStore()
     const soul = useSoulStore()
     const body = useBodyStore()
@@ -332,20 +332,28 @@ describe('the offering (D28)', () => {
     alchemy.chooseProfession('alchemy')
     body.extraordinaryMeridians = EXT_LIMIT
 
+    // Pre-first-cut: practice offerings bill at the Past (the rite practiced toward).
+    expect(severing.offeringCorpse).toBe('past')
+
     expect(severing.sever('soulAspect')).toBe(true) // cut PAST
-    expect(severing.offeringCorpse).toBe('present') // rite now serves present
-    // Cost basket switched to present (stepsInto reset to 0 at the cut).
-    expect(severing.offeringCost().insight.div(basket('present').insightBase).toNumber())
+    expect(severing.offeringCorpse).toBe('past') // D30: rite of the thing just given up
+    // Cost basket stays at the Past (stepsInto reset to 0 at the cut).
+    expect(severing.offeringCost().insight.div(basket('past').insightBase).toNumber())
       .toBeCloseTo(1, 9)
 
     for (let step = 0; step < 6; step++) soul.recordSeveranceRitual() // cross breakeven
     expect(severing.sever('profession')).toBe(true) // cut PRESENT
-    expect(severing.offeringCorpse).toBe('future')
+    expect(severing.offeringCorpse).toBe('present') // D30: now the Present's rite
+    // The basket is now the Present's (stepsInto=0 at the cut); mastery has accrued
+    // over 6 rituals, so the ratio is growth^0 × 0.9^6, not 1 — the corpse identity
+    // and the Present's insight base are what this asserts.
+    expect(severing.offeringCost().insight.div(basket('present').insightBase).toNumber())
+      .toBeCloseTo(expectedScale(0, 6, false), 9)
 
     for (let step = 0; step < 6; step++) soul.recordSeveranceRitual()
     expect(severing.sever('extraordinaryMeridians')).toBe(true) // cut FUTURE
     expect(severing.nextCorpse).toBeNull()
-    // All three cut: the rite continues to cap, priced by the LAST corpse.
+    // All three cut: the last severance IS the Future, so the rite is held there to cap.
     expect(severing.offeringCorpse).toBe('future')
   })
 
@@ -389,10 +397,11 @@ describe('the offering (D28)', () => {
     for (let step = 0; step < deepRituals; step++) soul.recordSeveranceRitual()
     expect(severing.sever('soulAspect')).toBe(true) // ritualStepsAtSever=20 → stepsInto=0
     expect(Math.pow(OFFER_ACC.ratio!, deepRituals)).toBeLessThan(OFFER_ACC.floor!)
-    const present = basket('present')
+    // D30: cutting the Past bills at the Past's own basket.
+    const past = basket('past')
     const cost = severing.offeringCost()
     // stepsInto=0 → growth^0=1; mastery floored at f; no pill → scale = floor.
-    expect(cost.insight.div(present.insightBase).toNumber()).toBeCloseTo(OFFER_ACC.floor!, 9)
+    expect(cost.insight.div(past.insightBase).toNumber()).toBeCloseTo(OFFER_ACC.floor!, 9)
   })
 
   it('an active pill discounts every offering by pillDiscount', () => {

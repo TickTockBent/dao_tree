@@ -21,7 +21,9 @@ const severCfg = SETPIECE_DATA.severance
 
 // D28: the offering — prestige('x') consumes a basket of qi + insight. The
 // panel shows the exact next-offering cost (D11 — never veil the now), the
-// corpse whose rite it is, and the pill + mastery discount state.
+// corpse whose rite it is (D30: the corpse JUST CUT — you pay the rite of the
+// thing you gave up while mastering that loss; the Past before the first cut),
+// and the pill + mastery discount state.
 const offering = computed(() => severing.offeringInfo)
 function makeOffering(): void {
   realm.prestige('x')
