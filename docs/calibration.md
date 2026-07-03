@@ -31,8 +31,10 @@ bracket — the counterfactual compressed whole interleaved segments; the
 real gain rule accelerates only c's portion, so it is honestly weaker.
 The pre-agreed ~[28–35h] Realistic re-pin therefore did NOT occur (the
 prediction was an artifact of the counterfactual's overstatement); the
-band stands at its measured [48.5–62.4h]. Flagged to Wes for design
-review — see D13's migration note in decisions.md.
+band stands at its measured [48.5–62.4h]. Resolved by **D26**
+(2026-07-03): the 53h stands — Act I's experience pacing is
+attendance-bound; legibility UI ships instead, wall-clock compression
+deferred to the almanac/banking layer.
 
 The Realistic band is **cadence-shaped**: the jitter sweep showed the
 banking-factor knob does nothing (check-in quantization dominates), so the

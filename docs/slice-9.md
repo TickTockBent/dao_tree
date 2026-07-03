@@ -53,8 +53,9 @@ Deliberate pin migration in the same commit: Realistic re-pins at
 > Competent re-pinned 74,041s → 41,659s; Realistic held byte-identical at
 > 53.25h / [48.5–62.4h] — check-in quantization absorbs the gain rule for
 > the experience actor (the ~[28–35h] figure was a counterfactual
-> artifact). Cluster 1.392. See D13's migration note + calibration.md;
-> flagged for Wes's review.
+> artifact). Cluster 1.392. See D13's migration note + calibration.md.
+> **Resolved by D26 (2026-07-03): 53h stands; keep-rule legibility UI
+> ships; wall-clock compression deferred to the almanac/banking layer.**
 
 ## 2. The Severing (D23)
 

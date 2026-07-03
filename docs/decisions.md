@@ -225,3 +225,25 @@ severing its effect made the lattice build 7.1h *faster* — no weakness
 window, no severance). Ships with the assertion that every viable build
 has ≥3 live severables. The full slice design is
 [slice-9.md](slice-9.md), signed off same day.
+
+## D26 — Act I's 53h stands; keep-rule legibility over wall-clock compression
+
+*2026-07-03, resolves the D13 migration flag.* The keep mechanic left the
+Realistic band untouched (53.25h, [48.5–62.4h] byte-identical) because the
+experience actor's Act I is **attendance-bound, not work-bound** — the
+churn decomposition already said the Realistic−Competent gap splits 75.4%
+idle / 24.6% churn, and a gain rule compresses work only (the optimizer
+got its full 20.57h → 11.57h). The ~[28–35h] target was an artifact of the
+clock-compression counterfactual; the measured 53h is the cadence-shaped
+truth and **it stands** — the band remains a one-knob function of session
+cadence, which is what a semi-idle player's Act I honestly is.
+
+**Ruling (Wes):** keep the hours, ship legibility. "The core remembers"
+becomes visible where it lives: a readout on the Core Formation section
+(ascent count + current re-climb gain multiplier + the ×20 cap) so the
+human perceives the mastery even though their wall-clock is governed by
+attendance. **Wall-clock compression is explicitly deferred to the
+almanac/banking mechanics** (design-directions #17) — the jitter sweep
+showed the banking knob is dead until bankable events exist; when that
+layer lands, attendance economics get tuned by a mechanic built for them
+and the band re-derives. No pacing data changes; no pins move.
