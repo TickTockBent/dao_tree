@@ -5,11 +5,11 @@ import { useForgeStore } from '@/stores/forge'
 import { useRealmStore } from '@/stores/realm'
 import { useBodyStore } from '@/stores/body'
 import { useGameStore } from '@/stores/game'
+import { useDaoStore } from '@/stores/dao'
 import { useScarStore } from '@/stores/scar'
 import { useTribulationStore } from '@/stores/tribulation'
 import { useLegacyStore } from '@/stores/legacy'
 import { SETPIECE_DATA } from '@/data/setpieces'
-import { findRealm } from '@/data/realms'
 
 // ---- Forge -----------------------------------------------------------------
 
@@ -221,14 +221,19 @@ describe('scar-on-entry: first Act II crossing', () => {
 
   const SHAKEN_GRADE_INDEX = SETPIECE_DATA.firstTribulation.grades.findIndex((g) => g.key === 'shaken')
   const FLAWLESS_GRADE_INDEX = SETPIECE_DATA.firstTribulation.grades.findIndex((g) => g.key === 'flawless')
-  const X_REQ_BASE = findRealm('x').reqBase
-
-  /** Fund realm x's next prestige: pass the tribulation (unlock condition) and bank enough Qi. */
+  /**
+   * Fund realm x's next OFFERING (D28): pass the tribulation (unlock condition)
+   * and bank enough Qi + Insight to afford the basket. prestige('x') is no
+   * longer a qi threshold — canReset requires BOTH resources — so priming Qi
+   * alone (the pre-D28 behavior) no longer funds the crossing.
+   */
   function primeForXPrestige(tribGradeIndex: number): void {
     const trib = useTribulationStore()
     const game = useGameStore()
+    const dao = useDaoStore()
     trib.tribGrade = tribGradeIndex
-    game.points = new Decimal(X_REQ_BASE)
+    game.points = new Decimal('1e14') // plenty for any early qi-heavy basket
+    dao.insight = new Decimal('1e8') // plenty for any early insight basket
   }
 
   it('the first x-prestige deepens the scar by exactly one and records the entry grade', () => {

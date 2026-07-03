@@ -265,23 +265,34 @@ export const REALM_DATA: readonly RealmRow[] = [
     // The realm both reveals AND unlocks on the passed tribulation: what
     // Spirit Severing is actually like stays veiled until the crossing
     // (D11 — veil the ahead, never the now).
-    // Sub-stage `at` thresholds and qiMults are PLACEHOLDERS <tune> — the
-    // slice-9 content agent calibrates them sim-side; each sub-stage is gated
-    // by its corpse's severance (the severing store enforces the sequence).
+    // D28 (The Offering): realm x is NOT a qi climb. prestige('x') is the
+    // OFFERING action (a basket of qi+insight consumed); the verb is
+    // sacrifice, not accumulate (D27's register break).
+    //   - reqBase / gainExp are RETIRED for x — kept only for the RealmRow
+    //     type shape; the offering path (severing store) ignores them. No
+    //     qi threshold is crossed and no prestige gain accrues; realm-x
+    //     points/best/total stay zero for honesty (D28).
+    //   - substage `at` values are REINTERPRETED as severance-COUNT
+    //     thresholds [1,2,3] (the corpse names already assumed this, D27).
+    //     The realm store latches x milestones off severing.severances.length
+    //     (NOT realmBest), so the sub-stage qiMults reward CUTS, not points.
+    // qiMults are PLACEHOLDERS ⟨tune⟩ — calibrated sim-side once Act II
+    // actors exist; each sub-stage is gated by its corpse's severance.
     id: 'x',
     row: 5,
     name: 'Spirit Severing',
     symbol: 'Sever',
     color: '#b48fe0',
     resource: 'spirit severing',
-    reqBase: 2e10,
-    gainExp: 0.4,
+    reqBase: 2e10, // RETIRED for x (type-shape only — offering path ignores it).
+    gainExp: 0.4, // RETIRED for x (type-shape only — no prestige gain accrues).
     reveal: { tribulationPassed: true },
     unlock: { tribulationPassed: true },
     substages: [
+      // `at` = severance COUNT (D28), not a qi/points threshold.
       { label: 'The Past Lies Severed', at: 1, qiMult: 2.0 },
-      { label: 'The Present Lies Severed', at: 25, qiMult: 2.4 },
-      { label: 'The Future Lies Severed', at: 400, qiMult: 2.8 },
+      { label: 'The Present Lies Severed', at: 2, qiMult: 2.4 },
+      { label: 'The Future Lies Severed', at: 3, qiMult: 2.8 },
     ],
     setpiece: 'severance',
   },

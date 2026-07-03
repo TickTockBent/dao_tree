@@ -175,6 +175,9 @@ export type CrossTreeKeepKey =
   | 'severingExtraordinaryMeridiansRead'
   | 'severingManifestationRead'
   | 'hintSeverSpiritRead'
+  | 'offeringQiCost'
+  | 'offeringInsightCost'
+  | 'offeringPillDiscount'
 export type AutomationKey =
   | 'nascentQiPrestige'
   | 'nascentPrimaryMeridians'

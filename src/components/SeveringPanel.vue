@@ -9,13 +9,23 @@
 
 import { ref, computed } from 'vue'
 import { useSeveringStore } from '@/stores/severing'
-import { SEVERING_DATA, findSeverable } from '@/data/severing'
+import { useRealmStore } from '@/stores/realm'
+import { SEVERING_DATA, findSeverable, findCorpse } from '@/data/severing'
 import { SETPIECE_DATA } from '@/data/setpieces'
 import { format } from '@/engine/format'
 import type { SeverableKey } from '@/engine/types'
 
 const severing = useSeveringStore()
+const realm = useRealmStore()
 const severCfg = SETPIECE_DATA.severance
+
+// D28: the offering — prestige('x') consumes a basket of qi + insight. The
+// panel shows the exact next-offering cost (D11 — never veil the now), the
+// corpse whose rite it is, and the pill + mastery discount state.
+const offering = computed(() => severing.offeringInfo)
+function makeOffering(): void {
+  realm.prestige('x')
+}
 
 // The severable armed for the second confirm step (null = menu, no pending cut).
 const armedSeverable = ref<SeverableKey | null>(null)
@@ -46,6 +56,39 @@ function confirmSever(key: SeverableKey): void {
 
 <template>
   <div class="severing-panel">
+    <!-- D28: The Offering — the next ritual step's exact cost (a basket of Act I
+         resources, consumed). prestige('x') is a sacrifice, not a qi climb. -->
+    <section class="offering">
+      <h4>The Offering</h4>
+      <p class="offering-rite">
+        The rite of <strong>{{ findCorpse(offering.corpse).name }}</strong>
+      </p>
+      <p class="offering-cost">
+        Give up: <strong>{{ format(offering.qi) }}</strong> Qi
+        <span :class="{ short: offering.qiShort }">(hold {{ format(offering.qiHave) }})</span>
+        and <strong>{{ format(offering.insight) }}</strong> Insight
+        <span :class="{ short: offering.insightShort }">(hold {{ format(offering.insightHave) }})</span>
+      </p>
+      <p class="offering-discounts">
+        Mastery discount ×{{ format(offering.masteryScale) }}
+        <span class="dim">from {{ offering.rituals }} rituals performed</span>
+        <span v-if="offering.pillActive" class="pill-on"> · pill active (offering discounted)</span>
+        <span v-else class="dim"> · no pill active</span>
+      </p>
+      <button
+        class="offer-btn"
+        :disabled="!offering.affordable"
+        @click="makeOffering()"
+      >
+        Make the Offering
+      </button>
+      <p v-if="!offering.affordable" class="warn offer-reason">
+        <template v-if="offering.qiShort && offering.insightShort">Not enough Qi or Insight yet.</template>
+        <template v-else-if="offering.qiShort">Not enough Qi yet.</template>
+        <template v-else>Not enough Insight yet.</template>
+      </p>
+    </section>
+
     <h4>The Three Corpses</h4>
     <ol class="corpses">
       <li v-for="(corpse, index) in SEVERING_DATA.corpses" :key="corpse.key">
@@ -134,6 +177,47 @@ function confirmSever(key: SeverableKey): void {
 <style scoped>
 .severing-panel {
   margin-top: 0.75rem;
+}
+.offering {
+  padding: 0.5rem 0.6rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid #4a3a6a;
+  border-radius: 6px;
+  background: #221a30;
+}
+.offering h4 {
+  margin: 0 0 0.35rem;
+  color: #c9a6f0;
+}
+.offering-rite {
+  font-size: 0.9rem;
+  margin: 0.25rem 0;
+}
+.offering-cost {
+  font-size: 0.85rem;
+  color: #d8cfe0;
+  margin: 0.35rem 0;
+}
+.offering-cost .short {
+  color: #e0a08f;
+}
+.offering-discounts {
+  font-size: 0.8rem;
+  color: #9fd0c0;
+  margin: 0.3rem 0;
+}
+.offering-discounts .dim {
+  color: #8a7f95;
+}
+.offering-discounts .pill-on {
+  color: #d8b25a;
+}
+.offer-btn {
+  border-color: #6a4a9a;
+  color: #d8c0f0;
+}
+.offer-reason {
+  margin: 0.3rem 0 0;
 }
 .corpses {
   list-style: none;

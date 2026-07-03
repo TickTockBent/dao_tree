@@ -25,3 +25,4 @@ export { SECLUSION_DATA, type SeclusionData, type SeclusionRung, findSeclusionRu
 export { ACCUMULATOR_DATA } from './accumulators'
 export { SEVERING_DATA, type SeveringData, type CorpseRow, type SeverableRow, findCorpse, findSeverable } from './severing'
 export { CROSS_TREE_KEEPS, type CrossTreeKeepRow } from './trees'
+export { OFFERING_DATA, type OfferingData, type OfferingBasketRow, findOfferingBasket } from './severing'

@@ -176,4 +176,22 @@ export const CROSS_TREE_KEEPS: readonly CrossTreeKeepRow[] = [
     consumer: 'hints severSpirit nudge',
     rationale: 'The hint pointing the player at Spirit Severing fires on the same Manifestation-reached signal (anyDaoNode >= 3) as the manifestation severable\'s own availability check.',
   },
+  {
+    key: 'offeringQiCost',
+    reads: 'game.points',
+    consumer: 'severing store offeringCost/canAffordOffering/performOffering (D28 offering basket)',
+    rationale: 'The Act II offering consumes Act I Qi — the qi-leaning basket (Past corpse) is paid from the points the Act I engine produced.',
+  },
+  {
+    key: 'offeringInsightCost',
+    reads: 'dao.insight',
+    consumer: 'severing store offeringCost/canAffordOffering/performOffering (D28 offering basket)',
+    rationale: 'The offering consumes lattice Insight — the insight-leaning basket (Future corpse) is paid from the Dao lattice currency Act I built out.',
+  },
+  {
+    key: 'offeringPillDiscount',
+    reads: 'alchemy.activePill',
+    consumer: 'severing store offeringCost/offeringInfo (D28 pill discount)',
+    rationale: 'A held Act I profession pill discounts the offering (the Present corpse\'s consumable lean) — build diversity as which offerings come easy.',
+  },
 ]

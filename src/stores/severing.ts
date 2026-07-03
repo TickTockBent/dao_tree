@@ -22,8 +22,9 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import Decimal from 'break_eternity.js'
 import { decimalOne } from '@/engine/decimal'
-import { SEVERING_DATA } from '@/data/severing'
+import { SEVERING_DATA, OFFERING_DATA, findOfferingBasket } from '@/data/severing'
 import { SETPIECE_DATA } from '@/data/setpieces'
+import { ACCUMULATOR_DATA } from '@/data/accumulators'
 import { findBodyBuyable } from '@/data/body'
 import { findRecipe } from '@/data/alchemy'
 import { LATTICE_DATA } from '@/data/lattice'
@@ -31,6 +32,7 @@ import { realmWithSoulAspect } from '@/data/realms'
 import { useBodyStore } from './body'
 import { useAlchemyStore } from './alchemy'
 import { useDaoStore } from './dao'
+import { useGameStore } from './game'
 import { useRealmStore } from './realm'
 import { useSoulStore } from './soul'
 import type { CorpseKey, PillKey, SeverableKey } from '@/engine/types'
@@ -260,6 +262,95 @@ export const useSeveringStore = defineStore('severing', () => {
     return true
   }
 
+  // ---- D28: The Offering (prestige('x') is a sacrifice) --------------------
+  //
+  // The severance-ritual mastery discount accumulator (D28). Cost-side DIRECT
+  // form max(ratio^rituals, floor) — as rituals accrue the offering cheapens,
+  // floored at `floor` (the optimizer bound). Same typed-accumulator math as
+  // ascentCounter; soul.reclimbGainMult mirrors the GAIN-side reciprocal.
+  const OFFERING_ACC = ACCUMULATOR_DATA.severanceRitual
+
+  /** The corpse whose rite the next offering serves (nextCorpse; last once all cut, D28). */
+  const offeringCorpse = computed<CorpseKey>(
+    () => nextCorpse.value ?? SEVERING_DATA.corpses[SEVERING_DATA.corpses.length - 1]!.key,
+  )
+
+  /**
+   * Ritual steps taken toward the CURRENT severance's ramp (D28). Measured
+   * from the most recent cut's ritualStepsAtSever; pre-first-severance there
+   * is no record, so it counts from 0 (every offering is a practice step that
+   * accrues the mastery discount but advances no severance ramp — there isn't
+   * one yet). A fresh cut resets this to 0, so each severance's offering ramp
+   * restarts from the basket base.
+   */
+  function stepsIntoCurrentSeverance(): number {
+    const records = slice.value.severances
+    const last = records[records.length - 1]
+    return useSoulStore().severanceRituals - (last?.ritualStepsAtSever ?? 0)
+  }
+
+  /** The mastery discount factor max(ratio^rituals, floor) — deepens as rituals accrue (D28). */
+  function offeringMasteryScale(): Decimal {
+    const rituals = useSoulStore().severanceRituals
+    return Decimal.max(Decimal.pow(OFFERING_ACC.ratio!, rituals), OFFERING_ACC.floor!)
+  }
+
+  /**
+   * The exact qi + insight cost of the NEXT offering (D28, D11 — exact
+   * numbers): basket base for the current corpse × growth^stepsInto ×
+   * mastery discount × (pill discount if a pill is active).
+   */
+  function offeringCost(): { qi: Decimal; insight: Decimal } {
+    const basket = findOfferingBasket(offeringCorpse.value)
+    const growthPow = Decimal.pow(OFFERING_DATA.growth, stepsIntoCurrentSeverance())
+    const mastery = offeringMasteryScale()
+    const pill = useAlchemyStore().activePill !== null
+      ? new Decimal(OFFERING_DATA.pillDiscount)
+      : decimalOne()
+    const scale = growthPow.times(mastery).times(pill)
+    return {
+      qi: new Decimal(basket.qiBase).times(scale),
+      insight: new Decimal(basket.insightBase).times(scale),
+    }
+  }
+
+  /** True when the player holds enough qi AND insight for the next offering (D28). */
+  function canAffordOffering(): boolean {
+    const cost = offeringCost()
+    return useGameStore().points.gte(cost.qi) && useDaoStore().insight.gte(cost.insight)
+  }
+
+  /** Consume the offering basket (qi + insight, both explicitly subtracted). Returns success. */
+  function performOffering(): boolean {
+    const cost = offeringCost()
+    const game = useGameStore()
+    const dao = useDaoStore()
+    if (game.points.lt(cost.qi) || dao.insight.lt(cost.insight)) return false
+    game.points = game.points.sub(cost.qi).max(0)
+    dao.insight = dao.insight.sub(cost.insight).max(0)
+    return true
+  }
+
+  /** Everything the offering UI renders (exact costs, corpse, pill + mastery state, affordability). */
+  const offeringInfo = computed(() => {
+    const cost = offeringCost()
+    const game = useGameStore()
+    const dao = useDaoStore()
+    return {
+      corpse: offeringCorpse.value,
+      qi: cost.qi,
+      insight: cost.insight,
+      qiHave: game.points,
+      insightHave: dao.insight,
+      qiShort: game.points.lt(cost.qi),
+      insightShort: dao.insight.lt(cost.insight),
+      affordable: game.points.gte(cost.qi) && dao.insight.gte(cost.insight),
+      rituals: useSoulStore().severanceRituals,
+      masteryScale: offeringMasteryScale(),
+      pillActive: useAlchemyStore().activePill !== null,
+    }
+  })
+
   /** Transcendent multiplier over the qi axis (identity when no severances). */
   const transcendentQiMult = computed<Decimal>(() => {
     let product = decimalOne()
@@ -309,6 +400,11 @@ export const useSeveringStore = defineStore('severing', () => {
     breakevenCrossed,
     axisMultFor,
     readoutFor,
+    offeringCorpse,
+    offeringCost,
+    canAffordOffering,
+    performOffering,
+    offeringInfo,
     transcendentQiMult,
     transcendentInsightMult,
     update,

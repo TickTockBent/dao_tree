@@ -89,11 +89,15 @@ const alchemyTabAvailable = computed(() => alchemy.isRevealed())
       <div v-if="currentTab === 'realms'" class="tab-content">
         <section v-for="r in visibleRealms" :key="r.id" class="panel">
           <h3 :style="{ color: r.color }">{{ r.name }}</h3>
-          <p>Best: {{ format(realm.realmBest(r.id)) }}</p>
-          <p v-if="realm.canReset(r.id)">Gain: +{{ format(realm.resetGain(r.id)) }}</p>
-          <button :disabled="!realm.canReset(r.id)" @click="onPrestige(r.id)">
-            {{ realm.canReset(r.id) ? `Break through (+${format(realm.resetGain(r.id))})` : `Need ${format(realm.nextAt(r.id))} Qi` }}
-          </button>
+          <!-- D28: realm x is the Offering, not a qi climb — the generic
+               Best/Gain/Break-through block hides; SeveringPanel owns its UI. -->
+          <template v-if="r.id !== 'x'">
+            <p>Best: {{ format(realm.realmBest(r.id)) }}</p>
+            <p v-if="realm.canReset(r.id)">Gain: +{{ format(realm.resetGain(r.id)) }}</p>
+            <button :disabled="!realm.canReset(r.id)" @click="onPrestige(r.id)">
+              {{ realm.canReset(r.id) ? `Break through (+${format(realm.resetGain(r.id))})` : `Need ${format(realm.nextAt(r.id))} Qi` }}
+            </button>
+          </template>
           <ForgePanel v-if="r.id === 'c'" />
           <CoreMemoryDisplay v-if="r.id === 'c'" />
           <TribulationPanel v-if="r.id === 's'" />

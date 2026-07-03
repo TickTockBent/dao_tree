@@ -31,6 +31,9 @@ import {
   findRealm,
   substageLabelAtBest,
 } from '@/data'
+// OFFERING_DATA (D28) is not re-exported through the data barrel — the
+// severing store imports it from its source module directly, and so do we.
+import { OFFERING_DATA } from '@/data/severing'
 
 describe('FACTORY_NUMERICS', () => {
   it('matches the 0.2.x values', () => {
@@ -99,6 +102,11 @@ describe('REALM_DATA', () => {
       'The Present Lies Severed',
       'The Future Lies Severed',
     ])
+    // D28: realm-x substage `at` values are REINTERPRETED as severance-COUNT
+    // thresholds [1,2,3] (not qi/points) — the realm store latches x
+    // milestones off severing.severances.length. reqBase/gainExp are RETIRED
+    // (type-shape only) — the offering path ignores them; no gain accrues.
+    expect(x.substages.map((s) => s.at)).toEqual([1, 2, 3])
     expect(x.setpiece).toBe('severance')
   })
 
@@ -208,7 +216,7 @@ describe('CROSS_TREE_KEEPS (slice 9 §5)', () => {
   it('pins the row count and spot-checks the realm-x tribulation-gate row', () => {
     // Pinned so the table only changes deliberately (§5's own discipline: a
     // new row is a deliberate declaration, never an incidental drift).
-    expect(CROSS_TREE_KEEPS).toHaveLength(8)
+    expect(CROSS_TREE_KEEPS).toHaveLength(11)
     expect(CROSS_TREE_KEEPS.find((row) => row.key === 'realmXTribulationGate')).toEqual({
       key: 'realmXTribulationGate',
       reads: 'tribulationPassed',
@@ -226,8 +234,10 @@ describe('ACCUMULATOR_DATA (slice 9)', () => {
     expect(ACCUMULATOR_DATA.ascentCounter).toEqual({
       key: 'ascentCounter', scope: 'soul', ratio: 0.7, floor: 0.05, persistence: 'never-reset',
     })
+    // D28: severanceRitual gains its own acceleration curve — ratio/floor
+    // drive the OFFERING mastery discount max(ratio^rituals, floor). ⟨tune⟩.
     expect(ACCUMULATOR_DATA.severanceRitual).toEqual({
-      key: 'severanceRitual', scope: 'soul', persistence: 'never-reset',
+      key: 'severanceRitual', scope: 'soul', ratio: 0.9, floor: 0.25, persistence: 'never-reset',
     })
   })
 })
@@ -238,6 +248,33 @@ describe('SEVERING_DATA (slice 9)', () => {
     expect(SEVERING_DATA.severables.map((s) => s.key)).toEqual([
       'soulAspect', 'profession', 'extraordinaryMeridians', 'manifestation',
     ])
+  })
+})
+
+describe('OFFERING_DATA (slice 9, D28)', () => {
+  it('has one corpse-colored basket per corpse, with the qi/insight lean', () => {
+    // One basket per corpse, in corpse order.
+    expect(OFFERING_DATA.baskets.map((b) => b.corpse)).toEqual(['past', 'present', 'future'])
+    const past = OFFERING_DATA.baskets.find((b) => b.corpse === 'past')!
+    const present = OFFERING_DATA.baskets.find((b) => b.corpse === 'present')!
+    const future = OFFERING_DATA.baskets.find((b) => b.corpse === 'future')!
+    // Past leans Qi (qi-heavy, minimal insight); Future leans Insight; Present
+    // sits between them on both axes (D28 corpse-colored lean). ⟨tune⟩ values.
+    expect(past.qiBase).toBeGreaterThan(future.qiBase)
+    expect(future.insightBase).toBeGreaterThan(past.insightBase)
+    expect(present.qiBase).toBeLessThan(past.qiBase)
+    expect(present.qiBase).toBeGreaterThan(future.qiBase)
+    expect(present.insightBase).toBeGreaterThan(past.insightBase)
+    expect(present.insightBase).toBeLessThan(future.insightBase)
+    // Insight bases are lattice ring-3 era (tens of thousands at the top).
+    expect(future.insightBase).toBeGreaterThanOrEqual(10000)
+  })
+
+  it('pins the growth and pill-discount factors (⟨tune⟩)', () => {
+    expect(OFFERING_DATA.growth).toBe(1.5) // per-step geometric ramp WITHIN a severance
+    expect(OFFERING_DATA.pillDiscount).toBe(0.8) // a held pill cheapens every offering
+    expect(OFFERING_DATA.growth).toBeGreaterThan(1) // costs must RISE per step
+    expect(OFFERING_DATA.pillDiscount).toBeLessThan(1) // a discount, not a surcharge
   })
 })
 

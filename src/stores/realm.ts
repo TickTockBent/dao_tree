@@ -28,6 +28,12 @@ import { useSoulStore } from './soul'
 import { useScarStore } from './scar'
 import { useLegacyStore } from './legacy'
 import { useTribulationStore } from './tribulation'
+// Slice 9 D28 (The Offering): realm-x prestige is the offering action; the
+// severing store owns the offering math (cost/afford/consume) and holds the
+// severance count that drives realm-x sub-stages. Deferred lookup (called
+// inside functions, never hoisted into setup()) — severing.ts already imports
+// useRealmStore, so a top-level instantiation here would close the cycle.
+import { useSeveringStore } from './severing'
 import type { RealmId } from '@/engine/types'
 
 // ---- State shape ----------------------------------------------------------
@@ -141,9 +147,19 @@ export const useRealmStore = defineStore('realm', () => {
     return new Decimal(s.best)
   }
 
-  /** Sub-stage label reached at current best, or null. */
+  /**
+   * The sub-stage "reached" measure for a realm: realmBest for Act I realms,
+   * but the SEVERANCE COUNT for realm x (D28 — x sub-stages `at` are
+   * severance-count thresholds, not qi/points; realmBest('x') stays zero).
+   */
+  function substageReachedValue(id: RealmId): number {
+    if (id === 'x') return useSeveringStore().severances.length
+    return realmBest(id).toNumber()
+  }
+
+  /** Sub-stage label reached at current best (or, for x, severance count), or null. */
   function realmSubstageLabel(id: RealmId): string | null {
-    return substageLabelAtBest(findRealm(id), realmBest(id).toNumber())
+    return substageLabelAtBest(findRealm(id), substageReachedValue(id))
   }
 
   /** Top sub-stage `at` value (the fully-climbed mark). */
@@ -181,11 +197,17 @@ export const useRealmStore = defineStore('realm', () => {
   function canReset(id: RealmId): boolean {
     const s = stateOf(id)
     if (!s.unlocked && !meets(findRealm(id).unlock, buildGameState())) return false
+    // D28: realm x is the OFFERING — no qi threshold. canReset = unlock met
+    // AND the next offering basket (qi + insight) is affordable.
+    if (id === 'x') return useSeveringStore().canAffordOffering()
     return game.points.gte(findRealm(id).reqBase)
   }
 
   /** Prestige gain = ((points / reqBase) ^ gainExp × foundationGradeMult) ^ 1, floored, max 0. */
   function resetGain(id: RealmId): Decimal {
+    // D28: realm-x points/best/total are RETIRED — the offering accrues no
+    // prestige gain (the reward is the severance ramp, not a currency).
+    if (id === 'x') return decimalZero()
     if (!canReset(id)) return decimalZero()
     const r = findRealm(id)
     let gain = game.points.div(r.reqBase).pow(r.gainExp)
@@ -220,15 +242,46 @@ export const useRealmStore = defineStore('realm', () => {
    */
   function prestige(id: RealmId): void {
     if (!canReset(id)) return
+    // D28: realm x is the OFFERING action, not a qi climb. Consume the basket
+    // (qi + insight, subtracted by performOffering), then run the EXISTING
+    // hooks in the EXISTING order — scar-on-entry (first crossing), the
+    // unlocked latch, and recordSeveranceRitual — all keep firing. No prestige
+    // gain accrues (points/best/total stay zero, D28) and game.points is NOT
+    // wiped: the offering consumed only its basket, not all remaining qi.
+    if (id === 'x') {
+      const severing = useSeveringStore()
+      // Capture the first-crossing BEFORE the unlocked latch below (as the
+      // generic path does): the first offering IS the crossing into Act II.
+      const isFirstActTwoCrossing = !stateOf('x').unlocked
+      if (!severing.performOffering()) return
+      // Demon Trial objective progress (unchanged from the generic path).
+      heartDemons.onTrialPrestige()
+      // Unlocked latch only — no points/best/total award (retired, D28).
+      const s = stateOf('x')
+      slice.value.x = { ...s, unlocked: true, resetTime: 0 }
+      // Sub-stage milestones now derive from severance count (D28).
+      latchMilestones('x')
+      // Scar-on-entry (slice 9 §3, retired spec §1.3): the first crossing
+      // leaves the guaranteed scar. Reuses the shipped ONE-slot scar system;
+      // typed per-act scar slots (retired spec §10.9) become necessary only
+      // when Act III adds a SECOND act-entry scar — revisit then.
+      if (isFirstActTwoCrossing) {
+        useScarStore().deepenScar()
+        useLegacyStore().recordActTwoEntry(useTribulationStore().tribGrade)
+      }
+      // The ritual clock advances on every offering (carries active ramps).
+      soul.recordSeveranceRitual()
+      // Cascade over lower same-tree layers — a no-op for x (act2 tree resets
+      // nothing below), kept for correctness/symmetry.
+      runDoResetCascade('x')
+      return
+    }
+    // Below here handles the Act I realms only (q/f/c/n/s); realm x returned
+    // above via its D28 offering branch.
     const r = findRealm(id)
     const gain = resetGain(id)
     // A held clarity charge boosted this gain (folded in resetGain) — consume it.
     const aidApplied = alchemy.breakthroughGainMult(id).gt(decimalOne())
-
-    // Slice 9 §3 (scar-on-entry): capture whether realm x is unlocking for the
-    // FIRST time on this prestige, BEFORE the state write below latches
-    // `unlocked` to true. This is "the crossing" — the first realm-x prestige.
-    const isFirstActTwoCrossing = id === 'x' && !stateOf(id).unlocked
 
     // onPrestige runs BEFORE the cascade resets q (meridians/temper/q.best intact).
     if (r.graded) {
@@ -262,27 +315,8 @@ export const useRealmStore = defineStore('realm', () => {
     // Latch sub-stage milestones (done() = best >= stage.at).
     latchMilestones(id)
 
-    // Slice 9 §3 (scar-on-entry, retired spec §1.3): the first crossing into
-    // Act II leaves a GUARANTEED scar — "the wound that severing thematically
-    // answers" — graded by the tribulation grade already latched on the
-    // tribulation store. Fires exactly once, on the crossing prestige only;
-    // every later x-prestige is a no-op here.
-    //
-    // This deliberately reuses the shipped ONE-slot scar system (deepenScar)
-    // rather than a typed per-act scar slot. Retired spec §10.9's typed
-    // per-act scar slots only become necessary once Act III adds a SECOND
-    // act-entry scar (today there is only one to hold); that is a system
-    // constraint to revisit then, not a narrative choice being made now.
-    if (isFirstActTwoCrossing) {
-      useScarStore().deepenScar()
-      useLegacyStore().recordActTwoEntry(useTribulationStore().tribGrade)
-    }
-
-    // Slice 9 (D23/D25): each Spirit Severing breakthrough completes one
-    // severance ritual — the climb IS the ritual, and the ritual counter is
-    // the clock that carries every active severance's transcendent multiplier
-    // up its ramp (v1 design; docs/slice-9.md §2).
-    if (id === 'x') soul.recordSeveranceRitual()
+    // (Scar-on-entry + the severance-ritual clock are handled in the D28
+    // realm-x branch above; the Act I path below never touches them.)
 
     // Run the doReset cascade: reset every strictly-lower same-tree tree-scoped layer.
     runDoResetCascade(id)
@@ -294,11 +328,14 @@ export const useRealmStore = defineStore('realm', () => {
   /** Latch any newly-met sub-stage milestones for a realm. */
   function latchMilestones(id: RealmId): void {
     const r = findRealm(id)
-    const best = realmBest(id).toNumber()
+    // D28: realm x latches milestones off SEVERANCE COUNT (its sub-stage `at`
+    // thresholds are cut-counts), so the qiMult bonuses reward CUTS, not
+    // points; every Act I realm still latches off realmBest.
+    const reached = substageReachedValue(id)
     const s = stateOf(id)
     const earned = new Set(s.milestones)
     r.substages.forEach((stage, index) => {
-      if (best >= stage.at) earned.add(index)
+      if (reached >= stage.at) earned.add(index)
     })
     slice.value[id] = { ...s, milestones: [...earned].sort((a, b) => a - b) }
   }

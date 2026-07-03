@@ -19,10 +19,18 @@ export const ACCUMULATOR_DATA: Readonly<Record<AccumulatorKey, AccumulatorDef>> 
    */
   ascentCounter: { key: 'ascentCounter', scope: 'soul', ratio: 0.7, floor: 0.05, persistence: 'never-reset' },
   /**
-   * "Master the severance" (D23/D25): counts severance-ritual completions —
-   * the ramp driver that carries each severance's transcendent multiplier
-   * from c·m past breakeven to k·m. Curve constants (start fraction, cap
-   * ratio, ramp steps) live on SETPIECE_DATA.severance.
+   * "Master the severance" (D23/D25/D28): counts severance-ritual completions
+   * — the ramp driver that carries each severance's transcendent multiplier
+   * from c·m past breakeven to k·m (the MULTIPLIER ramp constants — start
+   * fraction, cap ratio, ramp steps — live on SETPIECE_DATA.severance).
+   *
+   * D28 gives the accumulator "its own acceleration curve" (D23's staging
+   * intent, now real): ratio/floor drive the OFFERING mastery DISCOUNT. Each
+   * offering costs max(ratio^rituals, floor) of the basket base — the same
+   * typed-accumulator math as ascentCounter, applied cost-side (direct, not
+   * the gain-side reciprocal). First severance: expensive; third: practiced.
+   * ⟨tune⟩ r=0.9, f=0.25 — the discount deepens ~10%/ritual, floored at 25%
+   * (the optimizer bound: mastery can never make an offering nearly free).
    */
-  severanceRitual: { key: 'severanceRitual', scope: 'soul', persistence: 'never-reset' },
+  severanceRitual: { key: 'severanceRitual', scope: 'soul', ratio: 0.9, floor: 0.25, persistence: 'never-reset' },
 }
