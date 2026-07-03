@@ -422,3 +422,49 @@ stay byte-identical.
 **Sequence (one pass, one Gate-D ruling):** strip → re-measure the full
 roster → bring insight-pricing + Manifestation-cost to the settled
 numbers; the pill-discount and Act II band calls ride on that re-measure.
+
+## D34 — Act II insight retune: bring the prices to the faucet (tune #1/#2/#3/#4 ruled)
+
+*2026-07-03, the Gate-D tune pass on D33's settled numbers.*
+
+**#1/#2 together — lower the prices, don't build a new mechanic.** An
+Act II insight-rate mechanic ("severances feed the faucet they drink
+from") is a feedback loop, and feedback loops are the hardest thing to
+tune in an incremental — complexity bought to fix something with a
+simpler fix. If a future act needs an insight-rate mechanic (almanac
+divination, dao-scoped comprehension), it lands then on its own merits,
+never as a pricing patch. The Lattice specialist being 100% insight-bound
+is the tell that the faucet-to-demand ratio is wrong for EVERYONE.
+
+Two moves:
+- **Manifestation cost → the 15–25k range** (was ~75k — "a modest
+  multiplier behind a fortress price," and more than a full Act I bank).
+  Its price is a SHIPPING-ASSERTION CONSTRAINT (≥3-severables floor for
+  non-meridian builds), not a free tuning variable. Sizing test: a
+  Realistic actor entering with a MODERATE insight bank (not the 296k
+  hoard) affords it within the first severance's ritual window.
+- **Offering insight bases scaled proportionally** — the offering is a
+  ritual, not a purchase; it should feel like burning incense, not buying
+  a house. The Future's twelve-turning insight total ≈ ONE ring-3 node
+  purchase, not three, so insight splits roughly evenly between lattice
+  nodes and offerings.
+
+**Acceptance criteria (the agent finds exact numbers against these):**
+Lattice drops below 95% insight-bound (target ~70–80% — primary
+constraint, not only constraint); ≥3-live-severables holds across the
+roster at every candidate price; Realistic-with-moderate-bank affords the
+Manifestation in the first ritual window. Old-vs-new brought for
+verification; one commit.
+
+**#3 — pill-discount gap: CLOSED as build flavor.** Non-alchemists
+aren't binding on its absence; the Present costing more for them is the
+intended texture.
+
+**#4 — Act II band: DEFERRED to the retune's settled numbers.** Pinning
+against numbers about to move is what principle #15 exists to prevent.
+When pinned: an observation INSTRUMENT at the settled spread (like
+Competent's floor — "if it moves, the data changed"), never an experience
+target — Act II's Realistic 9h is a number that will move as content
+fills in, not a band to defend. The inversion (experience actor fastest)
+is a fact to observe, revisited when the almanac/loot layer add texture
+to Act II's idle windows.
