@@ -12,15 +12,21 @@ pin migration, `f8bb2ba` severing system, `e215a64` medium lattice):
 §4 medium lattice (25 nodes, Manifestation, conflict binding, Act I
 provably untouched). 320 tests, all gates green, Pages serving current.
 
-**Remaining from this spec (not yet built):** §3 scar-on-entry; §5
-cross-tree lint goes real; §6's new sim assertions (lifetime net ≥ 1,
-bounded weakness window, ≥3 live severables) + the actors' severing
-policy — all of §6's additions need Act II sim-actor support (today's
-actors never pass the tribulation, so severing is unreachable in the
-sim; the ⊘ probe's rate-share model is the only Act II signal). The
-≥3-live-severables property is now *structurally satisfiable* (aspect +
-profession + manifestation exist for non-meridian builds) but not yet
-sim-asserted.
+**Remaining from this spec — sequenced by Wes (2026-07-03): §5 → §3 → §6.**
+§5 cross-tree lint FIRST (structural safety net, smallest, no design
+questions — every subsequent Act II addition gets checked automatically);
+§3 scar-on-entry second (self-contained, reuses the shipped scar system,
+produces the entry grade §6's actors will want; confirm no band
+interaction — one-time event at a threshold, not before it); §6 LAST —
+the only one with a real blocker (today's actors never pass the
+tribulation). Do not rush actors into existence against moving data:
+express the three mechanical assertions (lifetime net ≥ 1, bounded
+weakness window, ≥3 live severables) as **lint-shape checks on the data
+tables now**; dynamic sim assertions wait for Act II actors + stable
+severing content; the ⊘ rate-share model bridges analytically. Also
+queued by D27: rework realm-x substages to severance-gated (the corpse
+names already assume it) + a ritual-step design proposal for sign-off.
+Watch Q5 (meets negation) — it may fire if §3 or §5 touches hint grammar.
 
 ## Scope
 

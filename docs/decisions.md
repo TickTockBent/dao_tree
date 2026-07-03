@@ -247,3 +247,26 @@ almanac/banking mechanics** (design-directions #17) — the jitter sweep
 showed the banking knob is dead until bankable events exist; when that
 layer lands, attendance economics get tuned by a mechanic built for them
 and the band re-derives. No pacing data changes; no pins move.
+
+## D27 — Realm-x progression: severances are the spine
+
+*2026-07-03, resolves slice-9B's coupling note.* Spirit Severing's
+sub-stages are gated by the three severances themselves — **no parallel
+qi climb**. The register break is the point: Spirit Severing is the first
+realm where the verb changes from **"accumulate" to "sacrifice."**
+
+Ritual steps are the interstitial content (the ramp from c·m through
+breakeven to cap), and they must **engage existing resource systems**
+(qi, insight, pills, lattice) rather than being a standalone counter:
+"perform the ritual" means *do familiar things in a new configuration*,
+not *click a new button twelve times*. This keeps build diversity alive
+inside the realm instead of suspending it.
+
+**Implementation status:** the shipped skeleton shape (realm-x as a
+qi-climb whose prestige advances the ritual clock, substages at prestige
+counts) is now known to be a placeholder that violates this ruling's
+verb-change. Rework queued: substage index derives from severance count
+(the corpse names already assume this); the ritual-step mechanic gets a
+concrete design proposal brought back for sign-off (rule 0.1) before any
+data changes — the "new configuration" of familiar systems is a design
+choice, not an implementation detail.
