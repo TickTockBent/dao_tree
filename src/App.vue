@@ -14,6 +14,7 @@ import DaoLatticeGraph from '@/components/DaoLatticeGraph.vue'
 import StancesPanel from '@/components/StancesPanel.vue'
 import BodyTab from '@/components/BodyTab.vue'
 import ForgePanel from '@/components/ForgePanel.vue'
+import CoreMemoryDisplay from '@/components/CoreMemoryDisplay.vue'
 import TribulationPanel from '@/components/TribulationPanel.vue'
 import LegacyDisplay from '@/components/LegacyDisplay.vue'
 import SectTab from '@/components/SectTab.vue'
@@ -94,6 +95,7 @@ const alchemyTabAvailable = computed(() => alchemy.isRevealed())
             {{ realm.canReset(r.id) ? `Break through (+${format(realm.resetGain(r.id))})` : `Need ${format(realm.nextAt(r.id))} Qi` }}
           </button>
           <ForgePanel v-if="r.id === 'c'" />
+          <CoreMemoryDisplay v-if="r.id === 'c'" />
           <TribulationPanel v-if="r.id === 's'" />
           <LegacyDisplay v-if="r.id === 's'" />
           <SeveringPanel v-if="r.id === 'x'" />
