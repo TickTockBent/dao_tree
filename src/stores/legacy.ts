@@ -18,10 +18,14 @@ import { realmWithSoulAspect } from '@/data/realms'
 
 export interface LegacySlice {
   actOneGrade: number
+  /** Slice 9 §3 (scar-on-entry): the tribulation grade recorded at the FIRST
+   *  crossing into Act II (the first realm-x prestige). Feeds the future Act
+   *  II legacy grade. Fresh -1; latches like actOneGrade (never downgrades). */
+  actTwoEntryGrade: number
 }
 
 export function freshLegacySlice(): LegacySlice {
-  return { actOneGrade: -1 }
+  return { actOneGrade: -1, actTwoEntryGrade: -1 }
 }
 
 // Gate achievement IDs are positional + this offset (matches gate.ts + TMT convention).
@@ -50,12 +54,17 @@ export const useLegacyStore = defineStore('legacy', () => {
   const gate = useGateStore()
 
   const actOneGrade = ref(-1)
+  // Slice 9 §3: recorded once, at the Act II crossing (see realm.ts prestige()).
+  const actTwoEntryGrade = ref(-1)
 
   /** The stored Act I Legacy band row, or null (no grade earned yet). */
   const actOneLegacyBand = computed(() => {
     if (actOneGrade.value < 0) return null
     return LEGACY_DATA.actOne.bands[actOneGrade.value] ?? null
   })
+
+  /** True once the Act II entry grade has been recorded (the crossing happened). */
+  const actTwoEntryRecorded = computed(() => actTwoEntryGrade.value >= 0)
 
   /**
    * The Soul Aspect's legacy "depth": none = 0, formless = 1, element aspect = 2.
@@ -118,6 +127,16 @@ export const useLegacyStore = defineStore('legacy', () => {
     if (bandIndex > actOneGrade.value) actOneGrade.value = bandIndex
   }
 
+  /**
+   * Record the Act II entry (crossing) grade. Called ONCE, from realm.ts's
+   * prestige() on the first realm-x prestige. Latches the BEST grade seen —
+   * mirrors actOneGrade's never-downgrade rule — though in practice this is
+   * only ever called once (the crossing cannot recur).
+   */
+  function recordActTwoEntry(gradeIndex: number): void {
+    if (gradeIndex > actTwoEntryGrade.value) actTwoEntryGrade.value = gradeIndex
+  }
+
   /** The stored Act I Legacy band's qiMult (the legacyQiMult pipeline factor). */
   const legacyQiMult = computed<Decimal>(() => {
     const band = actOneLegacyBand.value
@@ -127,11 +146,13 @@ export const useLegacyStore = defineStore('legacy', () => {
 
   // ---- Save slice ---------------------------------------------------------
   function save(): Record<string, unknown> {
-    return { actOneGrade: actOneGrade.value }
+    return { actOneGrade: actOneGrade.value, actTwoEntryGrade: actTwoEntryGrade.value }
   }
   function load(slice: unknown): void {
     const s = (slice ?? freshLegacySlice()) as Partial<LegacySlice>
     actOneGrade.value = s.actOneGrade ?? -1
+    // Missing in pre-slice-9 saves → fresh -1 (backward-compatible load).
+    actTwoEntryGrade.value = s.actTwoEntryGrade ?? -1
   }
   function fresh(): Record<string, unknown> {
     return freshLegacySlice() as unknown as Record<string, unknown>
@@ -142,6 +163,9 @@ export const useLegacyStore = defineStore('legacy', () => {
     actOneLegacyBand,
     actOneLegacyScore,
     computeAndStoreActOneLegacy,
+    actTwoEntryGrade,
+    actTwoEntryRecorded,
+    recordActTwoEntry,
     legacyQiMult,
     update: (_diff: number) => {},
     save,

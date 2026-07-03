@@ -20,6 +20,14 @@ import { useSectStore } from './sect'
 import { useAlchemyStore } from './alchemy'
 import { useHeartDemonsStore } from './heartDemons'
 import { useSoulStore } from './soul'
+// Slice 9 §3 (scar-on-entry): scar/legacy/tribulation lookups are deferred
+// (called inside prestige(), never hoisted into this store's setup()) because
+// legacy.ts → tribulation.ts → realm.ts closes a real circular-instantiation
+// loop — the same deferred-store-lookup pattern body.ts uses for useScarStore()
+// and useSeveringStore().
+import { useScarStore } from './scar'
+import { useLegacyStore } from './legacy'
+import { useTribulationStore } from './tribulation'
 import type { RealmId } from '@/engine/types'
 
 // ---- State shape ----------------------------------------------------------
@@ -217,6 +225,11 @@ export const useRealmStore = defineStore('realm', () => {
     // A held clarity charge boosted this gain (folded in resetGain) — consume it.
     const aidApplied = alchemy.breakthroughGainMult(id).gt(decimalOne())
 
+    // Slice 9 §3 (scar-on-entry): capture whether realm x is unlocking for the
+    // FIRST time on this prestige, BEFORE the state write below latches
+    // `unlocked` to true. This is "the crossing" — the first realm-x prestige.
+    const isFirstActTwoCrossing = id === 'x' && !stateOf(id).unlocked
+
     // onPrestige runs BEFORE the cascade resets q (meridians/temper/q.best intact).
     if (r.graded) {
       // Heart Demons (slice 8, §7.4 "rushed low-grade breakthroughs"): the
@@ -248,6 +261,22 @@ export const useRealmStore = defineStore('realm', () => {
 
     // Latch sub-stage milestones (done() = best >= stage.at).
     latchMilestones(id)
+
+    // Slice 9 §3 (scar-on-entry, retired spec §1.3): the first crossing into
+    // Act II leaves a GUARANTEED scar — "the wound that severing thematically
+    // answers" — graded by the tribulation grade already latched on the
+    // tribulation store. Fires exactly once, on the crossing prestige only;
+    // every later x-prestige is a no-op here.
+    //
+    // This deliberately reuses the shipped ONE-slot scar system (deepenScar)
+    // rather than a typed per-act scar slot. Retired spec §10.9's typed
+    // per-act scar slots only become necessary once Act III adds a SECOND
+    // act-entry scar (today there is only one to hold); that is a system
+    // constraint to revisit then, not a narrative choice being made now.
+    if (isFirstActTwoCrossing) {
+      useScarStore().deepenScar()
+      useLegacyStore().recordActTwoEntry(useTribulationStore().tribGrade)
+    }
 
     // Slice 9 (D23/D25): each Spirit Severing breakthrough completes one
     // severance ritual — the climb IS the ritual, and the ritual counter is

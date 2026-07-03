@@ -4,10 +4,12 @@ import Decimal from 'break_eternity.js'
 import { useForgeStore } from '@/stores/forge'
 import { useRealmStore } from '@/stores/realm'
 import { useBodyStore } from '@/stores/body'
+import { useGameStore } from '@/stores/game'
 import { useScarStore } from '@/stores/scar'
 import { useTribulationStore } from '@/stores/tribulation'
 import { useLegacyStore } from '@/stores/legacy'
 import { SETPIECE_DATA } from '@/data/setpieces'
+import { findRealm } from '@/data/realms'
 
 // ---- Forge -----------------------------------------------------------------
 
@@ -207,5 +209,85 @@ describe('legacy store', () => {
 
     legacy.computeAndStoreActOneLegacy()
     expect(legacy.legacyQiMult.toNumber()).toBeGreaterThanOrEqual(1)
+  })
+})
+
+// ---- Scar-on-entry (slice 9 §3) --------------------------------------------
+
+describe('scar-on-entry: first Act II crossing', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  const SHAKEN_GRADE_INDEX = SETPIECE_DATA.firstTribulation.grades.findIndex((g) => g.key === 'shaken')
+  const FLAWLESS_GRADE_INDEX = SETPIECE_DATA.firstTribulation.grades.findIndex((g) => g.key === 'flawless')
+  const X_REQ_BASE = findRealm('x').reqBase
+
+  /** Fund realm x's next prestige: pass the tribulation (unlock condition) and bank enough Qi. */
+  function primeForXPrestige(tribGradeIndex: number): void {
+    const trib = useTribulationStore()
+    const game = useGameStore()
+    trib.tribGrade = tribGradeIndex
+    game.points = new Decimal(X_REQ_BASE)
+  }
+
+  it('the first x-prestige deepens the scar by exactly one and records the entry grade', () => {
+    const realm = useRealmStore()
+    const scar = useScarStore()
+    const legacy = useLegacyStore()
+    const body = useBodyStore()
+
+    expect(body.scarDepth).toBe(0)
+    expect(legacy.actTwoEntryGrade).toBe(-1)
+
+    primeForXPrestige(SHAKEN_GRADE_INDEX)
+    realm.prestige('x')
+
+    expect(realm.stateOf('x').unlocked).toBe(true)
+    expect(scar.activeDepth).toBe(1)
+    expect(legacy.actTwoEntryGrade).toBe(SHAKEN_GRADE_INDEX)
+  })
+
+  it('a second x-prestige does not deepen the scar again or change the recorded grade', () => {
+    const realm = useRealmStore()
+    const scar = useScarStore()
+    const legacy = useLegacyStore()
+
+    primeForXPrestige(SHAKEN_GRADE_INDEX)
+    realm.prestige('x') // first crossing: deepens once, records SHAKEN
+
+    primeForXPrestige(FLAWLESS_GRADE_INDEX) // even a higher live grade on the 2nd prestige...
+    realm.prestige('x')
+
+    expect(scar.activeDepth).toBe(1) // ...must not deepen the scar again...
+    expect(legacy.actTwoEntryGrade).toBe(SHAKEN_GRADE_INDEX) // ...or move the recorded entry grade.
+  })
+
+  it('recordActTwoEntry latches the best grade and never downgrades', () => {
+    const legacy = useLegacyStore()
+
+    legacy.recordActTwoEntry(FLAWLESS_GRADE_INDEX)
+    expect(legacy.actTwoEntryGrade).toBe(FLAWLESS_GRADE_INDEX)
+
+    legacy.recordActTwoEntry(SHAKEN_GRADE_INDEX) // a weaker grade must not downgrade it
+    expect(legacy.actTwoEntryGrade).toBe(FLAWLESS_GRADE_INDEX)
+  })
+
+  it('save/load round-trips actTwoEntryGrade', () => {
+    const legacy = useLegacyStore()
+    legacy.recordActTwoEntry(FLAWLESS_GRADE_INDEX)
+    const saved = legacy.save()
+
+    setActivePinia(createPinia())
+    const reloaded = useLegacyStore()
+    reloaded.load(saved)
+    expect(reloaded.actTwoEntryGrade).toBe(FLAWLESS_GRADE_INDEX)
+  })
+
+  it('loading a save without the field yields -1 (backward-compatible)', () => {
+    const legacy = useLegacyStore()
+    legacy.load({ actOneGrade: SHAKEN_GRADE_INDEX }) // no actTwoEntryGrade key at all
+    expect(legacy.actTwoEntryGrade).toBe(-1)
+    expect(legacy.actOneGrade).toBe(SHAKEN_GRADE_INDEX)
   })
 })
