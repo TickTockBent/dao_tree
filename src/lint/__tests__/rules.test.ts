@@ -99,10 +99,18 @@ function syntheticEmptyState(): GameState {
 // ---- §9.2 no dead multipliers -----------------------------------------------
 
 describe('§9.2 no dead multipliers', () => {
-  it('every realm substage declares a qiMult', () => {
+  it('every realm substage declares a qiMult (or null — the D33 severance reward)', () => {
     for (const realm of REALM_DATA) {
       for (const stage of realm.substages) {
-        expect(stage.qiMult, `${realm.id} ${stage.label} has no qiMult`).toBeDefined()
+        // D33: `null` is the EXPLICIT "the reward is the severance itself, not a
+        // modifier" form (realm-x). It is not a silent no-op — it is a
+        // deliberate sentinel every consumer must skip. Any non-null value must
+        // be a real multiplier (> 1), never a dead 1.0 (§9.2 no dead mults).
+        const declared = stage.qiMult
+        expect(declared, `${realm.id} ${stage.label} qiMult undefined (must be number|null)`).not.toBeUndefined()
+        if (declared !== null) {
+          expect(declared, `${realm.id} ${stage.label} qiMult ${declared} is a dead multiplier`).toBeGreaterThan(1)
+        }
       }
     }
   })

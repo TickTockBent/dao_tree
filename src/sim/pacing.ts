@@ -1876,7 +1876,8 @@ const SEVERING_RITUAL_STEP_COUNT = 12
 // The math is MIRRORED FROM DATA, never the severing/dao stores (which the
 // pipelines transitively hold): SETPIECE_DATA.severance (the c·m → k·m ramp),
 // OFFERING_DATA (corpse baskets), ACCUMULATOR_DATA.severanceRitual (the mastery
-// discount), LATTICE_DATA manifestation tier, realm-x substage qiMults. Only
+// discount), LATTICE_DATA manifestation tier, realm-x substages (null per D33 —
+// the cut grants no qi bonus, so act2RealmXQiMult is identity). Only
 // end-state RATES and the bound aspect's data multipliers are read live (the
 // same read-only convention as measureSeveringRateShares).
 //
@@ -1884,9 +1885,11 @@ const SEVERING_RITUAL_STEP_COUNT = 12
 // transcendent ramp multiplies"): a severed piece's own multiplier is removed
 // from the rate and REPLACED by axisValue(m, ratio) = (m>1 ? m·ratio :
 // max(ratio,1)); ratio ramps from startFraction (0.5) through breakeven (>=1)
-// to capRatio (2.0). realm-x substage qiMults (2.0/2.4/2.8) multiply the qi
-// rate cumulatively as cuts land (the store latches x milestones off severance
-// COUNT — realm.ts §D28).
+// to capRatio (2.0). D33 (Q12 closed): the realm-x substage qiMults are now
+// null (act2RealmXQiMult strips to identity) — the cut grants NO qi bonus, so
+// the transcendent ramp is the ONLY compensation and the trough is a REAL dip
+// (pre-D33 the 2.0/2.4/2.8 bumps overwhelmed the 0.5 ramp and qi ROSE at every
+// cut). The store still latches x milestones off severance COUNT (realm.ts §D28).
 
 // Ramp constants, mirrored from SETPIECE_DATA.severance (never hardcoded).
 const ACT2_SEVER_CFG = SETPIECE_DATA.severance
@@ -1955,12 +1958,20 @@ function act2PieceAxisFactor(piece: Act2Piece, axis: 'qi' | 'insight'): Decimal 
   return piece.inBaseRate ? new Decimal(1) : m
 }
 
-/** realm-x qi multiplier after `severCount` cuts — cumulative substage product. */
+/**
+ * realm-x qi multiplier after `severCount` cuts — cumulative substage product.
+ * D33: realm-x substage qiMults are now `null` (the cut grants no qi bonus; the
+ * transcendent ramp is the only compensation), so this strips to identity (1).
+ * The loop stays so any future non-null substage would re-enter the product;
+ * null is skipped explicitly, never falsy-multiplied.
+ */
 function act2RealmXQiMult(severCount: number): Decimal {
   const substages = findRealm('x').substages
   let product = new Decimal(1)
   for (let i = 0; i < severCount && i < substages.length; i++) {
-    product = product.times(substages[i]!.qiMult)
+    const qiMult = substages[i]!.qiMult
+    if (qiMult === null) continue // D33: severance reward is the ramp, not a bonus.
+    product = product.times(qiMult)
   }
   return product
 }
@@ -2336,7 +2347,7 @@ function printActIISpine(result: Act2Result, pinnedCompetentSeconds: number): vo
     '  Act II mechanics are MODELED analytically from data (SETPIECE_DATA.severance ramp, OFFERING_DATA',
   )
   console.log(
-    '  baskets, ACCUMULATOR_DATA.severanceRitual mastery, realm-x substage qiMults) — all numbers ⟨tune⟩',
+    '  baskets, ACCUMULATOR_DATA.severanceRitual mastery, realm-x substages null-stripped per D33) — numbers ⟨tune⟩',
   )
   console.log('  pending Gate-D (D28). No severing/dao store is mutated; end-state rates are read live.')
 
@@ -2764,8 +2775,11 @@ function runActIIActor(policy: Act2ActorPolicy): Act2ActorResult {
     const piece = severOrder[severIndex]!
     const liveNow = liveSeverableCount()
 
-    // The cut: qi rate just before vs at the trough (ratio = startFraction),
-    // net of the realm-x substage bump the cut unlocks — the FELT dip.
+    // The cut: qi rate just before vs at the trough (ratio = startFraction).
+    // D33: the realm-x substage bump is gone (null-stripped to identity), so the
+    // trough is a REAL dip — the severed piece's own multiplier drops to
+    // m·startFraction with nothing offsetting it (pre-D33 the 2.0/2.4/2.8 bumps
+    // made qi RISE at the cut; the dip read negative — the D23 contradiction).
     const qiBeforeCut = qiRate()
     piece.severed = true
     piece.ratio = act2RatioAtStep(0)
@@ -3014,7 +3028,8 @@ function printActIIRoster(actors: Act2ActorResult[], spine: Act2Result): void {
     `  1. ⟨tune⟩ INSIGHT IS STILL THE ACT II BOTTLENECK, POST-D30 (spine + roster): the Future insight base (24,000, ×1.5/step) + ring-3 ` +
       `manifestation costs (6k–50k) both draw the lattice insight trickle. Roster insight-bound share of waited time (re-measured under D30): ` +
       `Realistic ${insBoundPct(realistic)}%, Meridian ${insBoundPct(meridian)}%, Lattice ${insBoundPct(lattice)}% (pre-D30: 98.4/99.9/100.0%). ` +
-      'D30 shed the billing artifact (durations collapsed, insight totals ~halved — see #2) yet insight still binds 94–100% of the wait: ' +
+      'D30 shed the billing artifact (durations collapsed, insight totals ~halved — see #2) yet insight still binds 90–100% of the wait ' +
+      '(D33 stripped the realm-x qi boost, so qi binds a little more — Meridian 95.6→90.6%): ' +
       'the bottleneck SURVIVES the fix. Rebalance offering insight bases DOWN or lattice insight rates UP?',
   )
   console.log(
@@ -3044,10 +3059,10 @@ function printActIIRoster(actors: Act2ActorResult[], spine: Act2Result): void {
       `${realisticBreaches ? `Manifestation is unaffordable/unowned for it (needs owned Seeds + ${realistic ? realistic.manifestInsightSpent.toExponential(2) : ''} insight) — the load-bearing third cut is out of reach for the experience target. Make Manifestation reachable for a hesitant lattice actor, or add a non-lattice third severable?` : 'the load-bearing Manifestation carries it — confirm the hesitant lattice actor reliably owns enough Seeds at Act II entry.'}`,
   )
   console.log(
-    `  6. ⟨tune⟩ THE MERIDIAN EXT CUT IS THE DEEPEST WEAKNESS WINDOW (roster): Meridian's ext-track sever (clean ${meridian ? meridian.extMultQi.toNumber().toFixed(2) : '5.96'}×) ` +
-      `dips qi ${meridian ? (meridian.rows.find((r) => r.severable === 'ext-meridian track')?.qiDipPct ?? 'n/a') : 'n/a'} at the trough over ` +
-      `${meridian ? (meridian.rows.find((r) => r.severable === 'ext-meridian track')?.weaknessWindowH ?? 'n/a') : 'n/a'}h — the roster's sharpest felt loss. Is a ~${meridian ? meridian.extMultQi.toNumber().toFixed(1) : '6'}× clean cut too punishing at c=0.5, ` +
-      'or is that exactly the "felt but bounded" window §2 wants? (realm-x boost partially offsets it — see the dip sign.)',
+    `  6. ⟨tune⟩ THE SEVERANCE TROUGH IS NOW A REAL DIP — RESOLVED BY D33 (Q12 closed, roster): the realm-x substage qiMults (pre-D33: 2.0/2.4/2.8) are stripped to null, so the c=0.5 transcendent ramp is the ONLY compensation and every cut DROPS qi at the trough. ` +
+      `Re-measured, each cut's own multiplier falls to m·0.5 with nothing offsetting it → a uniform qi dip of ${meridian ? (meridian.rows.find((r) => r.severable === 'ext-meridian track')?.qiDipPct ?? 'n/a') : 'n/a'} at the trough (Meridian's clean ${meridian ? meridian.extMultQi.toNumber().toFixed(2) : '5.96'}× ext cut, over ${meridian ? (meridian.rows.find((r) => r.severable === 'ext-meridian track')?.weaknessWindowH ?? 'n/a') : 'n/a'}h to breakeven). ` +
+      'PRE-D33 the same cuts read qi dip -20.0%/-40.0% (qi ROSE — the knife cut and nothing hurt, the D23 contradiction that opened Q12). The dip is bounded: the ramp recovers to breakeven at step 7. ' +
+      'Is a uniform ~50% trough at c=0.5 the "felt but bounded" window §2 wants, or should c be raised to soften it?',
   )
   console.log(
     `  7. ⟨tune⟩ CHECK-IN QUANTIZATION INFLATES THE EXPERIENCE ACTOR'S ACT II (roster): Realistic offerings land only on the ` +

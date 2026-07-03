@@ -22,8 +22,17 @@ export interface RealmSubstage {
   readonly label: string
   /** best threshold; sub-stage done when player[id].best >= at. */
   readonly at: number
-  /** Realm multiplier contribution on Qi/sec (no dead mult §9.2). */
-  readonly qiMult: number
+  /**
+   * Realm multiplier contribution on Qi/sec (no dead mult §9.2), OR `null`.
+   *
+   * D33: `null` means "this substage's reward is the severance ITSELF, not a
+   * modifier" — the Spirit Severing transitions are severance gates whose
+   * reward is the transcendent ramp STARTING, not a separate qi bonus (the
+   * transition is the event). null is NOT a placeholder 1.0 (rejected as data
+   * clutter): every consumer must handle it explicitly so nothing no-ops
+   * silently. Act I realms keep their numeric rewards unchanged.
+   */
+  readonly qiMult: number | null
 }
 
 /** A soul aspect row on the Nascent Soul realm. */
@@ -275,9 +284,15 @@ export const REALM_DATA: readonly RealmRow[] = [
     //   - substage `at` values are REINTERPRETED as severance-COUNT
     //     thresholds [1,2,3] (the corpse names already assumed this, D27).
     //     The realm store latches x milestones off severing.severances.length
-    //     (NOT realmBest), so the sub-stage qiMults reward CUTS, not points.
-    // qiMults are PLACEHOLDERS ⟨tune⟩ — calibrated sim-side once Act II
-    // actors exist; each sub-stage is gated by its corpse's severance.
+    //     (NOT realmBest), so the sub-stages mark CUTS, not points.
+    // D33 (Q12 closed): the substage qiMults are STRIPPED to `null`. The old
+    // 2.0/2.4/2.8 were doing two conflicting jobs (Act II qi scaling AND
+    // early-ramp compensation) and the scaling overwhelmed the severance cost —
+    // qi ROSE at every trough, contradicting D23's emotional design. Now the
+    // transcendent ramp (c=0.5 → k=2.0, SETPIECE_DATA.severance) is the ONLY
+    // compensation for a cut: the transition doesn't need a separate bonus
+    // because the transition IS the event. null = "reward is the severance
+    // itself" (see RealmSubstage.qiMult); consumers skip it explicitly.
     id: 'x',
     row: 5,
     name: 'Spirit Severing',
@@ -289,10 +304,11 @@ export const REALM_DATA: readonly RealmRow[] = [
     reveal: { tribulationPassed: true },
     unlock: { tribulationPassed: true },
     substages: [
-      // `at` = severance COUNT (D28), not a qi/points threshold.
-      { label: 'The Past Lies Severed', at: 1, qiMult: 2.0 },
-      { label: 'The Present Lies Severed', at: 2, qiMult: 2.4 },
-      { label: 'The Future Lies Severed', at: 3, qiMult: 2.8 },
+      // `at` = severance COUNT (D28), not a qi/points threshold. qiMult = null
+      // (D33): the ramp is the only compensation; the cut grants no qi bonus.
+      { label: 'The Past Lies Severed', at: 1, qiMult: null },
+      { label: 'The Present Lies Severed', at: 2, qiMult: null },
+      { label: 'The Future Lies Severed', at: 3, qiMult: null },
     ],
     setpiece: 'severance',
   },

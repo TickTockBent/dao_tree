@@ -377,6 +377,9 @@ export const useRealmStore = defineStore('realm', () => {
     const r = findRealm(id)
     const s = stateOf(id)
     r.substages.forEach((stage, index) => {
+      // D33: a null substage reward is the severance itself, not a modifier —
+      // skip it explicitly (never a silent falsy-multiply).
+      if (stage.qiMult === null) return
       if (s.milestones.includes(index)) product = product.times(stage.qiMult)
     })
     return product
@@ -389,6 +392,8 @@ export const useRealmStore = defineStore('realm', () => {
       const s = stateOf(r.id)
       if (!s.unlocked) continue
       r.substages.forEach((stage, index) => {
+        // D33: null substage reward = the severance itself, not a modifier.
+        if (stage.qiMult === null) return
         if (s.milestones.includes(index)) product = product.times(stage.qiMult)
       })
     }

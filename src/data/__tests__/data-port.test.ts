@@ -107,6 +107,10 @@ describe('REALM_DATA', () => {
     // milestones off severing.severances.length. reqBase/gainExp are RETIRED
     // (type-shape only) — the offering path ignores them; no gain accrues.
     expect(x.substages.map((s) => s.at)).toEqual([1, 2, 3])
+    // D33 (Q12 closed): the substage qiMults (pre-D33: 2.0/2.4/2.8) are stripped
+    // to null — the cut grants no qi bonus; the transcendent ramp is the only
+    // compensation, so the transition IS the reward (not a separate modifier).
+    expect(x.substages.map((s) => s.qiMult)).toEqual([null, null, null])
     expect(x.setpiece).toBe('severance')
   })
 
