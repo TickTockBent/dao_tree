@@ -4,35 +4,36 @@
 // LIFE-scoped (TREE_DATA layer 'severing'): severed things return next life.
 // The eternal severance HISTORY lives on the soul store (D24).
 //
-// SKELETON STATUS: the state shape, save plumbing, and every consumer-facing
-// getter are PINNED here; the ceremony (charge → commit → outcome), the
-// live-contribution measurement shown on the severance menu (D11 — the game
-// tells you exactly what you are giving up), sequential corpse gating
-// (lived-with = breakeven crossed), and the real ramp math are the slice-9
-// severing agent's surface. Every getter is identity/empty until then, so
-// the game plays byte-identical to pre-slice-9 (the no-dead-mult invariant).
-//
-// CONTRACT for the implementer:
+// CONTRACT for the implementer (now implemented):
 // - transcendentQiMult / transcendentInsightMult: product over active
-//   severances of min(c·m·g^steps, k·m) per D25 (c/k/steps on
-//   SETPIECE_DATA.severance; steps = soul.severanceRituals −
-//   record.ritualStepsAtSever; m = the contribution captured at sever time).
-//   The multiplier covers a SUPERSET of the severed domain (k > 1 makes the
-//   lifetime cover definitional) — the cross-check lint verifies the SHAPE,
-//   the sim asserts the pacing (never lint).
+//   severances of the per-axis ramp value. Ramp per D25: ratio starts at
+//   startFraction (c), grows geometrically per severance-ritual completion,
+//   caps at capRatio (k) by rampSteps; the axis value is ratio × the
+//   contribution (m) captured at sever time. An axis the piece did NOT occupy
+//   (m === 1) is floored at 1 so a qi-only cut never drags insight below
+//   baseline. Constants live on SETPIECE_DATA.severance — never hardcode.
 // - isSevered() is consulted by the nullification seams already wired in
-//   pipelines.ts (soul aspect), body.ts (extraordinary meridians), and
-//   alchemy.ts (profession pills) — implement the manifestation seam with
-//   the lattice ring (dao store).
-// - Severing calls soul.recordSeverance() (history) and captures the piece's
-//   live contribution BEFORE nullifying it.
+//   pipelines.ts (soul aspect + manifestation tier), body.ts (extraordinary
+//   meridians), and alchemy.ts (profession pills).
+// - sever() captures the piece's live contribution BEFORE nullifying it and
+//   records the cut in the eternal history via soul.recordSeverance().
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type Decimal from 'break_eternity.js'
+import Decimal from 'break_eternity.js'
 import { decimalOne } from '@/engine/decimal'
 import { SEVERING_DATA } from '@/data/severing'
-import type { CorpseKey, SeverableKey } from '@/engine/types'
+import { SETPIECE_DATA } from '@/data/setpieces'
+import { findBodyBuyable } from '@/data/body'
+import { findRecipe } from '@/data/alchemy'
+import { LATTICE_DATA } from '@/data/lattice'
+import { realmWithSoulAspect } from '@/data/realms'
+import { useBodyStore } from './body'
+import { useAlchemyStore } from './alchemy'
+import { useDaoStore } from './dao'
+import { useRealmStore } from './realm'
+import { useSoulStore } from './soul'
+import type { CorpseKey, PillKey, SeverableKey } from '@/engine/types'
 
 export interface SeveranceRecord {
   corpse: CorpseKey
@@ -48,8 +49,64 @@ export interface SeveringSlice {
   severances: SeveranceRecord[]
 }
 
+/** Per-severance ramp state the panel renders (all derived, never stored). */
+export interface SeveranceReadout {
+  /** Ritual completions since this cut (0 at sever). */
+  steps: number
+  /** 1-indexed presentation step, clamped to the cap step. */
+  displayStep: number
+  /** Current ramp ratio in [startFraction, capRatio]. */
+  ratio: number
+  /** Ramp value applied to the qi axis (contribution × ratio, floored per rule). */
+  qiMult: Decimal
+  /** Ramp value applied to the insight axis. */
+  insightMult: Decimal
+  /** True once the ramp has carried the multiplier past what was cut. */
+  breakevenCrossed: boolean
+  /** 1-indexed step at which the ramp first reaches breakeven (data-derived). */
+  breakevenStep: number
+  /** 1-indexed step at which the ramp reaches its cap. */
+  capStep: number
+}
+
 export function freshSeveringSlice(): SeveringSlice {
   return { severances: [] }
+}
+
+// ---- Ramp constants (D25 — read from data, never hardcode) ----------------
+const SEVER_CFG = SETPIECE_DATA.severance
+/** c — where the ramp starts, as a fraction of the severed contribution. */
+const START_FRACTION = SEVER_CFG.startFraction
+/** k — the lifetime cap, as a ratio over the severed contribution. */
+const CAP_RATIO = SEVER_CFG.capRatio
+/** Ritual completions from start to cap (display steps 1..rampSteps). */
+const RAMP_STEPS = SEVER_CFG.rampSteps
+/** Geometric growth per ritual step: c·g^(rampSteps−1) = k. */
+const RAMP_GROWTH = Math.pow(CAP_RATIO / START_FRACTION, 1 / (RAMP_STEPS - 1))
+/** Raw step count at which ratio first reaches 1 (0-indexed from sever). */
+const RAW_BREAKEVEN_STEPS =
+  START_FRACTION >= 1 ? 0 : Math.ceil(Math.log(1 / START_FRACTION) / Math.log(RAMP_GROWTH))
+/** Breakeven as a 1-indexed presentation step (step 7 at c=0.5, k=2.0). */
+const BREAKEVEN_STEP_DISPLAY = RAW_BREAKEVEN_STEPS + 1
+/** Cap as a 1-indexed presentation step (step 12 at rampSteps=12). */
+const CAP_STEP_DISPLAY = RAMP_STEPS
+
+/** The gathering pill whose nominal mult is the legible v1 profession contribution. */
+const GATHERING_PILL_KEY: PillKey = 'gatheringPill'
+/** MANIFESTATION-tier effects live at tier index 2 (owned requires tier >= 3). */
+const MANIFESTATION_TIER_INDEX = 2
+/** Life number stamped on every cut until Samsara numbers lives for real (D24). */
+const PRE_SAMSARA_LIFE_NUMBER = 1
+
+/** The ramp ratio at a given raw step count. */
+function ratioAtStep(steps: number): number {
+  return Math.min(START_FRACTION * Math.pow(RAMP_GROWTH, steps), CAP_RATIO)
+}
+
+/** Axis value: ratio × m, but an unoccupied axis (m === 1) is never dragged below 1. */
+function axisValue(contribution: Decimal, ratio: number): Decimal {
+  const scaled = contribution.times(ratio)
+  return contribution.eq(1) ? scaled.max(decimalOne()) : scaled
 }
 
 export const useSeveringStore = defineStore('severing', () => {
@@ -69,30 +126,157 @@ export const useSeveringStore = defineStore('severing', () => {
   })
 
   /**
-   * Severables the player can cut RIGHT NOW (acquired + not already severed).
-   * SKELETON: empty — the implementer derives availability from the owning
-   * stores (aspect chosen / profession picked / ext track complete /
-   * manifestation owned) and pairs each with its measured live contribution
-   * for the menu (D11).
+   * The piece's NOMINAL domain multiplier per axis, from data + owned state
+   * (D11 — shown on the menu BEFORE the cut, captured verbatim at sever time).
+   * profession is a COMPOSITE effect (pill + breakthrough aid + warding); the
+   * gathering pill's nominal mult is the honest legible v1 figure (k-probe).
    */
-  const liveSeverables = computed<readonly SeverableKey[]>(() => [])
-
-  /** Whether the severing ceremony can begin (SKELETON: never). */
-  const canSever = computed<boolean>(() => false)
-
-  /** Perform a severance (SKELETON: refuses). Returns success. */
-  function sever(severable: SeverableKey): boolean {
-    void severable
-    return false
+  function contributionOf(severable: SeverableKey): { qi: Decimal; insight: Decimal } {
+    if (severable === 'soulAspect') {
+      const aspectKey = useBodyStore().soulAspect
+      const aspect = realmWithSoulAspect()?.soulAspect?.aspects.find((a) => a.key === aspectKey)
+      return {
+        qi: new Decimal(aspect?.effect.qiMult ?? 1),
+        insight: new Decimal(aspect?.effect.insightMult ?? 1),
+      }
+    }
+    if (severable === 'extraordinaryMeridians') {
+      const extra = findBodyBuyable('extraordinaryMeridian')
+      const owned = useBodyStore().extraordinaryMeridians
+      return { qi: Decimal.pow(extra.effectBase, owned), insight: decimalOne() }
+    }
+    if (severable === 'profession') {
+      const effect = findRecipe(GATHERING_PILL_KEY).effect
+      const qi = effect.type === 'timedQiMult' ? new Decimal(effect.mult) : decimalOne()
+      return { qi, insight: decimalOne() }
+    }
+    // manifestation: product of every owned MANIFESTATION-tier effect per axis
+    // (empty until the manifestation ring lands in lattice data — correct).
+    const dao = useDaoStore()
+    let qi = decimalOne()
+    let insight = decimalOne()
+    for (const node of LATTICE_DATA.nodes) {
+      if (dao.nodeTierOwned(node.key) < MANIFESTATION_TIER_INDEX + 1) continue
+      const effect = node.effects[MANIFESTATION_TIER_INDEX]
+      if (!effect) continue
+      if ('qiMult' in effect) qi = qi.times(effect.qiMult)
+      else insight = insight.times(effect.insightMult)
+    }
+    return { qi, insight }
   }
 
-  /** Transcendent multiplier over the qi axis (identity until implemented). */
-  const transcendentQiMult = computed<Decimal>(() => decimalOne())
+  /** True if the severable is ACQUIRED this life (available to cut). */
+  function isAcquired(severable: SeverableKey): boolean {
+    if (severable === 'soulAspect') return useBodyStore().soulAspect !== ''
+    if (severable === 'profession') return useAlchemyStore().professionChosen
+    if (severable === 'extraordinaryMeridians') {
+      const limit = findBodyBuyable('extraordinaryMeridian').limit
+      return useBodyStore().extraordinaryMeridians >= limit
+    }
+    // manifestation: any lattice node owned at MANIFESTATION tier
+    const dao = useDaoStore()
+    return LATTICE_DATA.nodes.some((n) => dao.nodeTierOwned(n.key) >= MANIFESTATION_TIER_INDEX + 1)
+  }
 
-  /** Transcendent multiplier over the insight axis (identity until implemented). */
-  const transcendentInsightMult = computed<Decimal>(() => decimalOne())
+  /** Severables the player can cut RIGHT NOW (acquired + not already severed). */
+  const liveSeverables = computed<readonly SeverableKey[]>(() =>
+    SEVERING_DATA.severables
+      .map((s) => s.key)
+      .filter((key) => !isSevered(key) && isAcquired(key)),
+  )
 
-  /** Tick hook (registered in main.ts/test-setup.ts; ceremony pacing lands here). */
+  /** Raw ritual completions since a cut (0 at sever). */
+  function stepsSince(record: SeveranceRecord): number {
+    return useSoulStore().severanceRituals - record.ritualStepsAtSever
+  }
+
+  /** The cut has been LIVED WITH once its ramp reaches breakeven (D23). */
+  function breakevenCrossed(record: SeveranceRecord): boolean {
+    return ratioAtStep(stepsSince(record)) >= 1
+  }
+
+  /** Per-axis ramp value for one severance (the m·g^steps → k·m term). */
+  function axisMultFor(record: SeveranceRecord): { qi: Decimal; insight: Decimal } {
+    const ratio = ratioAtStep(stepsSince(record))
+    return {
+      qi: axisValue(new Decimal(record.severedQiMult), ratio),
+      insight: axisValue(new Decimal(record.severedInsightMult), ratio),
+    }
+  }
+
+  /** Everything the panel needs to render one severance's ramp/weakness state. */
+  function readoutFor(record: SeveranceRecord): SeveranceReadout {
+    const steps = stepsSince(record)
+    const ratio = ratioAtStep(steps)
+    const axis = axisMultFor(record)
+    return {
+      steps,
+      displayStep: Math.min(steps + 1, RAMP_STEPS),
+      ratio,
+      qiMult: axis.qi,
+      insightMult: axis.insight,
+      breakevenCrossed: ratio >= 1,
+      breakevenStep: BREAKEVEN_STEP_DISPLAY,
+      capStep: CAP_STEP_DISPLAY,
+    }
+  }
+
+  /** The previous cut must be lived with (breakeven) before the next opens (D23). */
+  const previousLivedWith = computed<boolean>(() => {
+    const records = slice.value.severances
+    const prev = records[records.length - 1]
+    return prev === undefined || breakevenCrossed(prev)
+  })
+
+  /** Whether the severing ceremony can begin. */
+  const canSever = computed<boolean>(
+    () =>
+      useRealmStore().stateOf('x').unlocked &&
+      nextCorpse.value !== null &&
+      liveSeverables.value.length > 0 &&
+      previousLivedWith.value,
+  )
+
+  /** Perform a severance. Returns success; nullification is automatic via isSevered. */
+  function sever(severable: SeverableKey): boolean {
+    if (!useRealmStore().stateOf('x').unlocked) return false
+    const corpse = nextCorpse.value
+    if (corpse === null) return false
+    if (!liveSeverables.value.includes(severable)) return false
+    // Sequential lived-with rule (D23): the previous cut must have crossed breakeven.
+    if (!previousLivedWith.value) return false
+
+    const soul = useSoulStore()
+    const contribution = contributionOf(severable)
+    const record: SeveranceRecord = {
+      corpse,
+      severable,
+      ritualStepsAtSever: soul.severanceRituals,
+      severedQiMult: contribution.qi.toString(),
+      severedInsightMult: contribution.insight.toString(),
+    }
+    slice.value = { severances: [...slice.value.severances, record] }
+    soul.recordSeverance(severable, PRE_SAMSARA_LIFE_NUMBER)
+    return true
+  }
+
+  /** Transcendent multiplier over the qi axis (identity when no severances). */
+  const transcendentQiMult = computed<Decimal>(() => {
+    let product = decimalOne()
+    for (const record of slice.value.severances) product = product.times(axisMultFor(record).qi)
+    return product
+  })
+
+  /** Transcendent multiplier over the insight axis (identity when no severances). */
+  const transcendentInsightMult = computed<Decimal>(() => {
+    let product = decimalOne()
+    for (const record of slice.value.severances) {
+      product = product.times(axisMultFor(record).insight)
+    }
+    return product
+  })
+
+  /** Tick hook: the ritual clock is realm-x prestige (soul.recordSeveranceRitual), so no-op. */
   function update(diff: number): void {
     void diff
   }
@@ -116,9 +300,15 @@ export const useSeveringStore = defineStore('severing', () => {
     severances,
     isSevered,
     nextCorpse,
+    contributionOf,
     liveSeverables,
     canSever,
+    previousLivedWith,
     sever,
+    stepsSince,
+    breakevenCrossed,
+    axisMultFor,
+    readoutFor,
     transcendentQiMult,
     transcendentInsightMult,
     update,
