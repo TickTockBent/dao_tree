@@ -54,6 +54,29 @@ function confirmSever(key: SeverableKey): void {
   severing.sever(key)
   armedSeverable.value = null
 }
+
+// D32: recovery math at choice time — the breakeven timeline + offering cost
+// trajectory for a HYPOTHETICAL cut, shown before the knife (never veil the
+// now). recoverySummary is the one-line readout under each candidate;
+// recoveryDetail is the per-turning breakdown, sat in a title tooltip (the
+// lighter convention already used here — no expand/details pattern exists
+// elsewhere in this codebase to reuse instead).
+type RecoveryProjectionLike = ReturnType<typeof severing.recoveryProjection>
+
+function recoveryDetail(recovery: RecoveryProjectionLike): string {
+  return recovery.trajectory
+    .map((turning) => `Turning ${turning.index + 1}: ~${format(turning.qi)} Qi, ~${format(turning.insight)} Insight`)
+    .join('\n')
+}
+
+function recoverySummary(recovery: RecoveryProjectionLike): string {
+  const corpseName = findCorpse(recovery.corpse).name
+  return (
+    `Breakeven: after ${recovery.turningsToBreakeven} turnings (of ${recovery.capStep} to full mastery). ` +
+    `The ${recovery.turningsToBreakeven} turnings of ${corpseName}'s rite will ask: ` +
+    `~${format(recovery.totalQi)} Qi, ~${format(recovery.totalInsight)} Insight in total.`
+  )
+}
 </script>
 
 <template>
@@ -137,22 +160,29 @@ function confirmSever(key: SeverableKey): void {
           </p>
           <ul v-else class="menu">
             <li v-for="key in severing.liveSeverables" :key="key" class="candidate">
-              <div v-for="contribution in [severing.contributionOf(key)]" :key="key">
+              <div
+                v-for="cand in [{ contribution: severing.contributionOf(key), recovery: severing.recoveryProjection(key) }]"
+                :key="key"
+              >
                 <p class="cand-name"><strong>{{ findSeverable(key).name }}</strong></p>
                 <p class="flavor">{{ findSeverable(key).flavor }}</p>
                 <p class="lost">
-                  You give up: Qi ×{{ format(contribution.qi) }}<span
-                    v-if="!contribution.insight.eq(1)"
-                  >, Insight ×{{ format(contribution.insight) }}</span>
+                  You give up: Qi ×{{ format(cand.contribution.qi) }}<span
+                    v-if="!cand.contribution.insight.eq(1)"
+                  >, Insight ×{{ format(cand.contribution.insight) }}</span>
                 </p>
                 <p class="gain">
                   In return: a transcendent multiplier over its domain, starting at
                   ×{{ severCfg.startFraction }} of what was cut and rising to
                   ×{{ severCfg.capRatio }} by ritual step {{ severCfg.rampSteps }}.
                 </p>
+                <p class="recovery" :title="recoveryDetail(cand.recovery)">
+                  {{ recoverySummary(cand.recovery) }}
+                </p>
 
                 <div v-if="armedSeverable === key" class="confirm">
                   <span class="confirm-q">Sever this? The weakness window opens immediately.</span>
+                  <p class="confirm-recovery">{{ recoverySummary(cand.recovery) }}</p>
                   <button class="danger" @click="confirmSever(key)">Sever</button>
                   <button @click="cancelSever()">Keep</button>
                 </div>
@@ -292,6 +322,7 @@ function confirmSever(key: SeverableKey): void {
 }
 .confirm {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   margin-top: 0.4rem;
@@ -299,6 +330,18 @@ function confirmSever(key: SeverableKey): void {
 .confirm-q {
   font-size: 0.82rem;
   color: #d8b25a;
+}
+.recovery {
+  color: #9ab0d8;
+  font-size: 0.8rem;
+  margin: 0.25rem 0;
+  cursor: help;
+}
+.confirm-recovery {
+  flex-basis: 100%;
+  color: #9ab0d8;
+  font-size: 0.8rem;
+  margin: 0;
 }
 .readout {
   margin-top: 0.4rem;

@@ -478,3 +478,168 @@ describe('the offering (D28)', () => {
     expect(realm.stateOf('x').milestones).toContain(0)
   })
 })
+
+// ---- D32: recovery math at choice time -------------------------------------
+
+describe('recovery projection (D32)', () => {
+  beforeEach(() => {
+    bootTestStores()
+  })
+
+  const OFFER_ACC = ACCUMULATOR_DATA.severanceRitual
+  function basket(corpse: 'past' | 'present' | 'future') {
+    return OFFERING_DATA.baskets.find((b) => b.corpse === corpse)!
+  }
+  /** Mirrors the store's private RAW_BREAKEVEN_STEPS derivation (D25 ramp math). */
+  function expectedRawBreakevenSteps(): number {
+    if (CFG.startFraction >= 1) return 0
+    const growth = Math.pow(CFG.capRatio / CFG.startFraction, 1 / (CFG.rampSteps - 1))
+    return Math.ceil(Math.log(1 / CFG.startFraction) / Math.log(growth))
+  }
+  /** Mirrors the projection's per-turning mastery scale: max(r^(rituals+i), f). */
+  function expectedTurningScale(rituals: number, index: number, pill: boolean): number {
+    const growth = Math.pow(OFFERING_DATA.growth, index)
+    const mastery = Math.max(Math.pow(OFFER_ACC.ratio!, rituals + index), OFFER_ACC.floor!)
+    return growth * mastery * (pill ? OFFERING_DATA.pillDiscount : 1)
+  }
+
+  it('breakeven step is 7 for c=0.5/k=2.0 (data-derived, matches readoutFor)', () => {
+    const severing = useSeveringStore()
+    unlockRealmX()
+    chooseAspect()
+    const projection = severing.recoveryProjection('soulAspect')
+    expect(CFG.startFraction).toBeCloseTo(0.5, 6)
+    expect(CFG.capRatio).toBeCloseTo(2.0, 6)
+    expect(projection.breakevenStep).toBe(7)
+    expect(projection.capStep).toBe(CFG.rampSteps)
+  })
+
+  it('trajectory length equals the raw breakeven step count', () => {
+    const severing = useSeveringStore()
+    unlockRealmX()
+    chooseAspect()
+    const projection = severing.recoveryProjection('soulAspect')
+    const rawSteps = expectedRawBreakevenSteps()
+    expect(projection.turningsToBreakeven).toBe(rawSteps)
+    expect(projection.trajectory.length).toBe(rawSteps)
+    expect(projection.trajectory[0]!.index).toBe(0)
+    expect(projection.trajectory[rawSteps - 1]!.index).toBe(rawSteps - 1)
+  })
+
+  it('the projected corpse is the one this cut would target (nextCorpse, pre-cut)', () => {
+    const severing = useSeveringStore()
+    unlockRealmX()
+    chooseAspect()
+    const projection = severing.recoveryProjection('soulAspect')
+    expect(projection.corpse).toBe('past')
+    expect(projection.corpse).toBe(severing.nextCorpse)
+  })
+
+  it('first turning = basket base × CURRENT mastery × pill state (no pill)', () => {
+    const severing = useSeveringStore()
+    const soul = useSoulStore()
+    unlockRealmX()
+    chooseAspect()
+    // Advance the ritual clock so "current" mastery is non-trivial (< 1).
+    for (let step = 0; step < 3; step++) soul.recordSeveranceRitual()
+
+    const projection = severing.recoveryProjection('soulAspect')
+    const first = projection.trajectory[0]!
+    const past = basket('past')
+    // offeringInfo.masteryScale is today's mastery discount, at today's rituals —
+    // exactly what turning 0 (rituals+0) should equal.
+    const currentMastery = severing.offeringInfo.masteryScale
+
+    expect(first.qi.div(past.qiBase).toNumber()).toBeCloseTo(currentMastery.toNumber(), 9)
+    expect(first.insight.div(past.insightBase).toNumber()).toBeCloseTo(currentMastery.toNumber(), 9)
+    expect(first.qi.div(past.qiBase).toNumber()).toBeCloseTo(expectedTurningScale(3, 0, false), 9)
+  })
+
+  it('a later turning composes growth^i × the FUTURE mastery discount (hand-computed)', () => {
+    const severing = useSeveringStore()
+    const soul = useSoulStore()
+    unlockRealmX()
+    chooseAspect()
+    for (let step = 0; step < 3; step++) soul.recordSeveranceRitual() // rituals = 3
+
+    const projection = severing.recoveryProjection('soulAspect')
+    const laterIndex = 3
+    const later = projection.trajectory[laterIndex]!
+    const past = basket('past')
+    const scale = expectedTurningScale(3, laterIndex, false)
+
+    expect(later.qi.div(past.qiBase).toNumber()).toBeCloseTo(scale, 9)
+    expect(later.insight.div(past.insightBase).toNumber()).toBeCloseTo(scale, 9)
+    // Distinguish from the (wrong) "current mastery held flat" computation.
+    const flatMastery = severing.offeringInfo.masteryScale.toNumber()
+    const growthOnly = Math.pow(OFFERING_DATA.growth, laterIndex)
+    expect(later.qi.div(past.qiBase).toNumber()).not.toBeCloseTo(growthOnly * flatMastery, 6)
+  })
+
+  it('totals equal the sum of the trajectory rows', () => {
+    const severing = useSeveringStore()
+    const soul = useSoulStore()
+    unlockRealmX()
+    chooseAspect()
+    for (let step = 0; step < 2; step++) soul.recordSeveranceRitual()
+
+    const projection = severing.recoveryProjection('soulAspect')
+    let sumQi = new Decimal(0)
+    let sumInsight = new Decimal(0)
+    for (const turning of projection.trajectory) {
+      sumQi = sumQi.plus(turning.qi)
+      sumInsight = sumInsight.plus(turning.insight)
+    }
+    expect(projection.totalQi.toNumber()).toBeCloseTo(sumQi.toNumber(), 6)
+    expect(projection.totalInsight.toNumber()).toBeCloseTo(sumInsight.toNumber(), 6)
+  })
+
+  it('a qi-only severable still bills the cut corpse basket on BOTH axes', () => {
+    const severing = useSeveringStore()
+    const body = useBodyStore()
+    unlockRealmX()
+    body.extraordinaryMeridians = EXT_LIMIT // qi-only contribution (insight m === 1)
+
+    const projection = severing.recoveryProjection('extraordinaryMeridians')
+    const past = basket('past')
+
+    expect(projection.corpse).toBe('past')
+    expect(projection.trajectory[0]!.qi.div(past.qiBase).toNumber()).toBeCloseTo(1, 9)
+    expect(projection.trajectory[0]!.insight.div(past.insightBase).toNumber()).toBeCloseTo(1, 9)
+    expect(projection.trajectory[0]!.insight.gt(0)).toBe(true)
+  })
+
+  it('an active pill discounts every projected turning (current pill state, held flat)', () => {
+    const severing = useSeveringStore()
+    const alchemy = useAlchemyStore()
+    unlockRealmX()
+    chooseAspect()
+
+    const before = severing.recoveryProjection('soulAspect')
+    alchemy.activePill = { key: 'gatheringPill', remaining: 600 }
+    const after = severing.recoveryProjection('soulAspect')
+
+    expect(after.trajectory[0]!.qi.div(before.trajectory[0]!.qi).toNumber())
+      .toBeCloseTo(OFFERING_DATA.pillDiscount, 9)
+    expect(after.totalQi.div(before.totalQi).toNumber())
+      .toBeCloseTo(OFFERING_DATA.pillDiscount, 9)
+  })
+
+  it('is pure: reading a projection mutates nothing (qi/insight/severances untouched)', () => {
+    const severing = useSeveringStore()
+    const game = useGameStore()
+    const dao = useDaoStore()
+    unlockRealmX()
+    chooseAspect()
+    const qiBefore = game.points
+    const insightBefore = dao.insight
+    const severancesBefore = severing.severances.length
+
+    severing.recoveryProjection('soulAspect')
+    severing.recoveryProjection('profession')
+
+    expect(game.points.toString()).toBe(qiBefore.toString())
+    expect(dao.insight.toString()).toBe(insightBefore.toString())
+    expect(severing.severances.length).toBe(severancesBefore)
+  })
+})

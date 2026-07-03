@@ -21,7 +21,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import Decimal from 'break_eternity.js'
-import { decimalOne } from '@/engine/decimal'
+import { decimalOne, decimalZero } from '@/engine/decimal'
 import { SEVERING_DATA, OFFERING_DATA, findOfferingBasket } from '@/data/severing'
 import { SETPIECE_DATA } from '@/data/setpieces'
 import { ACCUMULATOR_DATA } from '@/data/accumulators'
@@ -69,6 +69,35 @@ export interface SeveranceReadout {
   breakevenStep: number
   /** 1-indexed step at which the ramp reaches its cap. */
   capStep: number
+}
+
+/** One ritual turning's projected offering cost within a {@link RecoveryProjection}. */
+export interface RecoveryTurning {
+  /** 0-indexed position in the trajectory (the growth exponent for this turning). */
+  index: number
+  qi: Decimal
+  insight: Decimal
+}
+
+/**
+ * D32 — the recovery math for a HYPOTHETICAL cut, shown on the menu BEFORE
+ * the knife. All derived, never stored; mutates nothing.
+ */
+export interface RecoveryProjection {
+  /** The corpse this cut would sever — and so bill (D30) from turning one. */
+  corpse: CorpseKey
+  /** 1-indexed display step at which the ramp first reaches breakeven. */
+  breakevenStep: number
+  /** 1-indexed step at which the ramp reaches its lifetime cap. */
+  capStep: number
+  /** Raw ritual turnings needed to cross breakeven (trajectory length). */
+  turningsToBreakeven: number
+  /** Per-turning offering cost, index 0..turningsToBreakeven-1. */
+  trajectory: readonly RecoveryTurning[]
+  /** Sum of the trajectory's qi cost. */
+  totalQi: Decimal
+  /** Sum of the trajectory's insight cost. */
+  totalInsight: Decimal
 }
 
 export function freshSeveringSlice(): SeveringSlice {
@@ -359,6 +388,60 @@ export const useSeveringStore = defineStore('severing', () => {
     }
   })
 
+  /**
+   * D32 — the recovery math for a HYPOTHETICAL cut of `severable` RIGHT NOW,
+   * shown on the severance menu BEFORE the knife (never veil the now). Pure
+   * projection: reads live state, mutates nothing.
+   *
+   * The corpse billed is the one THIS cut would target (nextCorpse) — every
+   * live candidate at the current cut point shares it (D25's ramp is the
+   * same shape regardless of which piece is cut); `severable` is accepted so
+   * the panel can call this per-candidate without the caller reasoning about
+   * that uniformity itself, and so a future per-severable divergence has a
+   * stable call site. Turning `i` prices as
+   * basket × growth^i × max(r^(rituals+i), floor): `rituals` is TODAY's
+   * severance-ritual count (the mastery clock never resets and keeps
+   * advancing at its current pace regardless of which severance it serves),
+   * so `rituals+i` is the honest FUTURE ritual count when that turning would
+   * be paid. The pill discount is read at its CURRENT state only — the
+   * store cannot know a future pill's uptime — so every row assumes today's
+   * pill state, held flat across the trajectory (the panel labels it
+   * "current").
+   */
+  function recoveryProjection(severable: SeverableKey): RecoveryProjection {
+    void severable
+    const corpse = nextCorpse.value ?? SEVERING_DATA.corpses[0]!.key
+    const basket = findOfferingBasket(corpse)
+    const rituals = useSoulStore().severanceRituals
+    const pill = useAlchemyStore().activePill !== null
+      ? new Decimal(OFFERING_DATA.pillDiscount)
+      : decimalOne()
+
+    const trajectory: RecoveryTurning[] = []
+    let totalQi = decimalZero()
+    let totalInsight = decimalZero()
+    for (let index = 0; index < RAW_BREAKEVEN_STEPS; index++) {
+      const growthPow = Decimal.pow(OFFERING_DATA.growth, index)
+      const mastery = Decimal.max(Decimal.pow(OFFERING_ACC.ratio!, rituals + index), OFFERING_ACC.floor!)
+      const scale = growthPow.times(mastery).times(pill)
+      const qi = new Decimal(basket.qiBase).times(scale)
+      const insight = new Decimal(basket.insightBase).times(scale)
+      trajectory.push({ index, qi, insight })
+      totalQi = totalQi.plus(qi)
+      totalInsight = totalInsight.plus(insight)
+    }
+
+    return {
+      corpse,
+      breakevenStep: BREAKEVEN_STEP_DISPLAY,
+      capStep: CAP_STEP_DISPLAY,
+      turningsToBreakeven: RAW_BREAKEVEN_STEPS,
+      trajectory,
+      totalQi,
+      totalInsight,
+    }
+  }
+
   /** Transcendent multiplier over the qi axis (identity when no severances). */
   const transcendentQiMult = computed<Decimal>(() => {
     let product = decimalOne()
@@ -413,6 +496,7 @@ export const useSeveringStore = defineStore('severing', () => {
     canAffordOffering,
     performOffering,
     offeringInfo,
+    recoveryProjection,
     transcendentQiMult,
     transcendentInsightMult,
     update,
