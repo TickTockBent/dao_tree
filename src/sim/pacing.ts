@@ -1629,43 +1629,22 @@ function runProfileQuiet(fn: (state: SimState) => void): SimState {
   return state
 }
 
-// ---- Partial-keep probe report helpers (slice-9 decision input) --------------
+// ---- C re-climb curve report helpers (the core remembers — legibility) -------
 
-// The "core remembers" sweep grid. ⟨tune⟩ The full three-point sweep is kept —
-// measured wall budget holds (~46s of the 60s cap with all 8 extra runs); if
-// the budget ever breaks, drop 0.85 FIRST and log the cut here — no silent caps.
-const PARTIAL_KEEP_SWEEP_R = [0.85, 0.7, 0.5] as const
-// Curve-table density (designer pass: the read is curve SHAPE at the ENDS —
-// whether a fixed r makes late climbs trivially fast or early ones
-// indistinguishable from full cost; either failure means r must be a function
-// of k, not a constant). Full per-k list at/below the max; above it, every k
-// for the head, then deciles (p10…p90), then the tail.
+// Curve-table density (the read is curve SHAPE at the ENDS — whether the
+// live gain rule makes late climbs trivially fast or early ones
+// indistinguishable from full cost). Full per-k list at/below the max; above
+// it, every k for the head, then deciles (p10…p90), then the tail.
 const CURVE_PRINT_FULL_MAX = 20
 const CURVE_PRINT_HEAD_ROWS = 5
 const CURVE_PRINT_TAIL_ROWS = 3
-const FLAT_DISCOUNT_SPREAD = 0.05 // ⟨tune⟩ per-k ‡ discount max−min <= this reads as FLAT (no curve)
 // ⟨tune⟩ Fewer Realistic re-climbs than this = too few samples for the curve to
 // be FELT — the pre-named fallback signal (extend the curve into Act II instead).
 const FELT_CURVE_MIN_SAMPLES = 5
-
-// ---- R refinement (Realistic curve shape — designer follow-up) ---------------
-// The r value is chosen by its effect on the REALISTIC curve shape, not the
-// total ("the total is going to be fine anywhere in that range; the feel is in
-// the shape"). Fine grid around the confirmed r≈0.7 neighborhood; the 0.70
-// point reuses the coarse-sweep run rather than re-running it.
-const R_REFINEMENT_GRID = [0.65, 0.7, 0.75, 0.8] as const // ⟨tune⟩
-const R_REFINEMENT_FLOOR_R = 0.7 // the floor variants ride the confirmed-neighborhood r
-const R_REFINEMENT_FLOORS = [0.05, 0.1] as const // ⟨tune⟩ "brief ritual" scale floors f
 // Single-breath bar: a re-climb completing within ONE late-game check-in
-// interval is felt as "a breath". HONESTY NOTE: the clock-compression
-// counterfactual can show sub-check-in durations the real (check-in-quantized)
-// mechanic would never produce — so raw seconds under-report legibility; the
-// single-breath COUNT is the honest metric (how many climbs are breaths, and
-// whether any drop below noticeable at all).
+// interval is felt as "a breath". The single-breath COUNT is the legibility
+// metric (how many of the experience-target actor's climbs are breaths).
 const BREATH_SECONDS = REALISTIC_CHECKIN_LATE_SECONDS
-const VANISH_INSTANT_SECONDS = 60 // ⟨tune⟩ below this a climb reads as effectively zero (invisible)
-const VANISH_TAIL_ROWS = 4 // the designer's read is on the last few climbs
-const VANISH_TAIL_INSTANT_COUNT = 2 // ⟨tune⟩ >= this many instant tail climbs = the ritual VANISHED
 
 /** One curve-table row: `k=3: 512s (8.5m) [spans 2 cascades]`. */
 function reclimbRowText(segment: CReclimbSegment): string {
@@ -1732,47 +1711,9 @@ function printReclimbCurve(label: string, segments: CReclimbSegment[]): void {
   }
 }
 
-/**
- * Flat-discount check for ‡: pair base and ‡ segments by k, compute each k's
- * discount (1 − ‡/base duration), and read the spread. A milestones-only keep
- * with a truly flat effect leaves the spread ~0 — same relative discount on
- * every re-climb, no acceleration curve. Counts can misalign when the keep
- * changes cascade merging (Realistic's check-in grid); reported, not forced.
- */
-function flatDiscountCheck(
-  label: string,
-  baseSegments: CReclimbSegment[],
-  partialSegments: CReclimbSegment[],
-): { line: string; flat: boolean | null } {
-  if (baseSegments.length === 0 || baseSegments.length !== partialSegments.length) {
-    return {
-      line:
-        `  ${label}: re-climb counts differ (base ${baseSegments.length} vs ‡ ${partialSegments.length}) — ` +
-        'per-k discounts not directly alignable; compare the curve shapes above.',
-      flat: null,
-    }
-  }
-  const perKDiscounts = baseSegments
-    .map((segment, i) => ({
-      baseDuration: segment.durationSeconds,
-      partialDuration: partialSegments[i]!.durationSeconds,
-    }))
-    .filter((pair) => pair.baseDuration > 0)
-    .map((pair) => 1 - pair.partialDuration / pair.baseDuration)
-  if (perKDiscounts.length === 0) {
-    return { line: `  ${label}: every base re-climb is 0s — no discount is measurable.`, flat: null }
-  }
-  const discountMin = Math.min(...perKDiscounts)
-  const discountMax = Math.max(...perKDiscounts)
-  const spread = discountMax - discountMin
-  const flat = spread <= FLAT_DISCOUNT_SPREAD
-  return {
-    line:
-      `  ${label}: per-k ‡ discount min ${(discountMin * 100).toFixed(1)}% / max ${(discountMax * 100).toFixed(1)}% ` +
-      `→ spread ${(spread * 100).toFixed(1)}pts (${flat ? 'FLAT' : 'NOT FLAT'}, bar ${FLAT_DISCOUNT_SPREAD * 100}pts)`,
-    flat,
-  }
-}
+// HISTORICAL (retired 2026-07-02): flatDiscountCheck compared base vs the ‡
+// milestones-only keep to test the flat-discount prediction. Retired with the ‡
+// runs; the mechanic it fed into (D2) is closed and live. Record: calibration.md.
 
 // ---- SEVERING PROBE (Q9) helpers (decision input for D23 Spirit Severing) ----
 
@@ -2029,33 +1970,19 @@ export function runPacingSim(): void {
   const realisticRun = runProfile('Realistic', runRealistic)
   const realisticSeveringShares = measureSeveringRateShares() // SEVERING PROBE (Q9) — silent read
 
-  // ---- C-keep counterfactuals († runs): the churn-decomposition probes ------
-  // Same policies as Competent/Realistic, but c.best + c.milestones are force-
-  // preserved across n/s cascades (COUNTERFACTUAL — a c keep rule that does not
-  // exist in the game). The base-vs-† delta is the measured c-churn tax.
-  const competentCKeepRun = runProfile(
-    'Competent†',
-    spineRunner({ ...COMPETENT_CONFIG, counterfactualCKeep: true }),
-  )
-  const realisticCKeepRun = runProfile(
-    'Realistic†',
-    realisticRunner({ ...REALISTIC_CONFIG, counterfactualCKeep: true }),
-  )
-
-  // ---- Partial-keep counterfactuals (‡ runs): milestones survive, best wipes -
-  // The cheapest game-legal-SHAPED keep rule (same snapshot/restore machinery
-  // as †, milestones only). Because all three c milestones latch long before
-  // the first cascade, the structural prediction is a FLAT discount — every
-  // re-climb identically cheaper, no acceleration curve. Verified against the
-  // per-re-climb instrumentation in the PARTIAL-KEEP PROBE section below.
-  const competentPartialKeepRun = runProfile(
-    'Competent‡',
-    spineRunner({ ...COMPETENT_CONFIG, counterfactualPartialCKeep: true }),
-  )
-  const realisticPartialKeepRun = runProfile(
-    'Realistic‡',
-    realisticRunner({ ...REALISTIC_CONFIG, counterfactualPartialCKeep: true }),
-  )
+  // ---- HISTORICAL (retired 2026-07-02, slice-9 keep-rule activation) ---------
+  // The c-keep († counterfactualCKeep), milestones-only (‡
+  // counterfactualPartialCKeep), core-remembers clock-compression (r
+  // counterfactualCoreRemembers) and r-refinement (r/f) runs were
+  // PRE-IMPLEMENTATION probes: they modelled a keep mechanic that did not yet
+  // exist. Now that "the core remembers" is a REAL gain rule (soul.reclimbGainMult,
+  // live in every base run via realm.resetGain), those counterfactuals would
+  // DOUBLE-APPLY on top of the mechanic — so their runner invocations are
+  // retired. The decisions they fed are D2/D21; the measured record lives in
+  // docs/calibration.md + git history. The sim-side machinery (the config flags
+  // and the dormant branches in simPrestige / chargeSimClock / trackCReclimbCurve)
+  // is left in place, inert (no run sets the flags). The severing probe (⊘,
+  // observation-only) legitimately re-derives on the new baseline and is KEPT.
 
   // ---- Structural assertions: focused builds inherit the competent spine ---
   // Each must terminate at the tribulation trigger AND beat Diligent by >= 4×
@@ -2115,10 +2042,6 @@ export function runPacingSim(): void {
     markRow('SectFocused*', sectCounterfactualRun),
     markRow('PillFocused*', pillCounterfactualRun),
     markRow('Realistic', realisticRun),
-    markRow('Competent†', competentCKeepRun),
-    markRow('Realistic†', realisticCKeepRun),
-    markRow('Competent‡', competentPartialKeepRun),
-    markRow('Realistic‡', realisticPartialKeepRun),
   ])
 
   // ---- BUILD DIVERSITY (calibration — bands await sign-off) -----------------
@@ -2207,45 +2130,11 @@ export function runPacingSim(): void {
   )
   console.log('  (Calibration only — Competent is the regression floor; Realistic is the experience target. Two bands, two jobs.)')
 
-  // ---- C-CHURN DECOMPOSITION (decision input for #2 — no assertion) --------
-  // The † runs force-preserve c across n/s cascades (COUNTERFACTUAL c keep
-  // rule). base − † = the c-churn tax; churn share = tax / base. For Realistic,
-  // the remaining delta vs Competent splits into idle-gap (R† − C†, the human-
-  // imperfection cost with churn removed from both) and churn-gap (the extra
-  // churn Realistic pays beyond Competent's — its every-other-cascade lapses
-  // make its c climbs slower and rarer, so it banks at degraded rates longer).
-  const competentCKeepHours = competentCKeepRun.simSeconds / 3600
-  const realisticCKeepHours = realisticCKeepRun.simSeconds / 3600
-  const competentChurnHours = competentHours - competentCKeepHours
-  const realisticChurnHours = realisticHours - realisticCKeepHours
-  console.log('\n=== C-CHURN DECOMPOSITION (decision input for #2 — no assertion) ===')
-  console.table([
-    {
-      profile: 'Competent',
-      baseHours: competentHours.toFixed(2),
-      withCKeep: competentCKeepHours.toFixed(2),
-      churnTaxHours: competentChurnHours.toFixed(2),
-      churnShare: `${((competentChurnHours / competentHours) * 100).toFixed(1)}%`,
-    },
-    {
-      profile: 'Realistic',
-      baseHours: realisticHours.toFixed(2),
-      withCKeep: realisticCKeepHours.toFixed(2),
-      churnTaxHours: realisticChurnHours.toFixed(2),
-      churnShare: `${((realisticChurnHours / realisticHours) * 100).toFixed(1)}%`,
-    },
-  ])
-  const experienceGapHours = realisticHours - competentHours
-  const idleGapHours = realisticCKeepHours - competentCKeepHours
-  const churnGapHours = realisticChurnHours - competentChurnHours // == gap − idleGap
-  console.log(
-    `  Realistic − Competent gap: ${experienceGapHours.toFixed(2)}h = ` +
-      `idle/imperfection ${idleGapHours.toFixed(2)}h (${((idleGapHours / experienceGapHours) * 100).toFixed(1)}%) + ` +
-      `keep-topology churn ${churnGapHours.toFixed(2)}h (${((churnGapHours / experienceGapHours) * 100).toFixed(1)}%)`,
-  )
-  console.log(
-    '  (COUNTERFACTUAL probe — the c keep rule does not exist in the game; this measures what one would buy back.)',
-  )
+  // ---- C-CHURN DECOMPOSITION — HISTORICAL (retired 2026-07-02) --------------
+  // Retired with the † runs it consumed: the c-churn tax was a decision input
+  // for D2 (tax-vs-ritual), now closed. The mechanic that resolved it ("the
+  // core remembers") is live in every base run; there is no longer a
+  // counterfactual keep to decompose against. Record: docs/calibration.md.
 
   // ---- REALISTIC SENSITIVITY (calibration) ----------------------------------
   // Deterministic 9-point grid (no RNG): late-game check-in interval at
@@ -2292,19 +2181,16 @@ export function runPacingSim(): void {
       : `  Interpretation: WIDE swing (>= ${SWEEP_NARROW_SWING_RATIO}×) — pin a RANGE [${sweepMin.toFixed(1)}h … ${sweepMax.toFixed(1)}h], not a point.`,
   )
 
-  // ---- PARTIAL-KEEP PROBE (decision input for slice-9) ----------------------
-  // Wes's ruling on tax-vs-ritual: both pure options are off the table; the
-  // direction is a partial keep — "the core remembers" — where re-climbs STAY
-  // but ACCELERATE across ascents, the acceleration curve itself being the felt
-  // Act-I progression. His requirement: report the CURVE, not just the total
-  // ("a partial-keep that lands at 14h by making every re-climb uniformly 30%
-  // cheaper is worse than one that lands at 16h by making them accelerate —
-  // same hours, opposite design"). Three variants against the instrumented
-  // baselines: ‡ (milestones-only keep — the flat-discount prediction test),
-  // the r-sweep ("the core remembers" clock compression), and † as a reference
-  // endpoint only — † also keeps best, so it is NOT the r→0 limit (r→0
-  // compresses the re-climb clock; † removes the re-climb work entirely).
-  console.log('\n=== PARTIAL-KEEP PROBE (decision input for slice-9 keep design — no assertion) ===')
+  // ---- C RE-CLIMB CURVE (the core remembers — REAL mechanic, live) ----------
+  // Observation-only legibility evidence. "The core remembers" is now a real
+  // gain rule (soul.reclimbGainMult), so these baseline curves ARE the shipped
+  // mechanic's curve — no counterfactual compression. The pre-implementation
+  // probes (†/‡/r-sweep/r-refinement) that once shared this section are retired
+  // (see the HISTORICAL note above): a counterfactual clock scale must never
+  // double-apply on top of the live gain rule. What Wes asked to read still
+  // prints — per-ascent durations, the first/last collapse, and the Realistic
+  // single-breath count — but now as measurement, not model.
+  console.log('\n=== C RE-CLIMB CURVE (the core remembers — REAL mechanic; observation-only) ===')
   console.log(
     '  Segment = n/s cascade → c fully restored (best >= top sub-stage + all milestones re-latched);',
   )
@@ -2312,180 +2198,31 @@ export function runPacingSim(): void {
     '  duration includes interleaved work (f restores, n climbs, idle check-ins) — see CReclimbSegment.',
   )
 
-  console.log('\n  -- Baseline curves (the felt re-climb tax today) --')
-  printReclimbCurve('Competent (base)', competentRun.cReclimbSegments)
-  printReclimbCurve('Realistic (base)', realisticRun.cReclimbSegments)
-  const realisticReclimbCount = realisticRun.cReclimbSegments.length
+  // Competent: the optimizer's re-climb COUNT + collapse shape (its tail already
+  // self-compresses; the gain rule accelerates it further — first/last is the read).
+  console.log('\n  -- Competent (optimizer): re-climb count + collapse shape --')
+  printReclimbCurve('Competent', competentRun.cReclimbSegments)
+
+  // Realistic: the experience-target actor's per-ascent durations, first/last
+  // ratio, and single-breath count (climbs completing within one late check-in).
+  console.log('\n  -- Realistic (experience target): per-ascent durations + single-breath count --')
+  printReclimbCurve('Realistic', realisticRun.cReclimbSegments)
+  const realisticSegments = realisticRun.cReclimbSegments
+  const realisticReclimbCount = realisticSegments.length
+  const realisticSingleBreathCount = realisticSegments.filter(
+    (segment) => segment.durationSeconds <= BREATH_SECONDS,
+  ).length
   console.log(
     `\n  REALISTIC RE-CLIMB COUNT: ${realisticReclimbCount} felt re-climb segments in Act I ` +
-      `(spanning ${realisticRun.cReclimbSegments.reduce((sum, s) => sum + s.cascadesSpanned, 0)} cascades).`,
+      `(spanning ${realisticSegments.reduce((sum, segment) => sum + segment.cascadesSpanned, 0)} cascades); ` +
+      `first/last ${firstOverLastText(realisticSegments)}; ` +
+      `single-breath climbs (<= one ${BREATH_SECONDS}s late check-in): ${realisticSingleBreathCount}/${realisticReclimbCount}.`,
   )
   console.log(
     realisticReclimbCount < FELT_CURVE_MIN_SAMPLES
       ? `  SIGNAL (pre-named fallback): fewer than ${FELT_CURVE_MIN_SAMPLES} samples — too few re-climbs for an ` +
           'acceleration curve to be FELT in Act I; the mechanic would need Act II to extend the curve.'
       : `  Curve sample count OK (>= ${FELT_CURVE_MIN_SAMPLES}): enough re-climbs for an acceleration curve to be felt in Act I.`,
-  )
-
-  console.log('\n  -- ‡ milestones-only keep (the flat-discount prediction test) --')
-  printReclimbCurve('Competent‡', competentPartialKeepRun.cReclimbSegments)
-  printReclimbCurve('Realistic‡', realisticPartialKeepRun.cReclimbSegments)
-  const competentFlatCheck = flatDiscountCheck(
-    'Competent',
-    competentRun.cReclimbSegments,
-    competentPartialKeepRun.cReclimbSegments,
-  )
-  const realisticFlatCheck = flatDiscountCheck(
-    'Realistic',
-    realisticRun.cReclimbSegments,
-    realisticPartialKeepRun.cReclimbSegments,
-  )
-  console.log(competentFlatCheck.line)
-  console.log(realisticFlatCheck.line)
-  // The single verdict line Wes asked for. Carried by Competent (the clean
-  // actor — Realistic's check-in grid can shuffle its cascade merging).
-  const flatVerdictText =
-    competentFlatCheck.flat === null
-      ? 'INCONCLUSIVE on strict per-k alignment — judge from the first/last ratios above'
-      : competentFlatCheck.flat
-        ? 'HELD — every re-climb discounted near-identically; a milestones-only keep produces NO acceleration curve (the real mechanic needs an explicit compounding term, variant 3)'
-        : 'REFUTED — the ‡ discount varies across k; a milestones-only keep already bends the curve'
-  console.log(`  FLAT-DISCOUNT PREDICTION (‡): ${flatVerdictText}.`)
-
-  // ---- "The core remembers" sweep (quiet runs; r=1.0 IS the base run) -------
-  console.log(`\n  -- "The core remembers" sweep: re-climb k clock ×r^(k−1), r ∈ {${PARTIAL_KEEP_SWEEP_R.join(', ')}} ⟨tune⟩ --`)
-  console.log('  (r=1.0 is definitionally the base run — not re-run. Full 3-point sweep ran; nothing dropped.)')
-  const remembersRuns: { profile: string; r: number; run: SimState; baseSeconds: number }[] = []
-  for (const remembersRate of PARTIAL_KEEP_SWEEP_R) {
-    remembersRuns.push({
-      profile: 'Competent',
-      r: remembersRate,
-      run: runProfileQuiet(spineRunner({ ...COMPETENT_CONFIG, counterfactualCoreRemembers: remembersRate })),
-      baseSeconds: competentRun.simSeconds,
-    })
-    remembersRuns.push({
-      profile: 'Realistic',
-      r: remembersRate,
-      run: runProfileQuiet(realisticRunner({ ...REALISTIC_CONFIG, counterfactualCoreRemembers: remembersRate })),
-      baseSeconds: realisticRun.simSeconds,
-    })
-  }
-  for (const { profile, r, run } of remembersRuns) {
-    printReclimbCurve(`${profile} r=${r} (${(run.simSeconds / 3600).toFixed(2)}h total)`, run.cReclimbSegments)
-  }
-
-  // ---- Summary: profile × variant (totals + churn share + curve ratio) ------
-  // Same shape as the C-CHURN DECOMPOSITION table above, extended with the
-  // curve columns Wes asked for (re-climb count + first-vs-last ratio).
-  const probeSummaryRow = (
-    profile: string,
-    variant: string,
-    baseSeconds: number,
-    run: SimState,
-  ): Record<string, string | number> => ({
-    profile,
-    variant,
-    baseHours: (baseSeconds / 3600).toFixed(2),
-    withVariant: (run.simSeconds / 3600).toFixed(2),
-    taxVsBaseH: ((baseSeconds - run.simSeconds) / 3600).toFixed(2),
-    taxShare: `${(((baseSeconds - run.simSeconds) / baseSeconds) * 100).toFixed(1)}%`,
-    reclimbs: run.cReclimbSegments.length,
-    firstVsLast: firstOverLastText(run.cReclimbSegments),
-  })
-  console.log('\n  -- Summary (taxVsBase = base − variant; firstVsLast > 1× = re-climbs accelerate) --')
-  console.table([
-    probeSummaryRow('Competent', 'base (r=1.0)', competentRun.simSeconds, competentRun),
-    probeSummaryRow('Competent', '‡ milestones', competentRun.simSeconds, competentPartialKeepRun),
-    ...remembersRuns
-      .filter((row) => row.profile === 'Competent')
-      .map((row) => probeSummaryRow('Competent', `r=${row.r}`, row.baseSeconds, row.run)),
-    probeSummaryRow('Competent', '† full keep', competentRun.simSeconds, competentCKeepRun),
-    probeSummaryRow('Realistic', 'base (r=1.0)', realisticRun.simSeconds, realisticRun),
-    probeSummaryRow('Realistic', '‡ milestones', realisticRun.simSeconds, realisticPartialKeepRun),
-    ...remembersRuns
-      .filter((row) => row.profile === 'Realistic')
-      .map((row) => probeSummaryRow('Realistic', `r=${row.r}`, row.baseSeconds, row.run)),
-    probeSummaryRow('Realistic', '† full keep', realisticRun.simSeconds, realisticCKeepRun),
-  ])
-  console.log(
-    '  († is a reference endpoint only: it also keeps best — 0 re-climbs by construction — so it is',
-  )
-  console.log('  NOT the r→0 limit of the remembers sweep. COUNTERFACTUAL probes throughout; no game rule exists.)')
-
-  // ---- R REFINEMENT (Realistic curve shape — slice-9 r choice) --------------
-  // Designer follow-up on the sweep above: r≈0.7 is the right NEIGHBORHOOD, but
-  // the value is chosen by the Realistic curve SHAPE. Failure mode to detect: a
-  // tail of effectively-instant re-climbs — "a vanished ritual is just
-  // full-keep with extra steps; a brief ritual is 'I still do this, but I've
-  // mastered it.'" The floor variants probe his proposed fix if fixed-r
-  // vanishes the tail: scale = max(r^(k−1), f), flattening toward a
-  // brief-ritual asymptote instead of decaying to zero. Realistic ONLY —
-  // Competent's baseline tail already self-compresses to 0s (see the curve
-  // above), so it carries no shape signal for this choice.
-  console.log('\n=== R REFINEMENT (Realistic curve shape — decision input for slice-9 r; no assertion) ===')
-  console.log(
-    `  (Full grid ran — nothing dropped. r=${R_REFINEMENT_FLOOR_R} reuses the coarse-sweep run. ` +
-      'Totals are secondary by design brief; the read is the tail.)',
-  )
-  console.log(
-    `  (single-breath = climb <= one late check-in (${BREATH_SECONDS}s); instant = < ${VANISH_INSTANT_SECONDS}s. ` +
-      'The compression counterfactual can show sub-check-in durations the real quantized mechanic',
-  )
-  console.log(
-    '  would never produce, so the single-breath COUNT — not raw seconds — is the legibility metric.)',
-  )
-  const realisticCoarseRemembersRun = remembersRuns.find(
-    (row) => row.profile === 'Realistic' && row.r === R_REFINEMENT_FLOOR_R,
-  )!.run
-  const rRefinementVariants: { label: string; run: SimState }[] = R_REFINEMENT_GRID.map((r) => ({
-    label: `r=${r}`,
-    run:
-      r === R_REFINEMENT_FLOOR_R
-        ? realisticCoarseRemembersRun // the duplicate grid point — reused, not re-run
-        : runProfileQuiet(realisticRunner({ ...REALISTIC_CONFIG, counterfactualCoreRemembers: r })),
-  }))
-  for (const scaleFloor of R_REFINEMENT_FLOORS) {
-    rRefinementVariants.push({
-      label: `r=${R_REFINEMENT_FLOOR_R} f=${scaleFloor}`,
-      run: runProfileQuiet(
-        realisticRunner({
-          ...REALISTIC_CONFIG,
-          counterfactualCoreRemembers: R_REFINEMENT_FLOOR_R,
-          counterfactualRemembersFloor: scaleFloor,
-        }),
-      ),
-    })
-  }
-  const tailVerdictByLabel: { label: string; verdict: 'BRIEF' | 'VANISHES' | 'HEAVY' }[] = []
-  for (const { label, run } of rRefinementVariants) {
-    const segments = run.cReclimbSegments
-    printReclimbCurve(`Realistic ${label}`, segments)
-    const tail = segments.slice(-VANISH_TAIL_ROWS)
-    const singleBreathCount = segments.filter((s) => s.durationSeconds <= BREATH_SECONDS).length
-    const instantTailCount = tail.filter((s) => s.durationSeconds < VANISH_INSTANT_SECONDS).length
-    const verdict: 'BRIEF' | 'VANISHES' | 'HEAVY' =
-      instantTailCount >= VANISH_TAIL_INSTANT_COUNT
-        ? 'VANISHES'
-        : tail.every((s) => s.durationSeconds <= BREATH_SECONDS)
-          ? 'BRIEF'
-          : 'HEAVY'
-    console.log(
-      `    last ${VANISH_TAIL_ROWS}: ${tail.map((s) => `${s.durationSeconds.toFixed(0)}s`).join(' / ')} ` +
-        `| single-breath climbs: ${singleBreathCount}/${segments.length} (instant in tail: ${instantTailCount}) | tail: ${verdict}`,
-    )
-    console.log(`    total: ${(run.simSeconds / 3600).toFixed(2)}h (secondary)`)
-    tailVerdictByLabel.push({ label, verdict })
-  }
-  // The designer's criterion, one line: which variants keep the tail BRIEF
-  // (climbs still register) vs VANISH it (trailing climbs effectively zero).
-  const labelsWithVerdict = (verdict: 'BRIEF' | 'VANISHES' | 'HEAVY'): string => {
-    const labels = tailVerdictByLabel.filter((row) => row.verdict === verdict).map((row) => row.label)
-    return labels.length > 0 ? labels.join(', ') : 'none'
-  }
-  console.log(
-    `  BRIEF-vs-VANISH: BRIEF tail (ritual mastered, still felt) → [${labelsWithVerdict('BRIEF')}] | ` +
-      `VANISHED tail (full-keep with extra steps) → [${labelsWithVerdict('VANISHES')}] | ` +
-      `HEAVY tail (not yet a ritual) → [${labelsWithVerdict('HEAVY')}]`,
   )
 
   // ---- SEVERING PROBE (Q9 — decision input for D23 Spirit Severing; no assertion) ----
@@ -2684,20 +2421,35 @@ export function runPacingSim(): void {
   console.log('    (stance + profession: not clean multipliers — bracket them by deltaH, not by m; see Part 1 notes.)')
   console.log('  (SEVERING PROBE ends — everything above is observation/model input for Q9; the pins below are the only assertions.)')
 
-  // ---- PINNED BANDS (Gate-D: calibration reviewed, signed off by Wes 2026-07-02) ----
+  // ---- PINNED BANDS (Gate-D: re-pinned 2026-07-02 with the keep mechanic live) ----
   // Three bands, three jobs. These are the ONLY hard pacing pins in the sim;
   // they move only with a deliberate, signed-off retune (update the constants
   // in the same commit as the data change that moves them — see ledger #13).
-  // NOTE: slice 9's keep-rule work ("the core remembers") is EXPECTED to move
-  // the Competent floor (probe brackets it at ~6.6–10.3h) — that update is the
-  // deliberate kind, re-pinned when the real rule lands.
-  const COMPETENT_FLOOR_PINNED_SECONDS = 74041 // pinned at 1s resolution (the underlying analytic clock is fractional but deterministic)
-  const REALISTIC_BAND_MIN_HOURS = 48.5 // jitter-sweep min (0.8× cadence), rounded out
-  const REALISTIC_BAND_MAX_HOURS = 62.4 // jitter-sweep max (1.2× cadence), rounded out
-  const CLUSTER_RATIO_PINNED_MAX = 1.5 // observed 1.418 raw — focused builds must stay clustered
-  console.log('\n=== PINNED BANDS (Gate-D: signed off 2026-07-02) ===')
+  // MIGRATION (slice-9 keep-rule activation): "the core remembers" is now a real
+  // gain rule (soul.reclimbGainMult), so these pins are re-measured on the live
+  // baseline. The Competent floor MOVED (74,041s → 41,659s): the gain rule
+  // compresses the optimizer's minimum-gain re-climb spam (1,344 climbs, each
+  // now up to the 1/f = 20× cap). It lands ABOVE the ~6.6–10.3h clock-compression
+  // bracket — the counterfactual compressed the whole segment (interleaved f/n
+  // work included); the real gain rule accelerates only c's portion, so it is
+  // weaker (and honest). The Realistic band did NOT move: all nine jitter-grid
+  // points are byte-identical to pre-activation. Realistic re-climbs c with one
+  // OVERKILL prestige from a banked pile, so a 20× gain crosses best>=2 in the
+  // same single step — the acceleration is fully absorbed by check-in
+  // quantization (exactly the sub-check-in effect the calibration honesty note
+  // warned the clock-compression counterfactual would overstate). So the
+  // experience-target actor stays at 53.25h, OUTSIDE the ~[28–35h] design target
+  // the counterfactual predicted. Flagged for design review — the mechanic
+  // accelerates the OPTIMIZER's felt Act I, not the experience-target actor's
+  // run total (its felt sub-check-in re-temper still compresses; its wall-clock
+  // does not). Numbers + method: docs/calibration.md.
+  const COMPETENT_FLOOR_PINNED_SECONDS = 41659 // re-pinned post-keep-mechanic, 1s resolution (was 74,041; regression instrument, not a pacing claim)
+  const REALISTIC_BAND_MIN_HOURS = 48.5 // jitter-sweep min (0.8× cadence), rounded out — UNCHANGED (mechanic absorbed by cadence quantization)
+  const REALISTIC_BAND_MAX_HOURS = 62.4 // jitter-sweep max (1.2× cadence), rounded out — UNCHANGED
+  const CLUSTER_RATIO_PINNED_MAX = 1.5 // re-checked with the rule live: observed 1.392 raw — focused builds must stay clustered
+  console.log('\n=== PINNED BANDS (Gate-D: re-pinned 2026-07-02, post-keep-mechanic) ===')
   if (Math.round(competentRun.simSeconds) === COMPETENT_FLOOR_PINNED_SECONDS) {
-    console.log(`PASS: Competent regression floor — ${COMPETENT_FLOOR_PINNED_SECONDS}s (${competentHours.toFixed(2)}h)`)
+    console.log(`PASS: Competent regression floor (post-keep-mechanic) — ${COMPETENT_FLOOR_PINNED_SECONDS}s (${competentHours.toFixed(2)}h)`)
   } else {
     console.error(
       `FAIL: Competent regression floor moved — ${Math.round(competentRun.simSeconds)}s vs pinned ` +

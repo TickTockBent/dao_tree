@@ -5,15 +5,34 @@ produced them. The sim itself (`npm run sim`, `src/sim/pacing.ts`) is the
 source of truth — this file records what the numbers mean and which
 decisions consumed them.
 
-## Pinned bands (Gate-D, signed off 2026-07-02)
+## Pinned bands (Gate-D, re-pinned 2026-07-02 post-keep-mechanic)
 
 Asserted in every sim run ("PINNED BANDS" section) and enforced in CI:
 
 | Band | Value | Job |
 |---|---|---|
-| Competent floor | **74,041s (20.57h)** exact at 1s resolution | Regression instrument — if it moves, the data changed; not a pacing claim |
+| Competent floor | **41,659s (11.57h)** exact at 1s resolution | Regression instrument — if it moves, the data changed; not a pacing claim |
 | Realistic band | **[48.5h … 62.4h]** *at 24–36min late-game check-in cadence* | The experience target; the number defended at planning time |
-| Cluster ratio | **≤ 1.5** (observed 1.418) | Focused grammars stay viable relative to each other |
+| Cluster ratio | **≤ 1.5** (observed 1.392) | Focused grammars stay viable relative to each other |
+
+**Keep-mechanic migration finding (2026-07-02, slice 9):** activating "the
+core remembers" (`soul.reclimbGainMult`) moved the Competent floor
+74,041s → 41,659s but left the Realistic band **byte-identical across all
+nine jitter-grid points**. The mechanic is fully absorbed by check-in
+quantization for the experience-target actor: Realistic re-climbs c with a
+single overkill prestige from a banked pile, so even the capped 20× gain
+crosses `best ≥ 2` in the same one step — exactly the sub-check-in effect
+the honesty note below warned the clock-compression counterfactual would
+overstate. Net: the mechanic compresses the OPTIMIZER's Act I
+(compute-bound minimum-gain spam), not the experience actor's wall-clock
+(cadence-bound); Realistic's felt acceleration is sub-check-in re-temper,
+not run total. Competent also landed above the ~[6.6–10.3h] counterfactual
+bracket — the counterfactual compressed whole interleaved segments; the
+real gain rule accelerates only c's portion, so it is honestly weaker.
+The pre-agreed ~[28–35h] Realistic re-pin therefore did NOT occur (the
+prediction was an artifact of the counterfactual's overstatement); the
+band stands at its measured [48.5–62.4h]. Flagged to Wes for design
+review — see D13's migration note in decisions.md.
 
 The Realistic band is **cadence-shaped**: the jitter sweep showed the
 banking-factor knob does nothing (check-in quantization dominates), so the
@@ -23,9 +42,13 @@ every-few-hours checker land 14h apart, both finishing). The banking knob
 wakes when a mechanic interacts with banking discipline (the almanac); the
 band then re-derives, never silently widens.
 
-**Pin migration pre-agreed** (D13): post-slice-9 keep mechanic → Realistic
-~[28–35h] cadence-labeled with r final; Competent wherever it lands, as
-instrument; cluster re-checked with r in place.
+**Pin migration executed** (D13, 2026-07-02): Competent re-pinned at its
+measured 41,659s; Realistic measured unchanged (see the migration finding
+above), so its band did not move; cluster re-checked at 1.392 with the
+rule live. The †/‡/r/r-refinement counterfactual runs were retired from
+the sim as HISTORICAL (they would double-apply on top of the live gain
+rule); their record is this file + git history. The ⊘ severing probe is
+kept — observation-only, it legitimately re-derives on the new baseline.
 
 ## Actor roster
 

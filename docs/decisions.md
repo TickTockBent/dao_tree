@@ -126,6 +126,19 @@ mechanic lands, Realistic re-pins at ~[28–35h] (cadence-labeled, r final),
 Competent re-pins wherever it lands as a regression instrument, cluster
 re-checked with r in place. Numbers and probes: [calibration.md](calibration.md).
 
+**Migration executed (2026-07-02, slice 9):** the measured re-pin moved only
+Competent (74,041s → **41,659s**, 11.57h); Realistic held at 53.25h,
+band unchanged [48.5–62.4h], all nine jitter-grid points byte-identical —
+the ~[28–35h] prediction was an artifact of the clock-compression
+counterfactual, which the real check-in-quantized gain rule cannot
+reproduce (Realistic's single overkill prestige absorbs even the 20× cap
+in one step). The mechanic accelerates the optimizer's Act I, not the
+experience actor's wall-clock; its felt effect for Realistic is
+sub-check-in re-temper. Cluster re-checked at 1.392. Full finding:
+[calibration.md](calibration.md) "Keep-mechanic migration finding".
+Flagged for Wes's design review (does the 53h Act I stand, or does the
+felt-acceleration goal need a cadence-visible lever?).
+
 ## D14 — Extraordinary meridians: competitive standalone content
 
 MeridianProbe landed 30.45h — clusters with the focused builds, beats

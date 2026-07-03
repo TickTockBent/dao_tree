@@ -31,6 +31,13 @@ Deliberate pin migration in the same commit: Realistic re-pins at
 ~[28–35h] cadence-labeled with r final, Competent re-pins wherever it lands
 (regression instrument), cluster re-checked with r live.
 
+> **Built (2026-07-02).** Migration measured differently than predicted:
+> Competent re-pinned 74,041s → 41,659s; Realistic held byte-identical at
+> 53.25h / [48.5–62.4h] — check-in quantization absorbs the gain rule for
+> the experience actor (the ~[28–35h] figure was a counterfactual
+> artifact). Cluster 1.392. See D13's migration note + calibration.md;
+> flagged for Wes's review.
+
 ## 2. The Severing (D23)
 
 **Structure — the three corpses.** The realm has three sub-stages, each

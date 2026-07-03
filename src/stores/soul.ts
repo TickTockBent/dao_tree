@@ -10,10 +10,10 @@
 // differentiates — see trees.ts). Nothing in this store is ever cascade-reset;
 // hardReset alone wipes it (fresh()).
 //
-// SKELETON STATUS: state + recording + save plumbing are REAL; the pacing
-// mechanic (reclimbGainMult) is IDENTITY until the slice-9 keep-rule agent
-// activates it together with the sim pin migration in the SAME commit
-// (Gate-D: the pinned bands move only deliberately — see docs/slice-9.md §1).
+// STATUS: state + recording + save plumbing + the pacing mechanic
+// (reclimbGainMult) are all REAL. Activated together with the sim pin
+// migration in the SAME body of work (Gate-D: the pinned bands moved
+// deliberately when the mechanic landed — see docs/slice-9.md §1).
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
@@ -71,21 +71,28 @@ export const useSoulStore = defineStore('soul', () => {
   /**
    * "The core remembers" — the re-climb gain multiplier for a realm's
    * prestige gain (folded into realm.resetGain/nextAt so the shown gain stays
-   * honest). The real mechanic: identity for every realm except c; for c,
-   * min((1/r)^(ascents−1), 1/f) with r/f from ACCUMULATOR_DATA.ascentCounter
-   * (D21: r=0.70, f=0.05) — the gain-side equivalent of the sim's re-climb
-   * clock scale max(r^(k−1), f).
+   * honest). Identity for every realm except c; for c,
+   * min((1/r)^(k−1), 1/f) with r/f from ACCUMULATOR_DATA.ascentCounter
+   * (D21: r=0.70, f=0.05) — the gain-side reciprocal of the sim's re-climb
+   * clock scale max(r^(k−1), f), so mastery compounds gain and the floor f
+   * caps it at 1/f (= 20×, D21's optimizer bound).
    *
-   * SKELETON: IDENTITY. The slice-9 keep-rule agent activates this together
-   * with the pinned-band migration in the same commit (Gate-D). The constants
-   * are already live in data so activation is a one-site change here.
+   * INDEXING (off-by-one, deliberate): k := ascents. The sim's
+   * trackCReclimbCurve indexes the FIRST re-climb at ascentIndex = 1 (clock
+   * scale r^0, unscaled). realm.ts increments `ascents` at wipe time, so
+   * immediately after the first n/s wipe ascents === 1 and the player is ON
+   * that first re-climb (k = 1) → (1/r)^0 = identity; after the second wipe
+   * ascents === 2 → (1/r)^1; etc. ascents === 0 is c's pre-wipe INITIAL climb
+   * and must stay identity, never (1/r)^(−1) = r (which would PENALISE it).
    */
   function reclimbGainMult(id: RealmId): Decimal {
-    // Referenced now so the data wiring is proven; the formula lands with the
-    // pin migration. (ratio/floor are pinned in data-port.test.ts.)
-    void ACCUMULATOR_DATA.ascentCounter.ratio
-    void id
-    return decimalOne()
+    const currentReclimbIndex = slice.value.ascents
+    if (id !== 'c' || currentReclimbIndex === 0) return decimalOne()
+    const decayRatio = ACCUMULATOR_DATA.ascentCounter.ratio!
+    const scaleFloor = ACCUMULATOR_DATA.ascentCounter.floor!
+    const gainWithoutCap = decimalOne().div(decayRatio).pow(currentReclimbIndex - 1)
+    const gainCap = decimalOne().div(scaleFloor)
+    return gainWithoutCap.min(gainCap)
   }
 
   // ---- Save slice (id 'soul') ----------------------------------------------
