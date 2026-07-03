@@ -2418,11 +2418,11 @@ function printActIISpine(result: Act2Result, pinnedCompetentSeconds: number): vo
   // --- ⟨tune⟩ observations (mispricings the Act II model surfaces) ------------
   console.log('\n  -- ⟨tune⟩ observations (Act II numbers that look mispriced) --')
   console.log(
-    '  ⟨tune⟩ INSIGHT IS STILL THE ACT II BOTTLENECK (post-D30): the offering INSIGHT bases (Future basket ' +
-      `24,000, growing ×1.5/step) and the ring-3 manifestation node costs (6k–50k) both draw the SAME lattice ` +
-      `insight trickle (~${result.baseInsight.toNumber().toFixed(2)}/s). Act II runs ${(result.actIISeconds / 3600).toFixed(0)}h ` +
-      '(pre-D30: 67h) with insight the binding axis for the large majority of the wait; qi is oversupplied ' +
-      'except on the qi-heavy Past rite (2e10 base), the one basket D30 now lets bind on qi.',
+    '  ⟨tune⟩ INSIGHT-AS-BOTTLENECK — RESOLVED BY D34: the offering INSIGHT bases (Future basket ' +
+      `5,200 — was 24,000 — growing ×1.5/step) and the Manifestation node costs (3k–25k — were 6k–50k) both draw the SAME lattice ` +
+      `insight trickle (~${result.baseInsight.toNumber().toFixed(2)}/s). Act II now runs ${(result.actIISeconds / 3600).toFixed(2)}h ` +
+      '(pre-D34: 25.41h; pre-D30: 67h). The prices are brought to the faucet (D34 moves #1/#2); insight no longer binds ' +
+      'the large majority of the wait for the roster (Lattice 100→75.6% insight-bound). Sized per D34 criteria, signed off in range.',
   )
   console.log(
     '  ⟨tune⟩ CORPSE-BASKET BILLING — RESOLVED BY D30: offerings now bill at the corpse JUST CUT (was ' +
@@ -2439,12 +2439,11 @@ function printActIISpine(result: Act2Result, pinnedCompetentSeconds: number): vo
       'for non-alchemists.',
   )
   console.log(
-    `  ⟨tune⟩ MANIFESTATION UNLOCK COSTS MORE INSIGHT THAN THE CUT RETURNS: buying ${result.manifestNodesBought.length} ` +
-      `manifestation nodes costs ${result.manifestInsightSpent.toExponential(2)} insight — larger than the entire ` +
-      `Act I insight bank (${result.insightBankStart.toNumber().toFixed(0)}) — to unlock a manifestation severance whose ` +
-      `m is only ${result.manifestMultQi.toNumber().toFixed(2)}× qi / ${result.manifestMultInsight.toNumber().toFixed(2)}× insight. ` +
-      'The severable that makes the third cut POSSIBLE for a non-meridian build (§2 "load-bearing") is priced as the ' +
-      'most expensive thing in Act II relative to what it returns.',
+    `  ⟨tune⟩ MANIFESTATION UNLOCK COST — RESOLVED BY D34 (move #1): buying ${result.manifestNodesBought.length} ` +
+      `manifestation nodes now costs ${result.manifestInsightSpent.toExponential(2)} insight (was 7.50e+4) — now LESS than the ` +
+      `Act I insight bank (${result.insightBankStart.toNumber().toFixed(0)}), no longer "more than a full Act I bank" — to unlock a manifestation severance whose ` +
+      `m is ${result.manifestMultQi.toNumber().toFixed(2)}× qi / ${result.manifestMultInsight.toNumber().toFixed(2)}× insight. ` +
+      'The load-bearing third cut for a non-meridian build (§2) is now reachable from a moderate bank. Sized per D34 criteria, signed off in range.',
   )
 
   // --- §6 PREVIEW lines (NOT assertions; PREVIEW-OK / PREVIEW-BREACH only) ----
@@ -3025,12 +3024,12 @@ function printActIIRoster(actors: Act2ActorResult[], spine: Act2Result): void {
   console.log('\n=== ACT II TUNE-PASS INPUTS (for Gate-D sign-off) ===')
   console.log('  Numbered ⟨tune⟩ questions for Wes\'s ruling — chunk A\'s four (spine) + the roster\'s, evidence inline.')
   console.log(
-    `  1. ⟨tune⟩ INSIGHT IS STILL THE ACT II BOTTLENECK, POST-D30 (spine + roster): the Future insight base (24,000, ×1.5/step) + ring-3 ` +
-      `manifestation costs (6k–50k) both draw the lattice insight trickle. Roster insight-bound share of waited time (re-measured under D30): ` +
-      `Realistic ${insBoundPct(realistic)}%, Meridian ${insBoundPct(meridian)}%, Lattice ${insBoundPct(lattice)}% (pre-D30: 98.4/99.9/100.0%). ` +
-      'D30 shed the billing artifact (durations collapsed, insight totals ~halved — see #2) yet insight still binds 90–100% of the wait ' +
-      '(D33 stripped the realm-x qi boost, so qi binds a little more — Meridian 95.6→90.6%): ' +
-      'the bottleneck SURVIVES the fix. Rebalance offering insight bases DOWN or lattice insight rates UP?',
+    `  1. ⟨tune⟩ INSIGHT-AS-BOTTLENECK — RESOLVED BY D34 (spine + roster): the Future insight base (24,000 → 5,200, ×1.5/step) + ` +
+      `Manifestation costs (6k–50k → 3k–25k; 8-node total 75k → 37.5k) were both drawn from the lattice insight trickle. Re-measured roster insight-bound ` +
+      `share of waited time: Realistic ${insBoundPct(realistic)}%, Meridian ${insBoundPct(meridian)}%, Lattice ${insBoundPct(lattice)}% ` +
+      '(pre-D34: 94.4/90.6/100.0; pre-D30: 98.4/99.9/100.0). The Lattice specialist — the tell for the whole faucet-to-demand ratio — drops ' +
+      '100→75.6% (D34 target 70–80%). Move #1 lowered the Manifestation to a moderate-bank price; move #2 sized the Future rite to ≈ ONE ring-3 node ' +
+      '(27.2k insight vs the 25k ring-3, was 126k ≈ "three"). Present held at 4,600 (the Lattice bind floor). Sized per D34 criteria, signed off in range.',
   )
   console.log(
     `  2. ⟨tune⟩ CORPSE-BASKET BILLING — RESOLVED BY D30 (spine + roster): offerings now bill at the corpse JUST CUT (was ` +
@@ -3047,10 +3046,11 @@ function printActIIRoster(actors: Act2ActorResult[], spine: Act2Result): void {
       'a counter-monopoly gap: should every build get a discount path, or is the pill lean intended to be this decisive?',
   )
   console.log(
-    `  4. ⟨tune⟩ MANIFESTATION UNLOCK IS THE COSTLIEST THING IN ACT II vs WHAT IT RETURNS (spine + roster): the spine pays ` +
-      `${spine.manifestInsightSpent.toExponential(2)} insight for m ${spine.manifestMultQi.toNumber().toFixed(2)}× qi / ${spine.manifestMultInsight.toNumber().toFixed(2)}× insight; ` +
-      `Lattice pays ${lattice ? lattice.manifestInsightSpent.toExponential(2) : 'n/a'} for ${lattice ? lattice.manifestNodesBought.length : 0} nodes. It is the load-bearing third ` +
-      'severable for non-meridian builds (§2) yet priced highest — lower the Manifestation tier costs, or raise its m?',
+    `  4. ⟨tune⟩ MANIFESTATION UNLOCK COST — RESOLVED BY D34 move #1 (spine + roster): the spine now pays ` +
+      `${spine.manifestInsightSpent.toExponential(2)} insight (was 7.50e+4) for m ${spine.manifestMultQi.toNumber().toFixed(2)}× qi / ${spine.manifestMultInsight.toNumber().toFixed(2)}× insight; ` +
+      `Lattice pays ${lattice ? lattice.manifestInsightSpent.toExponential(2) : 'n/a'} for ${lattice ? lattice.manifestNodesBought.length : 0} nodes (< its Act I bank). Realistic's 14-node buy ` +
+      `${realistic ? realistic.manifestInsightSpent.toExponential(2) : 'n/a'} insight is affordable from HALF its Act I hoard — the load-bearing third severable (§2) is reachable within the ` +
+      'first ritual window. Tier scaled ×0.5 (ring-3 50k → 25k, in the 15–25k range). Sized per D34 criteria, signed off in range.',
   )
   const realisticBreaches = realistic ? realistic.liveAtFirstChoice < 3 : false
   console.log(
@@ -3071,9 +3071,11 @@ function printActIIRoster(actors: Act2ActorResult[], spine: Act2Result): void {
       '(the band would then be a cadence function again), or should offerings be bankable/batchable to decouple from check-in?',
   )
   console.log(
-    `  8. ⟨tune⟩ ACT II DURATION SPREAD / CLUSTER ANALOG (roster): [${minH.toFixed(2)}h … ${maxH.toFixed(2)}h], ratio ${(maxH / minH).toFixed(3)}. ` +
-      'Act I pins the focused-build cluster at ≤1.5; if Act II is to inherit that discipline a pin belongs here too — ' +
-      'is this spread acceptable, and should the Act II cluster-ratio become a Gate-D band?',
+    `  8. ⟨tune⟩ ACT II DURATION SPREAD / CLUSTER ANALOG (roster; DEFERRED per D34 #4/#8 — observation only): ` +
+      `[${minH.toFixed(2)}h … ${maxH.toFixed(2)}h], ratio ${(maxH / minH).toFixed(3)} (pre-D34: [9.01…25.41]h, ratio 2.820). D34's price cuts WIDENED the ` +
+      'spread: the Realistic hoarder now bank-covers everything (Act II collapses to ~0.5h), while the Lattice/Meridian specialists still feel their ' +
+      'insight rites. Per D34 this is an observation INSTRUMENT at the settled spread, NOT an experience target (Act II durations move as content fills in); ' +
+      'the experience-actor-fastest inversion is a fact to revisit when the almanac/loot layer add texture to Act II idle windows. No Gate-D band pinned here yet.',
   )
   console.log(
     '  (ACT II TUNE-PASS INPUTS end — every line answerable from the evidence above; nothing asserted, no error token emitted.)',

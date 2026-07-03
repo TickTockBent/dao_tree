@@ -270,8 +270,10 @@ describe('OFFERING_DATA (slice 9, D28)', () => {
     expect(present.qiBase).toBeGreaterThan(future.qiBase)
     expect(present.insightBase).toBeGreaterThan(past.insightBase)
     expect(present.insightBase).toBeLessThan(future.insightBase)
-    // Insight bases are lattice ring-3 era (tens of thousands at the top).
-    expect(future.insightBase).toBeGreaterThanOrEqual(10000)
+    // D34 lowered the offering insight scale to single-thousands ("burning incense,
+    // not buying a house"): the Future's twelve-turning rite ≈ ONE ring-3 node.
+    // Floor kept low but non-trivial to guard the insight lean from collapsing to 0.
+    expect(future.insightBase).toBeGreaterThanOrEqual(2000)
   })
 
   it('pins the growth and pill-discount factors (⟨tune⟩)', () => {

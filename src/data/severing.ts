@@ -97,7 +97,9 @@ export const SEVERING_DATA: SeveringData = {
 //
 // SCALE: Act II — the player has passed the tribulation. Qi lives in the
 // ~2e10 era (realm-x reqBase); Insight at the lattice ring-3 (Manifestation)
-// era is tens of thousands (LATTICE_DATA manifestation costs 6k–35k). The
+// era is single-thousands post-D34 (LATTICE_DATA manifestation costs 3k–25k;
+// the 8-node build's total ≈ 37.5k, was ~75k — no longer more than a full Act I
+// insight bank). The
 // offering cost formula (severing store) is:
 //   basket × growth^stepsIntoCurrentSeverance × max(r^rituals, f) × pill
 // where r/f are ACCUMULATOR_DATA.severanceRitual (the mastery discount) and
@@ -110,7 +112,7 @@ export interface OfferingBasketRow {
   readonly corpse: CorpseKey
   /** ⟨tune⟩ Qi base for this corpse's rite (Act II ~2e10 era). */
   readonly qiBase: number
-  /** ⟨tune⟩ Insight base for this corpse's rite (lattice ring-3 ~tens of thousands). */
+  /** ⟨tune⟩ Insight base for this corpse's rite (lattice Manifestation era, D34). */
   readonly insightBase: number
 }
 
@@ -127,10 +129,14 @@ export const OFFERING_DATA: OfferingData = {
   baskets: [
     // Past — the body's memory: qi-heavy, almost no insight. ⟨tune⟩
     { corpse: 'past', qiBase: 2e10, insightBase: 400 },
-    // Present — the life being lived: balanced, pill-discounted. ⟨tune⟩
-    { corpse: 'present', qiBase: 1.2e10, insightBase: 6000 },
-    // Future — the promise: insight-heavy (tens of thousands), less qi. ⟨tune⟩
-    { corpse: 'future', qiBase: 3e9, insightBase: 24000 },
+    // Present — the life being lived: balanced, pill-discounted. Scaled down per
+    // D34 but held ABOVE the Lattice specialist's insight-bind floor: Present is
+    // its only insight-binding rite once the Manifestation is bank-coverable, so
+    // it must stay large enough to keep Lattice inside the 70–80% band. ⟨tune⟩
+    { corpse: 'present', qiBase: 1.2e10, insightBase: 4600 },
+    // Future — the promise: insight-LEANING (least qi of the three, most insight
+    // per qi), sized per D34 so its twelve-turning rite ≈ ONE ring-3 node. ⟨tune⟩
+    { corpse: 'future', qiBase: 3e9, insightBase: 5200 },
   ],
   growth: 1.5, // ⟨tune⟩ — the second mountain steepens each step of a severance.
   pillDiscount: 0.8, // ⟨tune⟩ — a held pill makes every offering ~20% cheaper.

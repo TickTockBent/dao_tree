@@ -84,31 +84,31 @@ export const LATTICE_DATA: LatticeConfig = {
     // --- Roots (the Five Elements, matching spiritual roots §4.2/§7.1) ---
     // Manifestation cost/effect (3rd entry) is Act-II-scale ⟨tune⟩ — the
     // store gates reachability on tribulationPassed, not this number.
-    { key: 'metal', name: 'Metal Root', element: 'metal', requires: [], costs: [100, 300, 6000], effects: [{ qiMult: 1.03 }, { qiMult: 1.06 }, { qiMult: 1.12 }] },
-    { key: 'wood', name: 'Wood Root', element: 'wood', requires: [], costs: [100, 300, 6000], effects: [{ qiMult: 1.03 }, { qiMult: 1.06 }, { qiMult: 1.12 }] },
-    { key: 'water', name: 'Water Root', element: 'water', requires: [], costs: [100, 300, 6000], effects: [{ qiMult: 1.03 }, { qiMult: 1.06 }, { qiMult: 1.12 }] },
-    { key: 'fire', name: 'Fire Root', element: 'fire', requires: [], costs: [100, 300, 6000], effects: [{ qiMult: 1.03 }, { qiMult: 1.06 }, { qiMult: 1.12 }] },
-    { key: 'earth', name: 'Earth Root', element: 'earth', requires: [], costs: [100, 300, 6000], effects: [{ qiMult: 1.03 }, { qiMult: 1.06 }, { qiMult: 1.12 }] },
+    { key: 'metal', name: 'Metal Root', element: 'metal', requires: [], costs: [100, 300, 3000], effects: [{ qiMult: 1.03 }, { qiMult: 1.06 }, { qiMult: 1.12 }] },
+    { key: 'wood', name: 'Wood Root', element: 'wood', requires: [], costs: [100, 300, 3000], effects: [{ qiMult: 1.03 }, { qiMult: 1.06 }, { qiMult: 1.12 }] },
+    { key: 'water', name: 'Water Root', element: 'water', requires: [], costs: [100, 300, 3000], effects: [{ qiMult: 1.03 }, { qiMult: 1.06 }, { qiMult: 1.12 }] },
+    { key: 'fire', name: 'Fire Root', element: 'fire', requires: [], costs: [100, 300, 3000], effects: [{ qiMult: 1.03 }, { qiMult: 1.06 }, { qiMult: 1.12 }] },
+    { key: 'earth', name: 'Earth Root', element: 'earth', requires: [], costs: [100, 300, 3000], effects: [{ qiMult: 1.03 }, { qiMult: 1.06 }, { qiMult: 1.12 }] },
     // --- Ring 2 (first derived concept per element; requires its root) ---
     // Sword (Metal): the §4.2 sword line; insight-leaning (gates Sword Trance).
-    { key: 'sword', name: 'Sword Intent', element: 'metal', requires: ['metal'], costs: [250, 800, 15000], effects: [{ insightMult: 1.03 }, { insightMult: 1.07 }, { insightMult: 1.15 }] },
-    { key: 'growth', name: 'Growth', element: 'wood', requires: ['wood'], costs: [250, 800, 15000], effects: [{ qiMult: 1.04 }, { qiMult: 1.08 }, { qiMult: 1.15 }] },
+    { key: 'sword', name: 'Sword Intent', element: 'metal', requires: ['metal'], costs: [250, 800, 7500], effects: [{ insightMult: 1.03 }, { insightMult: 1.07 }, { insightMult: 1.15 }] },
+    { key: 'growth', name: 'Growth', element: 'wood', requires: ['wood'], costs: [250, 800, 7500], effects: [{ qiMult: 1.04 }, { qiMult: 1.08 }, { qiMult: 1.15 }] },
     // Flow (Water): half of the Flow/Stillness tension pair; insight-leaning.
     // The pair's Manifestation-tier EXCLUSIVITY (declared in `conflicts` since
     // slice 3) binds here: dao.ts refuses the purchase that would put both
     // flow and stillness at tier 3 simultaneously.
-    { key: 'flow', name: 'Flow', element: 'water', requires: ['water'], costs: [250, 800, 15000], effects: [{ insightMult: 1.03 }, { insightMult: 1.07 }, { insightMult: 1.15 }] },
+    { key: 'flow', name: 'Flow', element: 'water', requires: ['water'], costs: [250, 800, 7500], effects: [{ insightMult: 1.03 }, { insightMult: 1.07 }, { insightMult: 1.15 }] },
     // Life (Fire): the yang half of Fire's life/death yin-yang pair; qi-leaning.
-    { key: 'life', name: 'Life', element: 'fire', requires: ['fire'], costs: [250, 800, 15000], effects: [{ qiMult: 1.04 }, { qiMult: 1.08 }, { qiMult: 1.15 }] },
-    { key: 'mountain', name: 'Mountain', element: 'earth', requires: ['earth'], costs: [250, 800, 15000], effects: [{ qiMult: 1.04 }, { qiMult: 1.08 }, { qiMult: 1.15 }] },
+    { key: 'life', name: 'Life', element: 'fire', requires: ['fire'], costs: [250, 800, 7500], effects: [{ qiMult: 1.04 }, { qiMult: 1.08 }, { qiMult: 1.15 }] },
+    { key: 'mountain', name: 'Mountain', element: 'earth', requires: ['earth'], costs: [250, 800, 7500], effects: [{ qiMult: 1.04 }, { qiMult: 1.08 }, { qiMult: 1.15 }] },
     // --- Ring 2b (deeper/sharper aspect per element; still requires only root) ---
-    { key: 'edge', name: 'Cutting Edge', element: 'metal', requires: ['metal'], costs: [600, 2000, 35000], effects: [{ insightMult: 1.04 }, { insightMult: 1.09 }, { insightMult: 1.18 }] },
-    { key: 'vitality', name: 'Vitality', element: 'wood', requires: ['wood'], costs: [600, 2000, 35000], effects: [{ qiMult: 1.05 }, { qiMult: 1.1 }, { qiMult: 1.18 }] },
+    { key: 'edge', name: 'Cutting Edge', element: 'metal', requires: ['metal'], costs: [600, 2000, 17500], effects: [{ insightMult: 1.04 }, { insightMult: 1.09 }, { insightMult: 1.18 }] },
+    { key: 'vitality', name: 'Vitality', element: 'wood', requires: ['wood'], costs: [600, 2000, 17500], effects: [{ qiMult: 1.05 }, { qiMult: 1.1 }, { qiMult: 1.18 }] },
     // Stillness (Water): the other half of the Flow/Stillness exclusivity.
-    { key: 'stillness', name: 'Stillness', element: 'water', requires: ['water'], costs: [600, 2000, 35000], effects: [{ insightMult: 1.04 }, { insightMult: 1.09 }, { insightMult: 1.18 }] },
+    { key: 'stillness', name: 'Stillness', element: 'water', requires: ['water'], costs: [600, 2000, 17500], effects: [{ insightMult: 1.04 }, { insightMult: 1.09 }, { insightMult: 1.18 }] },
     // Death (Fire): the yin half of Fire's life/death pair.
-    { key: 'death', name: 'Death', element: 'fire', requires: ['fire'], costs: [600, 2000, 35000], effects: [{ qiMult: 1.05 }, { qiMult: 1.1 }, { qiMult: 1.18 }] },
-    { key: 'endurance', name: 'Endurance', element: 'earth', requires: ['earth'], costs: [600, 2000, 35000], effects: [{ qiMult: 1.05 }, { qiMult: 1.1 }, { qiMult: 1.18 }] },
+    { key: 'death', name: 'Death', element: 'fire', requires: ['fire'], costs: [600, 2000, 17500], effects: [{ qiMult: 1.05 }, { qiMult: 1.1 }, { qiMult: 1.18 }] },
+    { key: 'endurance', name: 'Endurance', element: 'earth', requires: ['earth'], costs: [600, 2000, 17500], effects: [{ qiMult: 1.05 }, { qiMult: 1.1 }, { qiMult: 1.18 }] },
     // --- Ring 3 (slice 9 / D22): one successor per ring-2 node. Whole-cloth
     // Act II content — dao.ts gates EVERY tier of a ring-3 node behind the
     // passed tribulation (not just Manifestation), because an unbounded
@@ -117,19 +117,19 @@ export const LATTICE_DATA: LatticeConfig = {
     // alone well inside Act I and move the pinned pacing bands. Costs still
     // sit above every existing node's cheapest tier as a second line of
     // defense. ⟨tune⟩ throughout.
-    { key: 'severingIntent', name: 'Severing Intent', element: 'metal', requires: ['sword'], costs: [1500, 5000, 50000], effects: [{ insightMult: 1.05 }, { insightMult: 1.11 }, { insightMult: 1.2 }] },
-    { key: 'blossoming', name: 'Blossoming', element: 'wood', requires: ['growth'], costs: [1500, 5000, 50000], effects: [{ qiMult: 1.06 }, { qiMult: 1.12 }, { qiMult: 1.22 }] },
+    { key: 'severingIntent', name: 'Severing Intent', element: 'metal', requires: ['sword'], costs: [1500, 5000, 25000], effects: [{ insightMult: 1.05 }, { insightMult: 1.11 }, { insightMult: 1.2 }] },
+    { key: 'blossoming', name: 'Blossoming', element: 'wood', requires: ['growth'], costs: [1500, 5000, 25000], effects: [{ qiMult: 1.06 }, { qiMult: 1.12 }, { qiMult: 1.22 }] },
     // River of Time (Water, from Flow): the Time-adjacent continuation of the sword/flow exemplar chains.
-    { key: 'riverOfTime', name: 'River of Time', element: 'water', requires: ['flow'], costs: [1500, 5000, 50000], effects: [{ insightMult: 1.05 }, { insightMult: 1.11 }, { insightMult: 1.2 }] },
-    { key: 'undying', name: 'Undying', element: 'fire', requires: ['life'], costs: [1500, 5000, 50000], effects: [{ qiMult: 1.06 }, { qiMult: 1.12 }, { qiMult: 1.22 }] },
-    { key: 'unmovable', name: 'Unmovable', element: 'earth', requires: ['mountain'], costs: [1500, 5000, 50000], effects: [{ qiMult: 1.06 }, { qiMult: 1.12 }, { qiMult: 1.22 }] },
+    { key: 'riverOfTime', name: 'River of Time', element: 'water', requires: ['flow'], costs: [1500, 5000, 25000], effects: [{ insightMult: 1.05 }, { insightMult: 1.11 }, { insightMult: 1.2 }] },
+    { key: 'undying', name: 'Undying', element: 'fire', requires: ['life'], costs: [1500, 5000, 25000], effects: [{ qiMult: 1.06 }, { qiMult: 1.12 }, { qiMult: 1.22 }] },
+    { key: 'unmovable', name: 'Unmovable', element: 'earth', requires: ['mountain'], costs: [1500, 5000, 25000], effects: [{ qiMult: 1.06 }, { qiMult: 1.12 }, { qiMult: 1.22 }] },
     // --- Ring 3 (slice 9 / D22): one successor per ring-2b node ---
-    { key: 'soulBlade', name: 'Soul Blade', element: 'metal', requires: ['edge'], costs: [1500, 5000, 50000], effects: [{ insightMult: 1.05 }, { insightMult: 1.11 }, { insightMult: 1.2 }] },
-    { key: 'evergreen', name: 'Evergreen', element: 'wood', requires: ['vitality'], costs: [1500, 5000, 50000], effects: [{ qiMult: 1.06 }, { qiMult: 1.12 }, { qiMult: 1.22 }] },
-    { key: 'eternalStillness', name: 'Eternal Stillness', element: 'water', requires: ['stillness'], costs: [1500, 5000, 50000], effects: [{ insightMult: 1.05 }, { insightMult: 1.11 }, { insightMult: 1.2 }] },
+    { key: 'soulBlade', name: 'Soul Blade', element: 'metal', requires: ['edge'], costs: [1500, 5000, 25000], effects: [{ insightMult: 1.05 }, { insightMult: 1.11 }, { insightMult: 1.2 }] },
+    { key: 'evergreen', name: 'Evergreen', element: 'wood', requires: ['vitality'], costs: [1500, 5000, 25000], effects: [{ qiMult: 1.06 }, { qiMult: 1.12 }, { qiMult: 1.22 }] },
+    { key: 'eternalStillness', name: 'Eternal Stillness', element: 'water', requires: ['stillness'], costs: [1500, 5000, 25000], effects: [{ insightMult: 1.05 }, { insightMult: 1.11 }, { insightMult: 1.2 }] },
     // Rebirth (Fire, from Death): the other half of the Life/Death tension carried into ring 3.
-    { key: 'rebirth', name: 'Rebirth', element: 'fire', requires: ['death'], costs: [1500, 5000, 50000], effects: [{ qiMult: 1.06 }, { qiMult: 1.12 }, { qiMult: 1.22 }] },
-    { key: 'boundless', name: 'Boundless', element: 'earth', requires: ['endurance'], costs: [1500, 5000, 50000], effects: [{ qiMult: 1.06 }, { qiMult: 1.12 }, { qiMult: 1.22 }] },
+    { key: 'rebirth', name: 'Rebirth', element: 'fire', requires: ['death'], costs: [1500, 5000, 25000], effects: [{ qiMult: 1.06 }, { qiMult: 1.12 }, { qiMult: 1.22 }] },
+    { key: 'boundless', name: 'Boundless', element: 'earth', requires: ['endurance'], costs: [1500, 5000, 25000], effects: [{ qiMult: 1.06 }, { qiMult: 1.12 }, { qiMult: 1.22 }] },
   ],
   conflicts: [['flow', 'stillness']],
 }
