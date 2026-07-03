@@ -29,6 +29,13 @@ import { LATTICE_DATA } from '@/data/lattice'
 import { TECHNIQUE_DATA } from '@/data/techniques'
 import { findSecretRealmSite } from '@/data/secret-realm'
 import { ALCHEMY_DATA } from '@/data/alchemy'
+// Act II model (§6): mirror the severing / offering math from DATA, never the
+// stores (the sim's convention — the ⊘ probe reads store STATE but the Act II
+// mechanics are re-derived here so no severing/dao mutation ever touches a
+// measured run). See the ACT II SPINE banner far below.
+import { SEVERING_DATA, OFFERING_DATA, findOfferingBasket } from '@/data/severing'
+import { ACCUMULATOR_DATA } from '@/data/accumulators'
+import { findBodyBuyable } from '@/data/body'
 import type { Condition } from '@/engine/meets'
 import type { PillKey, SectArchetypeKey, SecretRealmSiteKey } from '@/engine/types'
 
@@ -1854,6 +1861,605 @@ const SEVERING_RAMP_START_FRACTIONS = [0.25, 0.5, 0.75] as const // c: start = c
 const SEVERING_RAMP_CAP_FACTORS = [1.2, 1.5, 2.0] as const // k: cap = k·m (k>1 = D23's superset rule)
 const SEVERING_RITUAL_STEP_COUNT = 12
 
+// =============================================================================
+// === ACT II SPINE MODEL (slice-9 §6; D25/D27/D28) — observation-only ==========
+// =============================================================================
+//
+// Extends a COPY of the Competent policy through Spirit Severing. The pinned
+// Competent run is UNTOUCHED — this boots its own quiet Competent Act I, reads
+// the end state, then models Act II ANALYTICALLY (like the rest of the sim:
+// time-to-afford, not a tick loop). Everything here is a MODEL awaiting Gate-D
+// sign-off (D28: "all new numbers ⟨tune⟩ pending Act II sim evidence"); NOTHING
+// is asserted — no FAIL token is ever emitted (§6: dynamic assertions become
+// FAIL-able only after Wes signs off Act II numbers).
+//
+// The math is MIRRORED FROM DATA, never the severing/dao stores (which the
+// pipelines transitively hold): SETPIECE_DATA.severance (the c·m → k·m ramp),
+// OFFERING_DATA (corpse baskets), ACCUMULATOR_DATA.severanceRitual (the mastery
+// discount), LATTICE_DATA manifestation tier, realm-x substage qiMults. Only
+// end-state RATES and the bound aspect's data multipliers are read live (the
+// same read-only convention as measureSeveringRateShares).
+//
+// THE PIPELINE MODEL (§6, "the severed piece's contribution nullifies; the
+// transcendent ramp multiplies"): a severed piece's own multiplier is removed
+// from the rate and REPLACED by axisValue(m, ratio) = (m>1 ? m·ratio :
+// max(ratio,1)); ratio ramps from startFraction (0.5) through breakeven (>=1)
+// to capRatio (2.0). realm-x substage qiMults (2.0/2.4/2.8) multiply the qi
+// rate cumulatively as cuts land (the store latches x milestones off severance
+// COUNT — realm.ts §D28).
+
+// Ramp constants, mirrored from SETPIECE_DATA.severance (never hardcoded).
+const ACT2_SEVER_CFG = SETPIECE_DATA.severance
+const ACT2_START_FRACTION = ACT2_SEVER_CFG.startFraction // c = 0.5
+const ACT2_CAP_RATIO = ACT2_SEVER_CFG.capRatio // k = 2.0
+const ACT2_RAMP_STEPS = ACT2_SEVER_CFG.rampSteps // 12
+const ACT2_RAMP_GROWTH = Math.pow(ACT2_CAP_RATIO / ACT2_START_FRACTION, 1 / (ACT2_RAMP_STEPS - 1))
+// Raw ritual completions until ratio first reaches 1 (0-indexed from the cut);
+// mirrors the severing store's RAW_BREAKEVEN_STEPS. Display step = this + 1.
+const ACT2_RAW_BREAKEVEN_STEPS =
+  ACT2_START_FRACTION >= 1
+    ? 0
+    : Math.ceil(Math.log(1 / ACT2_START_FRACTION) / Math.log(ACT2_RAMP_GROWTH))
+const ACT2_BREAKEVEN_STEP_DISPLAY = ACT2_RAW_BREAKEVEN_STEPS + 1
+// The offering mastery-discount accumulator (D28), cost-side max(r^rituals, f).
+const ACT2_OFFERING_ACC = ACCUMULATOR_DATA.severanceRitual
+// The tribulation set-piece duration (SETPIECE_DATA.firstTribulation) — the
+// entry beat that opens Act II; modeled as a fixed cost (§3 scar-on-entry is
+// out of chunk-A scope, noted below).
+const ACT2_TRIBULATION_SECONDS = SETPIECE_DATA.firstTribulation.durationSeconds
+
+/** Ramp ratio at a raw step count (mirrors severing store ratioAtStep). */
+function act2RatioAtStep(steps: number): number {
+  return Math.min(ACT2_START_FRACTION * Math.pow(ACT2_RAMP_GROWTH, steps), ACT2_CAP_RATIO)
+}
+
+/**
+ * axisValue(m, ratio) = the transcendent multiplier a severance leaves on ONE
+ * axis: an occupied axis (m>1) ramps m·ratio; an unoccupied axis (m===1) gets
+ * max(ratio,1) — the k>1 superset bonus, never a penalty. Mirrors the severing
+ * store's axisValue exactly.
+ */
+function act2AxisValue(m: Decimal, ratio: number): Decimal {
+  return m.eq(1) ? Decimal.max(new Decimal(ratio), 1) : m.times(ratio)
+}
+
+/**
+ * One severable the Act II spine carries. `inBaseRate` marks pieces already
+ * folded into the Competent end-state rate (the bound soul aspect) vs pieces
+ * ACQUIRED in Act II (ext track, manifestation) whose owned multiplier is added
+ * on acquisition. The per-axis rate factor is: not-acquired → 1; owned →
+ * (inBase ? 1 : m); severed → axisValue(m,ratio) / (inBase ? m : 1). The divide
+ * for in-base pieces removes the piece's original contribution before the ramp
+ * replaces it — so the net is axisValue(m,ratio) either way.
+ */
+interface Act2Piece {
+  // Plain string: the sim's local SeverableKey predates the manifestation
+  // severable (it lists only the Act-I-measurable four); key is label-only here.
+  readonly key: string
+  readonly label: string
+  readonly mQi: Decimal
+  readonly mInsight: Decimal
+  readonly inBaseRate: boolean
+  acquired: boolean
+  severed: boolean
+  ratio: number
+}
+
+function act2PieceAxisFactor(piece: Act2Piece, axis: 'qi' | 'insight'): Decimal {
+  const m = axis === 'qi' ? piece.mQi : piece.mInsight
+  if (piece.severed) {
+    const av = act2AxisValue(m, piece.ratio)
+    return piece.inBaseRate ? av.div(m) : av
+  }
+  if (!piece.acquired) return new Decimal(1)
+  return piece.inBaseRate ? new Decimal(1) : m
+}
+
+/** realm-x qi multiplier after `severCount` cuts — cumulative substage product. */
+function act2RealmXQiMult(severCount: number): Decimal {
+  const substages = findRealm('x').substages
+  let product = new Decimal(1)
+  for (let i = 0; i < severCount && i < substages.length; i++) {
+    product = product.times(substages[i]!.qiMult)
+  }
+  return product
+}
+
+interface Act2SeverRow {
+  severable: string
+  corpseCut: string
+  offeringCorpse: string
+  mQi: string
+  mInsight: string
+  breakevenStep: number
+  weaknessWindowH: string
+  offerings: number
+  qiSacrificed: string
+  insightSacrificed: string
+  inWindowNet: string
+  lifetimeNet: string
+  liveAtChoice: number
+}
+
+interface Act2Result {
+  actISeconds: number
+  actIISeconds: number
+  tribToFirstSeverSeconds: number
+  extAcquireSeconds: number
+  manifestAcquireSeconds: number
+  manifestNodesBought: string[]
+  manifestInsightSpent: Decimal
+  rows: Act2SeverRow[]
+  totalOfferings: number
+  totalQiSacrificed: Decimal
+  totalInsightSacrificed: Decimal
+  masteryTrajectory: number[]
+  baseQi: Decimal
+  baseInsight: Decimal
+  qiBankStart: Decimal
+  insightBankStart: Decimal
+  aspectKey: string
+  extMultQi: Decimal
+  manifestMultQi: Decimal
+  manifestMultInsight: Decimal
+  minLiveSeverables: number
+  liveAtFirstChoice: number
+  timeToCapProjectionH: string[]
+}
+
+/**
+ * Model the Competent spine through Act II. Boots a fresh Competent Act I (its
+ * end state is the launch pad), then runs the analytic Act II model. Returns the
+ * measured/derived numbers; the caller prints them. No stores are mutated for
+ * the Act II mechanics (all offering/severance math is data-mirrored); the only
+ * store writes are the throwaway ext-meridian cost reads via body.buyableCost,
+ * which is a pure read.
+ */
+function runActIISpine(): Act2Result {
+  const actState = runProfileQuiet(runCompetent) // Pinia now live at Competent Act I end
+  const actISeconds = actState.simSeconds
+  const pipelines = usePipelinesStore()
+  const body = useBodyStore()
+  const dao = useDaoStore()
+  const game = useGameStore()
+
+  const baseQi = pipelines.qiPerSecond // includes the bound aspect; no ext, no manifestation
+  const baseInsight = pipelines.insightPerSecond
+
+  // --- Piece 1: soul aspect (bound in Act I, in the base rate) ---------------
+  const aspectKey = body.soulAspect
+  const aspectData = findRealm('n').soulAspect!.aspects.find((a) => a.key === aspectKey)
+  const aspectPiece: Act2Piece = {
+    key: 'soulAspect',
+    label: 'soul aspect',
+    mQi: new Decimal(aspectData?.effect.qiMult ?? 1),
+    mInsight: new Decimal(aspectData?.effect.insightMult ?? 1),
+    inBaseRate: true,
+    acquired: true,
+    severed: false,
+    ratio: 0,
+  }
+
+  // --- Piece 3: extraordinary-meridian track (ACQUIRED in Act II) ------------
+  // The Competent spine skips the ext track in Act I (byte-identical to the
+  // pin). Post-tribulation the gate is long met (12 primary + q 10th Level), so
+  // buying the full set of 8 is greedy-but-legal — and it is the THIRD live
+  // severable (aspect + manifestation alone is only 2; §6 needs >=3). Justified
+  // from the k-probe: the ext track is a CLEAN 5.96× (1.25^8), so cutting it
+  // gives a clean ramp — profession is a duty-cycle/episodic composite (not
+  // clean), the worse severance to build a policy on. "ext-or-profession → ext."
+  const extBuyable = findBodyBuyable('extraordinaryMeridian')
+  const extMultQi = Decimal.pow(extBuyable.effectBase, extBuyable.limit)
+  let extCostQi = new Decimal(0)
+  for (let i = 0; i < extBuyable.limit; i++) {
+    extCostQi = extCostQi.add(body.buyableCost('extraordinaryMeridian', i))
+  }
+  const extPiece: Act2Piece = {
+    key: 'extraordinaryMeridians',
+    label: 'ext-meridian track',
+    mQi: extMultQi,
+    mInsight: new Decimal(1),
+    inBaseRate: false,
+    acquired: false, // flips true after the Act II buy
+    severed: false,
+    ratio: 0,
+  }
+
+  // --- Piece 2: lattice Manifestation (ACQUIRED in Act II) -------------------
+  // Greedy-but-legal manifestation policy: buy the Manifestation tier on every
+  // node the spine already owns at Seed (tier >= 2), cheapest-first, from banked
+  // Insight, refusing the buy that would place BOTH conflict partners
+  // (flow/stillness) at Manifestation (data-driven off LATTICE_DATA.conflicts).
+  // Requires the passed tribulation (modeled — we are post-tribulation here).
+  const MANIFESTATION_TIER_INDEX = 2
+  const ownedSeedNodes = LATTICE_DATA.nodes.filter((n) => dao.nodeTierOwned(n.key) >= 2)
+  const manifestCandidates = [...ownedSeedNodes].sort(
+    (a, b) => a.costs[MANIFESTATION_TIER_INDEX]! - b.costs[MANIFESTATION_TIER_INDEX]!,
+  )
+  const conflictPairs = LATTICE_DATA.conflicts
+  const manifestBoughtKeys: string[] = []
+  let manifestMultQi = new Decimal(1)
+  let manifestMultInsight = new Decimal(1)
+  let manifestInsightCost = new Decimal(0)
+  for (const node of manifestCandidates) {
+    // Conflict guard: skip if the partner is already taken to Manifestation.
+    const conflicted = conflictPairs.some(([x, y]) => {
+      const partner = x === node.key ? y : y === node.key ? x : null
+      return partner !== null && manifestBoughtKeys.includes(partner)
+    })
+    if (conflicted) continue
+    const effect = node.effects[MANIFESTATION_TIER_INDEX]
+    if (!effect) continue
+    if ('qiMult' in effect) manifestMultQi = manifestMultQi.times(effect.qiMult)
+    else manifestMultInsight = manifestMultInsight.times(effect.insightMult)
+    manifestInsightCost = manifestInsightCost.add(node.costs[MANIFESTATION_TIER_INDEX]!)
+    manifestBoughtKeys.push(node.key)
+  }
+  const manifestPiece: Act2Piece = {
+    key: 'manifestation',
+    label: 'manifestation',
+    mQi: manifestMultQi,
+    mInsight: manifestMultInsight,
+    inBaseRate: false,
+    acquired: false,
+    severed: false,
+    ratio: 0,
+  }
+
+  // Sever order (§6 spine policy): aspect → manifestation → ext. Corpses are
+  // severed in DATA order (past, present, future) — the severable maps onto the
+  // corpse by position, not by theme (the offering basket is the CORPSE's).
+  const severOrder = [aspectPiece, manifestPiece, extPiece]
+  const corpses = SEVERING_DATA.corpses
+
+  // --- Rate recompute (the pipeline model) -----------------------------------
+  const allPieces = [aspectPiece, manifestPiece, extPiece]
+  const severCountNow = (): number => allPieces.filter((p) => p.severed).length
+  const qiRate = (): Decimal => {
+    let rate = baseQi.times(act2RealmXQiMult(severCountNow()))
+    for (const piece of allPieces) rate = rate.times(act2PieceAxisFactor(piece, 'qi'))
+    return rate
+  }
+  const insightRate = (): Decimal => {
+    let rate = baseInsight
+    for (const piece of allPieces) rate = rate.times(act2PieceAxisFactor(piece, 'insight'))
+    return rate
+  }
+
+  // --- Timeline (analytic; carry live banks into Act II) ---------------------
+  let simSeconds = 0
+  let qiBank = game.points
+  let insightBank = dao.insight
+  const qiBankStart = game.points
+  const insightBankStart = dao.insight
+  let rituals = 0 // soul.severanceRituals mirror (offerings only; sever() never bumps it)
+  const advance = (dt: number): void => {
+    if (dt <= 0) return
+    simSeconds += dt
+    qiBank = qiBank.add(qiRate().times(dt))
+    insightBank = insightBank.add(insightRate().times(dt))
+  }
+  const timeToAfford = (needQi: Decimal, needInsight: Decimal): number => {
+    const qiGap = needQi.sub(qiBank)
+    const insGap = needInsight.sub(insightBank)
+    const qiDt = qiGap.lte(0) ? 0 : qiGap.div(qiRate()).toNumber()
+    const insDt = insGap.lte(0) ? 0 : insGap.div(insightRate().toNumber() <= 0 ? new Decimal(1) : insightRate()).toNumber()
+    return Math.max(qiDt, Number.isFinite(insDt) ? insDt : 0, 0)
+  }
+
+  // 1) The tribulation set-piece opens Act II (banks accrue across it).
+  advance(ACT2_TRIBULATION_SECONDS)
+
+  // 2) Acquire the ext-meridian track (qi) — cheap at Act II qi scale.
+  const extStart = simSeconds
+  advance(timeToAfford(extCostQi, new Decimal(0)))
+  qiBank = qiBank.sub(extCostQi).max(0)
+  extPiece.acquired = true
+  const extAcquireSeconds = simSeconds - extStart
+
+  // 3) Acquire manifestation nodes (insight) — the insight competition begins.
+  const manifestStart = simSeconds
+  for (const node of manifestBoughtKeys) {
+    const cost = new Decimal(
+      LATTICE_DATA.nodes.find((n) => n.key === node)!.costs[MANIFESTATION_TIER_INDEX]!,
+    )
+    advance(timeToAfford(new Decimal(0), cost))
+    insightBank = insightBank.sub(cost).max(0)
+  }
+  manifestPiece.acquired = true
+  const manifestAcquireSeconds = simSeconds - manifestStart
+  const tribToFirstSeverSeconds = simSeconds
+
+  // 4) Sever the three corpses sequentially; each lived-with at breakeven.
+  const rows: Act2SeverRow[] = []
+  let totalOfferings = 0
+  let totalQiSacrificed = new Decimal(0)
+  let totalInsightSacrificed = new Decimal(0)
+  const masteryTrajectory: number[] = []
+  const liveSeverableCount = (): number =>
+    allPieces.filter((p) => p.acquired && !p.severed).length
+  let minLiveSeverables = Number.POSITIVE_INFINITY
+  let liveAtFirstChoice = 0
+  const timeToCapProjectionH: string[] = []
+
+  for (let severIndex = 0; severIndex < severOrder.length; severIndex++) {
+    const piece = severOrder[severIndex]!
+    const liveNow = liveSeverableCount()
+    if (severIndex === 0) liveAtFirstChoice = liveNow
+    minLiveSeverables = Math.min(minLiveSeverables, liveNow)
+
+    // The cut: capture ramp start; realm-x substage unlocks (severCount++).
+    piece.severed = true
+    piece.ratio = act2RatioAtStep(0)
+    const ritualsAtSever = rituals
+
+    // Offerings until this cut crosses breakeven (raw step >= breakeven).
+    const weaknessStart = simSeconds
+    let stepsSince = 0
+    let severQiSacrificed = new Decimal(0)
+    let severInsightSacrificed = new Decimal(0)
+    let rampSumToBreakeven = 0
+    // The offering corpse is nextCorpse ?? last (severing store) — after cutting
+    // corpse N the rite performed is corpse N+1's (last once all three are cut).
+    const offeringCorpseIndex = Math.min(severIndex + 1, corpses.length - 1)
+    const offeringCorpseKey = corpses[offeringCorpseIndex]!.key
+    const basket = findOfferingBasket(offeringCorpseKey)
+
+    while (stepsSince < ACT2_RAW_BREAKEVEN_STEPS) {
+      const stepsInto = rituals - ritualsAtSever // cost growth within this severance
+      const mastery = Decimal.max(
+        Decimal.pow(ACT2_OFFERING_ACC.ratio!, rituals),
+        ACT2_OFFERING_ACC.floor!,
+      )
+      // Competent carries no active pill (engagePills:false) → pill factor 1.
+      const scale = Decimal.pow(OFFERING_DATA.growth, stepsInto).times(mastery)
+      const costQi = new Decimal(basket.qiBase).times(scale)
+      const costInsight = new Decimal(basket.insightBase).times(scale)
+      piece.ratio = act2RatioAtStep(stepsSince) // weakness-window rate for this wait
+      advance(timeToAfford(costQi, costInsight))
+      qiBank = qiBank.sub(costQi).max(0)
+      insightBank = insightBank.sub(costInsight).max(0)
+      severQiSacrificed = severQiSacrificed.add(costQi)
+      severInsightSacrificed = severInsightSacrificed.add(costInsight)
+      masteryTrajectory.push(mastery.toNumber())
+      rituals++
+      stepsSince++
+      rampSumToBreakeven += act2RatioAtStep(stepsSince - 1)
+      totalOfferings++
+    }
+    piece.ratio = act2RatioAtStep(stepsSince) // now >= 1 (lived-with)
+
+    totalQiSacrificed = totalQiSacrificed.add(severQiSacrificed)
+    totalInsightSacrificed = totalInsightSacrificed.add(severInsightSacrificed)
+
+    // In-window net = mean ramp ratio over the steps to breakeven (m-independent,
+    // like the Part-2 grid). Full-ramp lifetime net = mean over all 12 steps.
+    const inWindowNet = rampSumToBreakeven / ACT2_RAW_BREAKEVEN_STEPS
+    let fullRampSum = 0
+    for (let step = 0; step < ACT2_RAMP_STEPS; step++) fullRampSum += act2RatioAtStep(step)
+    const lifetimeNet = fullRampSum / ACT2_RAMP_STEPS
+
+    // Time-to-cap projection: analytically, the ramp caps at raw step
+    // (rampSteps-1); the extra offerings past breakeven cost growth^stepsInto
+    // more each. Project the additional wall-time at the CURRENT rate (a
+    // lower-bound — the rate rises past breakeven, so real cap-time is shorter).
+    let capProjectionSeconds = simSeconds - weaknessStart
+    {
+      let projRituals = rituals
+      let projStepsInto = stepsSince
+      let projBankInsight = insightBank
+      let projBankQi = qiBank
+      let projSeconds = 0
+      const projQiRate = qiRate()
+      const projInsRate = insightRate()
+      while (projStepsInto < ACT2_RAMP_STEPS - 1) {
+        const mastery = Decimal.max(
+          Decimal.pow(ACT2_OFFERING_ACC.ratio!, projRituals),
+          ACT2_OFFERING_ACC.floor!,
+        )
+        const scale = Decimal.pow(OFFERING_DATA.growth, projStepsInto).times(mastery)
+        const costQi = new Decimal(basket.qiBase).times(scale)
+        const costInsight = new Decimal(basket.insightBase).times(scale)
+        const qiGap = costQi.sub(projBankQi)
+        const insGap = costInsight.sub(projBankInsight)
+        const dt = Math.max(
+          qiGap.lte(0) ? 0 : qiGap.div(projQiRate).toNumber(),
+          insGap.lte(0) || projInsRate.lte(0) ? 0 : insGap.div(projInsRate).toNumber(),
+        )
+        projSeconds += dt
+        projBankQi = projBankQi.add(projQiRate.times(dt)).sub(costQi).max(0)
+        projBankInsight = projBankInsight.add(projInsRate.times(dt)).sub(costInsight).max(0)
+        projRituals++
+        projStepsInto++
+      }
+      capProjectionSeconds += projSeconds
+    }
+    timeToCapProjectionH.push((capProjectionSeconds / 3600).toFixed(2))
+
+    rows.push({
+      severable: piece.label,
+      corpseCut: corpses[severIndex]!.name,
+      offeringCorpse: corpses[offeringCorpseIndex]!.name,
+      mQi: `${piece.mQi.toNumber().toFixed(3)}×`,
+      mInsight: `${piece.mInsight.toNumber().toFixed(3)}×`,
+      breakevenStep: ACT2_BREAKEVEN_STEP_DISPLAY,
+      weaknessWindowH: ((simSeconds - weaknessStart) / 3600).toFixed(2),
+      offerings: ACT2_RAW_BREAKEVEN_STEPS,
+      qiSacrificed: severQiSacrificed.toExponential(2),
+      insightSacrificed: severInsightSacrificed.toExponential(2),
+      inWindowNet: inWindowNet.toFixed(3),
+      lifetimeNet: lifetimeNet.toFixed(3),
+      liveAtChoice: liveNow,
+    })
+  }
+
+  return {
+    actISeconds,
+    actIISeconds: simSeconds,
+    tribToFirstSeverSeconds,
+    extAcquireSeconds,
+    manifestAcquireSeconds,
+    manifestNodesBought: manifestBoughtKeys,
+    manifestInsightSpent: manifestInsightCost,
+    rows,
+    totalOfferings,
+    totalQiSacrificed,
+    totalInsightSacrificed,
+    masteryTrajectory,
+    baseQi,
+    baseInsight,
+    qiBankStart,
+    insightBankStart,
+    aspectKey: aspectKey || 'none',
+    extMultQi,
+    manifestMultQi,
+    manifestMultInsight,
+    minLiveSeverables: Number.isFinite(minLiveSeverables) ? minLiveSeverables : 0,
+    liveAtFirstChoice,
+    timeToCapProjectionH,
+  }
+}
+
+/**
+ * Print the ACT II SPINE section (pure insertion; observation-only; no
+ * assertion). §6 preview lines emit PREVIEW-OK / PREVIEW-BREACH — NEVER the
+ * token CI greps for; these become assertions only after Gate-D sign-off.
+ */
+function printActIISpine(result: Act2Result, pinnedCompetentSeconds: number): void {
+  console.log('\n=== ACT II SPINE (observation-only; no assertion; bands await sign-off) ===')
+  console.log(
+    '  A COPY of Competent extended through Spirit Severing (the pinned Competent run is untouched).',
+  )
+  console.log(
+    '  Act II mechanics are MODELED analytically from data (SETPIECE_DATA.severance ramp, OFFERING_DATA',
+  )
+  console.log(
+    '  baskets, ACCUMULATOR_DATA.severanceRitual mastery, realm-x substage qiMults) — all numbers ⟨tune⟩',
+  )
+  console.log('  pending Gate-D (D28). No severing/dao store is mutated; end-state rates are read live.')
+
+  const actIH = result.actISeconds / 3600
+  const actIIH = result.actIISeconds / 3600
+  const pinH = pinnedCompetentSeconds / 3600
+  const actIMatch = Math.round(result.actISeconds) === Math.round(pinnedCompetentSeconds)
+  console.log(
+    `\n  Act I duration (this run's Competent Act I): ${result.actISeconds.toFixed(0)}s (${actIH.toFixed(2)}h) — ` +
+      `${actIMatch ? 'MATCHES' : 'DIVERGES from'} the pinned Competent (${pinnedCompetentSeconds}s / ${pinH.toFixed(2)}h).`,
+  )
+  console.log(
+    `  Act II duration (tribulation → 3rd breakeven): ${result.actIISeconds.toFixed(0)}s (${actIIH.toFixed(2)}h).`,
+  )
+  console.log(
+    `    ├─ tribulation set-piece: ${ACT2_TRIBULATION_SECONDS}s (fixed; §3 scar-on-entry out of chunk-A scope).`,
+  )
+  console.log(
+    `    ├─ ext-meridian track acquire (qi): ${(result.extAcquireSeconds / 3600).toFixed(3)}h ` +
+      `(m=${result.extMultQi.toNumber().toFixed(2)}× qi = 1.25^8).`,
+  )
+  console.log(
+    `    ├─ manifestation acquire (insight): ${(result.manifestAcquireSeconds / 3600).toFixed(2)}h ` +
+      `for ${result.manifestNodesBought.length} nodes [${result.manifestNodesBought.join(', ')}], ` +
+      `${result.manifestInsightSpent.toExponential(2)} insight.`,
+  )
+  console.log(
+    `    └─ tribulation → first sever: ${(result.tribToFirstSeverSeconds / 3600).toFixed(2)}h ` +
+      '(acquisition is entirely pre-first-cut so all three severables are live at corpse 1).',
+  )
+  console.log(
+    `  End-state rates (Competent Act I): qi ${result.baseQi.toExponential(2)}/s, ` +
+      `insight ${result.baseInsight.toNumber().toFixed(3)}/s | aspect ${result.aspectKey} ` +
+      `| manifestation m: ${result.manifestMultQi.toNumber().toFixed(3)}× qi / ${result.manifestMultInsight.toNumber().toFixed(3)}× insight.`,
+  )
+  console.log(
+    `  Act I banks carried into Act II: ${result.qiBankStart.toExponential(2)} qi, ` +
+      `${result.insightBankStart.toNumber().toFixed(0)} insight (why ext + manifestation acquire near-instantly — ` +
+      'the insight trickle banked ~a run\'s worth; the OFFERINGS drain it and then bind on the trickle).',
+  )
+
+  console.log('\n  -- Per-severance (sever order aspect → manifestation → ext; corpses in data order) --')
+  console.table(result.rows)
+  console.log(
+    `  breakevenStep ${ACT2_BREAKEVEN_STEP_DISPLAY} (raw ${ACT2_RAW_BREAKEVEN_STEPS} offerings) is the ` +
+      `data-derived lived-with gate (c=${ACT2_START_FRACTION}, k=${ACT2_CAP_RATIO}, growth=${ACT2_RAMP_GROWTH.toFixed(4)}).`,
+  )
+  console.log(
+    '  weaknessWindowH = wall-time from the cut to breakeven (the 6 offerings); inWindowNet/lifetimeNet are ' +
+      'm-INDEPENDENT ramp means (steps-to-breakeven vs the full 12-step ramp) — the D25 grid, re-derived live.',
+  )
+  console.log(`  time-to-cap projections (per severance, to step ${ACT2_RAMP_STEPS} at end-of-window rate): ` +
+    `[${result.timeToCapProjectionH.join('h, ')}h].`)
+
+  console.log('\n  -- Offering economics --')
+  console.log(
+    `  Total offerings: ${result.totalOfferings} (${ACT2_RAW_BREAKEVEN_STEPS}/severance × 3). ` +
+      `Total sacrificed: ${result.totalQiSacrificed.toExponential(3)} qi + ` +
+      `${result.totalInsightSacrificed.toExponential(3)} insight.`,
+  )
+  const traj = result.masteryTrajectory
+  console.log(
+    `  Mastery-discount trajectory max(0.9^rituals, 0.25) across the ${traj.length} offerings: ` +
+      `${traj[0]!.toFixed(3)} → ${traj[Math.floor(traj.length / 2)]!.toFixed(3)} → ${traj[traj.length - 1]!.toFixed(3)} ` +
+      '(deepens then floors at 0.25 — the optimizer bound).',
+  )
+
+  // --- ⟨tune⟩ observations (mispricings the Act II model surfaces) ------------
+  console.log('\n  -- ⟨tune⟩ observations (Act II numbers that look mispriced) --')
+  console.log(
+    '  ⟨tune⟩ INSIGHT IS THE ACT II BOTTLENECK: the offering INSIGHT bases (Future basket 24,000, growing ' +
+      `×1.5/step) and the ring-3 manifestation node costs (6k–50k) both draw the SAME lattice insight ` +
+      `trickle (~${result.baseInsight.toNumber().toFixed(2)}/s). Act II runs ${(result.actIISeconds / 3600).toFixed(0)}h ` +
+      'almost entirely insight-starved — qi is oversupplied by orders of magnitude (offerings never bind on qi).',
+  )
+  console.log(
+    '  ⟨tune⟩ CORPSE-BASKET / NEXT-CORPSE MISMATCH: the severing store bills offerings at nextCorpse ?? last, ' +
+      'so living-with the PAST cut is billed at the PRESENT basket, and the FUTURE (insight-heavy) basket is ' +
+      'billed for 12 of the 18 offerings. The qi-heavy PAST basket is only reachable via pre-severance ' +
+      'practice offerings the optimal spine never makes. D27 already flags realm-x as a placeholder — this is ' +
+      'the concrete pricing symptom.',
+  )
+  console.log(
+    '  ⟨tune⟩ THE PRESENT PILL DISCOUNT IS DEAD FOR THIS BUILD: OFFERING_DATA.pillDiscount (0.8) only fires ' +
+      'with an active pill; the Competent spine (engagePills:false) never holds one, so the Present rite ' +
+      'gives it no discount. The corpse-colored lean rewards only the pill build — a counter-monopoly gap ' +
+      'for non-alchemists.',
+  )
+  console.log(
+    `  ⟨tune⟩ MANIFESTATION UNLOCK COSTS MORE INSIGHT THAN THE CUT RETURNS: buying ${result.manifestNodesBought.length} ` +
+      `manifestation nodes costs ${result.manifestInsightSpent.toExponential(2)} insight — larger than the entire ` +
+      `Act I insight bank (${result.insightBankStart.toNumber().toFixed(0)}) — to unlock a manifestation severance whose ` +
+      `m is only ${result.manifestMultQi.toNumber().toFixed(2)}× qi / ${result.manifestMultInsight.toNumber().toFixed(2)}× insight. ` +
+      'The severable that makes the third cut POSSIBLE for a non-meridian build (§2 "load-bearing") is priced as the ' +
+      'most expensive thing in Act II relative to what it returns.',
+  )
+
+  // --- §6 PREVIEW lines (NOT assertions; PREVIEW-OK / PREVIEW-BREACH only) ----
+  console.log('\n  -- §6 mechanical-assertion PREVIEW (NOT asserted — Gate-D gates the assertable form) --')
+  // 1) lifetime net >= 1 on every sampled severance.
+  const lifetimeNets = result.rows.map((r) => Number(r.lifetimeNet))
+  const minLifetimeNet = Math.min(...lifetimeNets)
+  console.log(
+    `  [1] lifetime net >= 1: min lifetimeNet ${minLifetimeNet.toFixed(3)} across ${result.rows.length} severances → ` +
+      `${minLifetimeNet >= 1 ? 'PREVIEW-OK' : 'PREVIEW-BREACH'} ` +
+      '(severing is never a strict loss over a life).',
+  )
+  // 2) breakeven within the ramp horizon (<= rampSteps) on every severance.
+  const breakevenOk = ACT2_BREAKEVEN_STEP_DISPLAY <= ACT2_RAMP_STEPS
+  console.log(
+    `  [2] breakeven within ramp horizon: step ${ACT2_BREAKEVEN_STEP_DISPLAY} <= ${ACT2_RAMP_STEPS} → ` +
+      `${breakevenOk ? 'PREVIEW-OK' : 'PREVIEW-BREACH'} (the weakness window is bounded).`,
+  )
+  // 3) >= 3 live severables at the (first) corpse choice — the shipping assertion.
+  const threeLiveOk = result.liveAtFirstChoice >= 3
+  console.log(
+    `  [3] >= 3 live severables: ${result.liveAtFirstChoice} live at the first corpse choice → ` +
+      `${threeLiveOk ? 'PREVIEW-OK' : 'PREVIEW-BREACH'} ` +
+      '(three sequential severances require the build to offer >= 3; the count then decrements 3→2→1 as cuts land).',
+  )
+  console.log(
+    '  (ACT II SPINE ends — observation/model input for Gate-D; nothing here is asserted, no error token is emitted.)',
+  )
+}
+
 function runProfile(name: string, fn: (state: SimState) => void): SimState {
   bootSim()
   const state: SimState = {
@@ -2573,6 +3179,15 @@ export function runPacingSim(): void {
   }
   console.log(`  VERDICT (${q10ClosurePct >= Q10_MOST_OF_GAP_PCT ? 'closed ≥ threshold' : 'gap survives'}): ${q10Verdict}`)
   console.log('  (Q10 PROBE ends — observation input for the trap-vs-policy call; the pins below are the only assertions.)')
+
+  // ---- ACT II SPINE (slice-9 §6; observation-only, pure insertion) ---------
+  // Boots its OWN quiet Competent Act I (the pinned Competent run above is
+  // untouched), then models Act II analytically. No FAIL is ever emitted here;
+  // the §6 preview lines report PREVIEW-OK / PREVIEW-BREACH only (Gate-D gates
+  // the FAIL-able assertions). Runs before PINNED BANDS, which reads only stored
+  // numbers (competentRun.simSeconds etc.), so booting a fresh Pinia here is safe.
+  const actIIResult = runActIISpine()
+  printActIISpine(actIIResult, competentRun.simSeconds)
 
   // ---- PINNED BANDS (Gate-D: re-pinned 2026-07-02 with the keep mechanic live) ----
   // Three bands, three jobs. These are the ONLY hard pacing pins in the sim;
