@@ -396,3 +396,29 @@ and what those turnings will cost (the offering trajectory), so the depth
 of the window is legible when the choice is made. Veil the ahead, never
 the now — and the recovery timeline is part of NOW once the knife is in
 hand. UI work item queued on SeveringPanel's menu.
+
+## D33 — Realm-x substage qiMults stripped; the transition IS the event (Q12 closed)
+
+*2026-07-03, approves Q12's decouple lean with the post-D30 numbers in
+hand.* The substage qiMults (2.0/2.4/2.8) were doing two conflicting
+jobs — Act II qi scaling AND early-ramp compensation — and the scaling
+overwhelmed the severance cost: qi ROSE at every trough. The knife cut
+and nothing hurt, contradicting D23's emotional design outright.
+
+**Ruling (Wes):** strip the realm-x substage qiMults; the transcendent
+ramp (c=0.5 → k=2.0) is the ONLY compensation for a cut. In Spirit
+Severing the substage transitions are the severance gates and the reward
+is the ramp STARTING — the transition doesn't need a separate bonus
+because the transition is the event.
+
+**Schema consequence (explicit, not placeholder):** the substage reward
+becomes NULLABLE — `qiMult: number | null`, where null means "this
+substage's reward is the severance itself, not a modifier." A
+placeholder 1.0 that technically does nothing is rejected as data
+clutter; consumers must handle null explicitly so nothing no-ops
+silently. Act I realms keep their numeric rewards; Act I output must
+stay byte-identical.
+
+**Sequence (one pass, one Gate-D ruling):** strip → re-measure the full
+roster → bring insight-pricing + Manifestation-cost to the settled
+numbers; the pill-discount and Act II band calls ride on that re-measure.
