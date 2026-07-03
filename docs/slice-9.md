@@ -1,8 +1,26 @@
 # Slice 9 — Act II opens: Spirit Severing
 
-**Status: SIGNED OFF 2026-07-02 (D25).** Scope cut approved 2026-07-02;
-shape decisions in [decisions.md](decisions.md) D21–D25; probe evidence in
+**Status: CORE BUILT 2026-07-03 (overnight pipeline).** Signed off
+2026-07-02 (D25); scope cut approved 2026-07-02; shape decisions in
+[decisions.md](decisions.md) D21–D25; probe evidence in
 [calibration.md](calibration.md).
+
+Built (commits `6b0a94d`/`12f159b` skeleton+seams, `f7a7812` keep rule +
+pin migration, `f8bb2ba` severing system, `e215a64` medium lattice):
+§1 keep rule (see the migration note below — Realistic did NOT re-pin),
+§2 severing (store, ceremony panel, ramp, sequential gating, 15 tests),
+§4 medium lattice (25 nodes, Manifestation, conflict binding, Act I
+provably untouched). 320 tests, all gates green, Pages serving current.
+
+**Remaining from this spec (not yet built):** §3 scar-on-entry; §5
+cross-tree lint goes real; §6's new sim assertions (lifetime net ≥ 1,
+bounded weakness window, ≥3 live severables) + the actors' severing
+policy — all of §6's additions need Act II sim-actor support (today's
+actors never pass the tribulation, so severing is unreachable in the
+sim; the ⊘ probe's rate-share model is the only Act II signal). The
+≥3-live-severables property is now *structurally satisfiable* (aspect +
+profession + manifestation exist for non-meridian builds) but not yet
+sim-asserted.
 
 ## Scope
 

@@ -3,6 +3,28 @@
 All notable changes to **Dao Tree**. Versions track the itch.io releases;
 **0.2** was the first public release, so earlier development is folded into it.
 
+## 0.5.0 — unreleased — the second road
+
+### Added
+- **Act II opens: Spirit Severing.** Pass the First Tribulation and a sixth
+  realm waits — and with it, the Three Corpses. Each demands a severance:
+  choose a real piece of your build — your soul aspect, your profession, your
+  extraordinary meridians, a Dao Manifestation — and cut it away. The cut is
+  fully legible before you make it: the game shows exactly what you give up.
+  What follows is a weakness window; the severance ritual carries the
+  transcendent multiplier from half of what you lost to double it. Sequential
+  by design — each corpse must be lived with before the next is chosen.
+- **The Dao lattice deepens: Manifestation.** Every lattice truth can now go
+  one tier further, and ten new comprehensions extend the element branches —
+  Severing Intent, River of Time, Rebirth, and their kin. All of it is Act II
+  content, sealed until the tribulation is crossed. At Manifestation depth,
+  Flow and Stillness finally refuse to coexist: the conflict the lattice
+  always hinted at now binds.
+- **The core remembers.** Re-climbing Core Formation after an ascent
+  accelerates: each ascent compounds the re-climb's prestige gain (up to
+  20×), so the mountain you've mastered yields faster with every return.
+  The ritual never vanishes — it becomes a breath.
+
 ## 0.4.2 — unreleased
 
 ### Added
