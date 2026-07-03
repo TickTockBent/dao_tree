@@ -74,3 +74,33 @@ severance ritual; stance to v2.)*
 [decisions.md](decisions.md) D29: POLICY ERROR, the stance data is fine —
 the sim's always-on trance usage caused the inversion, 85.2% of the gap
 closed by insight-binding-only engagement. No data change.)*
+
+## Q11 — Stance as severable v2 *(trigger: the Act II tune pass; unblocked by D29)*
+
+D31's coverage ruling names the stance as the severable that closes both
+roster breaches (MeridianProbe and LatticeFocused each land 2 live
+severables — each lacks what the other's identity provides). D29 cleared
+the trance's data (the D25 inversion was sim policy error), so the
+redesign is unblocked — but D29's numbers also show the trance is
+~net-neutral for the lattice optimizer even when used well, so severing
+it as-captured would still have no felt weakness window. The design task:
+give the stance severable a real m (what is actually lost when you sever
+your relationship to technique itself?) that fits D23's shape. Candidate
+framing: sever the STANCE SYSTEM (all stances, the toggle itself), not
+one stance's effect — the loss is flexibility, priced as the best-stance
+uptime the build actually uses.
+
+## Q12 — Realm-x substage qiMults: decouple scaling from compensation *(trigger: the Act II tune pass, with D30's re-measured numbers)*
+
+The roster found the weakness window is NOT felt on qi — the substage
+qiMults (2.0/2.4/2.8 per cut) more than offset the c=0.5 ramp, so qi
+RISES at the trough. The prose promises pain ("for six turnings you were
+less than you had been"); the math delivers a power spike. **Wes's lean
+(recorded 2026-07-03, decision at the tune pass):** the qiMults are doing
+two conflicting jobs — Act II qi scaling AND early-ramp compensation.
+Decouple them: the transcendent ramp should be the ONLY compensation for
+a cut; strip or dramatically reduce the substage qiMults (Spirit Severing
+is not "every realm" — its power comes from the ramp, not sub-stage
+bonuses). Confirm against D30's re-measured numbers first; billing
+direction (which resource squeezes) and substage mults (whether the cut
+is felt at all) are orthogonal and both must be right.

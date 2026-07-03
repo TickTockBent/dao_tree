@@ -358,3 +358,41 @@ from ~18 offerings to the Future's 12, redistributing Past→qi,
 Present→consumables, Future→insight at 12 steps each. The billing fix
 lands and RE-MEASURES before any basket base is touched (rule 0.1:
 separate the artifact from the real pricing problem first).
+
+## D31 — The ≥3-severables assertion stands; expand coverage, don't cheapen
+
+*2026-07-03, rules on the Act II roster's PREVIEW-BREACHes.* MeridianProbe
+(no Seeds → no Manifestation) and LatticeFocused (no profession, no ext
+track) each land 2 live severables — each specialist lacks exactly what
+the other build's identity provides. **That is the counter-monopoly
+working as intended**: builds are genuinely different, and the difference
+extends to what they can sacrifice.
+
+**Ruling (Wes):** the shipping assertion as written (≥3 live severables
+per viable build) is correct — and the fix is **expanding what counts as
+a severable**, never cheapening existing ones (no discounting the
+Manifestation, no free professions). The named candidate: **the stance**
+(dropped to v2 by D25's probe inversion). D29 has since attributed that
+inversion to sim policy error — the trance's design is sound — so the
+stance-severable redesign is UNBLOCKED and would close both breaches
+simultaneously. Caveat carried from D29's numbers: even smart-used, the
+trance is ~net-neutral for the lattice optimizer, so the v2 redesign must
+still earn D23's shape (a felt weakness window), not merely re-list the
+stance. Tracked as open-questions Q11.
+
+## D32 — Deep weakness windows are a feature only if seen: recovery math at choice time
+
+*2026-07-03, rules on the Meridian 80h sub-breakeven window.* The 80-hour
+window on the ext-track cut (clean 5.96×, the deepest sacrifice in the
+game) **is the intended price — but only if the player chose it
+knowingly.** An informed player betting their Act II on the ramp is a
+dramatic, good story; a player discovering 80 hours in that they are
+still weaker than before the cut is a trap wearing a feature's clothes.
+
+**Ruling (Wes; D11 applied):** the severance menu must show the RECOVERY
+MATH at choice time, before the cut — not just the multipliers lost and
+the c→k promise, but the breakeven timeline: ritual turnings to breakeven
+and what those turnings will cost (the offering trajectory), so the depth
+of the window is legible when the choice is made. Veil the ahead, never
+the now — and the recovery timeline is part of NOW once the knife is in
+hand. UI work item queued on SeveringPanel's menu.
