@@ -25,11 +25,26 @@ export interface CorpseRow {
   readonly flavor: string
 }
 
+/**
+ * D35 / principle #35 — the contribution CLASS a severable belongs to, the
+ * lint surface that keeps "severing a conditional thing cannot create an
+ * unconditional loss" honest:
+ * - 'passive': an always-on pipeline contribution. Nullifying it under the
+ *   standard ramp opens a real c·m weakness window (the original four).
+ * - 'conditional-lock': a CONDITIONAL contribution (a toggled stance). It
+ *   cannot be nullified into a weakness window — nullifying a toggle changes
+ *   nothing — so instead the LOCK shape makes it permanent flesh (a novel
+ *   cost imposed, not a benefit removed) and asserts cap·m > 1 on every axis.
+ */
+export type SeverableContribution = 'passive' | 'conditional-lock'
+
 export interface SeverableRow {
   readonly key: SeverableKey
   readonly name: string
   /** What the cut takes — shown on the severance menu with the measured contribution. */
   readonly flavor: string
+  /** Principle #35 contribution class — passive (weakness-window) vs conditional-lock. */
+  readonly contribution: SeverableContribution
 }
 
 export interface SeveringData {
@@ -62,21 +77,36 @@ export const SEVERING_DATA: SeveringData = {
       key: 'soulAspect',
       name: 'Soul Aspect',
       flavor: 'The form your soul took at Nascent Soul — its element, its identity.',
+      contribution: 'passive',
     },
     {
       key: 'profession',
       name: 'Profession',
       flavor: 'The mortal livelihood: cauldron, ledger, and every pill it would have brewed.',
+      contribution: 'passive',
     },
     {
       key: 'extraordinaryMeridians',
       name: 'Extraordinary Meridians',
       flavor: 'The eight hidden channels, sealed as if never opened.',
+      contribution: 'passive',
     },
     {
       key: 'manifestation',
       name: 'Dao Manifestation',
       flavor: 'A truth of the lattice made real — unmade.',
+      contribution: 'passive',
+    },
+    {
+      // D35 — Sever the Flowing Form. You must be WEARING a stance to cut it;
+      // the knife does not destroy the form, it makes it FLESH — permanent,
+      // involuntary, its modifiers captured verbatim and run through the ramp.
+      // A conditional thing made unconditional: the lock is a floor, not a
+      // cage (other forms still practice from it). Principle #35.
+      key: 'flowingForm',
+      name: 'Sever the Flowing Form',
+      flavor: 'The stance you wear, made permanent flesh — no longer a breath you take and release, but the shape you are.',
+      contribution: 'conditional-lock',
     },
   ],
 }

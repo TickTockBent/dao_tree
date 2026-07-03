@@ -23,6 +23,7 @@ import { ref, computed } from 'vue'
 import Decimal from 'break_eternity.js'
 import { decimalOne, decimalZero } from '@/engine/decimal'
 import { SEVERING_DATA, OFFERING_DATA, findOfferingBasket } from '@/data/severing'
+import { STANCE_DATA, type StanceRow } from '@/data/stances'
 import { SETPIECE_DATA } from '@/data/setpieces'
 import { ACCUMULATOR_DATA } from '@/data/accumulators'
 import { findBodyBuyable } from '@/data/body'
@@ -35,7 +36,7 @@ import { useDaoStore } from './dao'
 import { useGameStore } from './game'
 import { useRealmStore } from './realm'
 import { useSoulStore } from './soul'
-import type { CorpseKey, PillKey, SeverableKey } from '@/engine/types'
+import type { CorpseKey, PillKey, SeverableKey, StanceKey } from '@/engine/types'
 
 export interface SeveranceRecord {
   corpse: CorpseKey
@@ -45,6 +46,14 @@ export interface SeveranceRecord {
   /** Live contribution captured at sever time (Decimal strings — the m in c·m → k·m). */
   severedQiMult: string
   severedInsightMult: string
+  /**
+   * D35 — which stance the Flowing Form cut locked into flesh (only set on a
+   * 'flowingForm' severance). Additive + save/load-safe: absent on the four
+   * passive severables and on every pre-D35 save. Feeds dao's lockedStance
+   * getter so the toggle path refuses it and the ramp (not the toggle) carries
+   * its captured modifiers.
+   */
+  lockedStance?: StanceKey
 }
 
 export interface SeveringSlice {
@@ -140,6 +149,22 @@ function axisValue(contribution: Decimal, ratio: number): Decimal {
   return contribution.eq(1) ? scaled.max(decimalOne()) : scaled
 }
 
+/**
+ * D35 / principle #35 shippability floor for a conditional-lock severable: the
+ * captured stance must be RECOVERABLE on EVERY axis — cap·m > 1 (the ramp's
+ * lifetime peak clears baseline 1, not the stance's own m; a lock's baseline is
+ * 1). A stance too lopsided to clear this on some axis is WEARABLE but not
+ * LOCKABLE: locking it would impose a permanent malus the ramp can never repay
+ * on that axis. At k=2.0: Breathing Trance qi 0.7 → 1.4 ✓, insight 2.0 → 4.0 ✓
+ * (lockable); Sword Trance qi 0.4 → 0.8 ✗ (NOT lockable — discovered at
+ * implementation, reported to design, stance data unchanged per rule 0.1).
+ */
+function stanceLockRecoverable(stance: StanceRow): boolean {
+  const qiM = stance.modifiers.qiMult ?? 1
+  const insightM = stance.modifiers.insightMult ?? 1
+  return CAP_RATIO * qiM > 1 && CAP_RATIO * insightM > 1
+}
+
 export const useSeveringStore = defineStore('severing', () => {
   const slice = ref<SeveringSlice>(freshSeveringSlice())
 
@@ -162,7 +187,23 @@ export const useSeveringStore = defineStore('severing', () => {
    * profession is a COMPOSITE effect (pill + breakthrough aid + warding); the
    * gathering pill's nominal mult is the honest legible v1 figure (k-probe).
    */
+  /** The stance currently WORN (dao.activeStance resolved to its row), or null. */
+  function wornStance(): StanceRow | null {
+    const key = useDaoStore().activeStance
+    if (!key) return null
+    return STANCE_DATA.stances.find((s) => s.key === key) ?? null
+  }
+
   function contributionOf(severable: SeverableKey): { qi: Decimal; insight: Decimal } {
+    if (severable === 'flowingForm') {
+      // D35 — the WORN stance's modifiers verbatim (D11 — shown exactly on the
+      // menu, captured verbatim at sever time as the m in c·m → k·m).
+      const stance = wornStance()
+      return {
+        qi: new Decimal(stance?.modifiers.qiMult ?? 1),
+        insight: new Decimal(stance?.modifiers.insightMult ?? 1),
+      }
+    }
     if (severable === 'soulAspect') {
       const aspectKey = useBodyStore().soulAspect
       const aspect = realmWithSoulAspect()?.soulAspect?.aspects.find((a) => a.key === aspectKey)
@@ -198,6 +239,14 @@ export const useSeveringStore = defineStore('severing', () => {
 
   /** True if the severable is ACQUIRED this life (available to cut). */
   function isAcquired(severable: SeverableKey): boolean {
+    if (severable === 'flowingForm') {
+      // D35 eligibility: you must be WEARING a form (dao.activeStance !== null),
+      // AND that form must be lockable — cap·m > 1 on every axis (principle #35).
+      // A worn-but-too-lopsided stance (Sword Trance) is deliberately NOT
+      // offered; flowingFormBlockReason says why.
+      const stance = wornStance()
+      return stance !== null && stanceLockRecoverable(stance)
+    }
     if (severable === 'soulAspect') return useBodyStore().soulAspect !== ''
     if (severable === 'profession') return useAlchemyStore().professionChosen
     if (severable === 'extraordinaryMeridians') {
@@ -278,6 +327,8 @@ export const useSeveringStore = defineStore('severing', () => {
     if (!previousLivedWith.value) return false
 
     const soul = useSoulStore()
+    // Captured BEFORE the D35 lock clears the worn stance (order matters: the
+    // Flowing Form's contribution reads the stance that is about to be freed).
     const contribution = contributionOf(severable)
     const record: SeveranceRecord = {
       corpse,
@@ -286,10 +337,46 @@ export const useSeveringStore = defineStore('severing', () => {
       severedQiMult: contribution.qi.toString(),
       severedInsightMult: contribution.insight.toString(),
     }
+    if (severable === 'flowingForm') {
+      // D35 — record WHICH form was made flesh, then clear the toggle so it
+      // stops applying via the stance path (the ramp carries its captured
+      // modifiers now — this is the double-count guard). The lock is a FLOOR,
+      // not a cage: dao.toggleStance still lets OTHER stances stack on top.
+      const dao = useDaoStore()
+      const worn = dao.activeStance
+      if (worn) record.lockedStance = worn
+      dao.lockActiveStance()
+    }
     slice.value = { severances: [...slice.value.severances, record] }
     soul.recordSeverance(severable, PRE_SAMSARA_LIFE_NUMBER)
     return true
   }
+
+  /**
+   * D35 — the stance the Flowing Form severance locked into flesh this life, or
+   * null. Read by dao (deferred lookup) to refuse re-toggling it and to exclude
+   * it from the active-stance modifier path (the ramp carries it instead).
+   */
+  const lockedStance = computed<StanceKey | null>(() => {
+    const record = slice.value.severances.find((s) => s.severable === 'flowingForm')
+    return record?.lockedStance ?? null
+  })
+
+  /**
+   * D35 eligibility reason: why the currently WORN form cannot be locked, or
+   * null (nothing worn, or the worn form is lockable). Lets the panel say "this
+   * form is too lopsided to survive as flesh" when a worn stance fails the
+   * cap·m > 1 shippability floor (principle #35).
+   */
+  const flowingFormBlockReason = computed<string | null>(() => {
+    const stance = wornStance()
+    if (stance === null) return null
+    if (stanceLockRecoverable(stance)) return null
+    return `${stance.name} is too lopsided to survive as flesh — one axis could never recover past baseline. Wear a more balanced form to sever it.`
+  })
+
+  /** The name of the form the Flowing Form cut would lock right now (D11), or null. */
+  const wornStanceName = computed<string | null>(() => wornStance()?.name ?? null)
 
   // ---- D28: The Offering (prestige('x') is a sacrifice) --------------------
   //
@@ -484,6 +571,9 @@ export const useSeveringStore = defineStore('severing', () => {
     nextCorpse,
     contributionOf,
     liveSeverables,
+    lockedStance,
+    flowingFormBlockReason,
+    wornStanceName,
     canSever,
     previousLivedWith,
     sever,

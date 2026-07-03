@@ -834,3 +834,86 @@ describe('§6 severance shape (lint-interim for the sim assertions)', () => {
     expect(SEVERING_DATA.severables.length).toBeGreaterThanOrEqual(SEVERING_DATA.corpses.length)
   })
 })
+
+// ---- principle #35 — severable contribution classes -------------------------
+//
+// docs/design-principles.md #35 + D35: "Severing a conditional thing cannot
+// create an unconditional loss." Every SEVERING_DATA severable declares a
+// contribution CLASS. A 'passive' severable is nullified under the standard
+// ramp (a c·m weakness window — the four D25 rows). A 'conditional-lock'
+// severable (a toggled stance) CANNOT be nullified into a weakness window —
+// nullifying a toggle changes nothing — so it uses the LOCK shape (the
+// conditional thing becomes permanent flesh) and its OWN assertion form:
+// cap·m > 1 on EVERY axis (baseline 1, not m). This lint asserts the DATA
+// SHAPE; the sim chunk (a separate follow-up) measures the lived recovery.
+describe('principle #35 severable contribution classes', () => {
+  const CONTRIBUTION_CLASSES = ['passive', 'conditional-lock'] as const
+  const cap = SETPIECE_DATA.severance.capRatio
+
+  it('every severable declares a contribution class', () => {
+    for (const row of SEVERING_DATA.severables) {
+      expect(
+        CONTRIBUTION_CLASSES,
+        `${row.key} has an undeclared/invalid contribution class`,
+      ).toContain(row.contribution)
+    }
+  })
+
+  it('the four passive rows are exactly the pre-D35 (D25) set', () => {
+    // Pinned: the original passive severables. A new passive severable must be
+    // added here deliberately (it opens a real c·m weakness window and must be
+    // sim-verified survivable); a conditional one must NOT slip in as passive.
+    const passiveKeys = SEVERING_DATA.severables
+      .filter((s) => s.contribution === 'passive')
+      .map((s) => s.key)
+    expect(passiveKeys).toEqual(['soulAspect', 'profession', 'extraordinaryMeridians', 'manifestation'])
+  })
+
+  it("flowingForm is the sole 'conditional-lock' severable (the stance-lock, D35)", () => {
+    const lockKeys = SEVERING_DATA.severables
+      .filter((s) => s.contribution === 'conditional-lock')
+      .map((s) => s.key)
+    expect(lockKeys).toEqual(['flowingForm'])
+  })
+
+  // The conditional-lock assertion form: cap·m > 1 on EVERY axis. Mirrors
+  // stores/severing.ts stanceLockRecoverable exactly — the lock is only OFFERED
+  // for a stance clearing this on both axes (the shippability floor: no offered
+  // lock can ever fail to recover an axis).
+  function lockRecoverable(qiM: number, insightM: number): boolean {
+    return cap * qiM > 1 && cap * insightM > 1
+  }
+
+  it('at least one stance is lockable (cap·m > 1 every axis) — the Flowing Form offer is non-empty', () => {
+    const lockable = STANCE_DATA.stances.filter((s) =>
+      lockRecoverable(s.modifiers.qiMult ?? 1, s.modifiers.insightMult ?? 1),
+    )
+    expect(
+      lockable.length,
+      'no stance passes the cap·m > 1 floor — the Flowing Form severable is dead content',
+    ).toBeGreaterThanOrEqual(1)
+  })
+
+  it('a stance too lopsided to clear cap·m > 1 on some axis is NOT lockable (Sword Trance at k=2.0)', () => {
+    // DESIGN CONSEQUENCE discovered at D35 implementation: at capRatio 2.0,
+    // Breathing Trance (qi 0.7 → 1.4, insight 2.0 → 4.0) IS lockable, but Sword
+    // Trance (qi 0.4 → 0.8 < 1) is NOT — its qi axis could never recover past
+    // baseline. It stays WEARABLE; it is simply never offered for the lock
+    // (stance data unchanged per rule 0.1 — the eligibility rule carries it).
+    const byKey = Object.fromEntries(STANCE_DATA.stances.map((s) => [s.key, s.modifiers]))
+    const breathing = byKey['breathingTrance']
+    const sword = byKey['swordTrance']
+    if (breathing) {
+      expect(
+        lockRecoverable(breathing.qiMult ?? 1, breathing.insightMult ?? 1),
+        'Breathing Trance should be lockable at k=2.0',
+      ).toBe(true)
+    }
+    if (sword) {
+      expect(
+        lockRecoverable(sword.qiMult ?? 1, sword.insightMult ?? 1),
+        'Sword Trance unexpectedly lockable — the qi axis 0.4 must fail cap·m > 1 at k=2.0',
+      ).toBe(false)
+    }
+  })
+})

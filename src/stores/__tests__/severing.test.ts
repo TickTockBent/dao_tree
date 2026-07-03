@@ -479,6 +479,195 @@ describe('the offering (D28)', () => {
   })
 })
 
+// ---- D35: Sever the Flowing Form (the stance-lock severable) ----------------
+
+describe('D35 — Sever the Flowing Form (stance-lock severable)', () => {
+  beforeEach(() => {
+    bootTestStores()
+  })
+
+  // Breathing Trance (qi 0.7 / insight 2.0) is lockable at k=2.0:
+  //   qi cap 2.0·0.7 = 1.4 > 1, insight cap 2.0·2.0 = 4.0 > 1.
+  // Sword Trance (qi 0.4) is NOT: qi cap 2.0·0.4 = 0.8 < 1.
+  const TRANCE_QI = 0.7
+  const TRANCE_INSIGHT = 2.0
+  // Hand-computed ramp endpoints (c=0.5, k=2.0):
+  const CUT_QI = TRANCE_QI * CFG.startFraction // 0.35 — the deepest trough in the game
+  const CUT_INSIGHT = TRANCE_INSIGHT * CFG.startFraction // 1.0
+  const CAP_QI = TRANCE_QI * CFG.capRatio // 1.4
+  const CAP_INSIGHT = TRANCE_INSIGHT * CFG.capRatio // 4.0
+
+  // ---- availability + eligibility -----------------------------------------
+
+  it('not live with no stance worn; live once a LOCKABLE stance is worn', () => {
+    const severing = useSeveringStore()
+    const dao = useDaoStore()
+    unlockRealmX()
+    expect(severing.liveSeverables).not.toContain('flowingForm')
+
+    dao.toggleStance('breathingTrance')
+    expect(dao.activeStance).toBe('breathingTrance')
+    expect(severing.liveSeverables).toContain('flowingForm')
+    expect(severing.wornStanceName).toBe('Breathing Trance')
+  })
+
+  it('a worn Sword Trance is NOT lockable (qi cap·m 0.8 < 1) and the reason is exposed', () => {
+    const severing = useSeveringStore()
+    const dao = useDaoStore()
+    unlockRealmX()
+    dao.grantGlimpse('sword') // satisfy Sword Trance's unlock (daoNode ['sword', 1])
+    dao.toggleStance('swordTrance')
+    expect(dao.activeStance).toBe('swordTrance')
+
+    // Wearable, but too lopsided to survive as flesh — not offered for the lock.
+    expect(severing.liveSeverables).not.toContain('flowingForm')
+    expect(severing.flowingFormBlockReason).toContain('Sword Trance')
+    expect(severing.flowingFormBlockReason).toContain('lopsided')
+  })
+
+  // ---- capture + record shape ---------------------------------------------
+
+  it('captures the worn stance modifiers verbatim and records which form was locked', () => {
+    const severing = useSeveringStore()
+    const dao = useDaoStore()
+    unlockRealmX()
+    dao.toggleStance('breathingTrance')
+
+    expect(severing.sever('flowingForm')).toBe(true)
+    const record = severing.severances[0]!
+    expect(new Decimal(record.severedQiMult).toNumber()).toBeCloseTo(TRANCE_QI, 6)
+    expect(new Decimal(record.severedInsightMult).toNumber()).toBeCloseTo(TRANCE_INSIGHT, 6)
+    expect(record.lockedStance).toBe('breathingTrance')
+    expect(severing.lockedStance).toBe('breathingTrance')
+  })
+
+  // ---- hand-computed ramp, both axes --------------------------------------
+
+  it('ramps qi 0.35→1.4 and insight 1.0→4.0 (hand-computed at cut / breakeven / cap)', () => {
+    const severing = useSeveringStore()
+    const dao = useDaoStore()
+    const soul = useSoulStore()
+    unlockRealmX()
+    dao.toggleStance('breathingTrance')
+    expect(severing.sever('flowingForm')).toBe(true)
+    const record = severing.severances[0]!
+
+    // Cut (raw step 0): qi 0.7·0.5 = 0.35; insight 2.0·0.5 = 1.0 (m≠1, no floor).
+    let readout = severing.readoutFor(record)
+    expect(readout.qiMult.toNumber()).toBeCloseTo(CUT_QI, 6)
+    expect(readout.insightMult.toNumber()).toBeCloseTo(CUT_INSIGHT, 6)
+    expect(readout.breakevenCrossed).toBe(false)
+    expect(severing.transcendentQiMult.toNumber()).toBeCloseTo(CUT_QI, 6)
+    expect(severing.transcendentInsightMult.toNumber()).toBeCloseTo(CUT_INSIGHT, 6)
+
+    // Breakeven (raw step 6 = display step 7): the ramp ratio crosses 1, so qi
+    // heals back to ×0.7 (where the toggle used to be), insight to ×2.0.
+    for (let step = 0; step < 6; step++) soul.recordSeveranceRitual()
+    readout = severing.readoutFor(record)
+    expect(readout.displayStep).toBe(7)
+    expect(readout.breakevenCrossed).toBe(true)
+    expect(readout.ratio).toBeGreaterThanOrEqual(1)
+    expect(readout.qiMult.toNumber()).toBeGreaterThanOrEqual(TRANCE_QI)
+
+    // Cap (raw step 11 = display step 12): qi ×1.4, insight ×4.0.
+    for (let step = 6; step < 11; step++) soul.recordSeveranceRitual()
+    readout = severing.readoutFor(record)
+    expect(readout.displayStep).toBe(CFG.rampSteps)
+    expect(readout.qiMult.toNumber()).toBeCloseTo(CAP_QI, 6)
+    expect(readout.insightMult.toNumber()).toBeCloseTo(CAP_INSIGHT, 6)
+  })
+
+  // ---- double-count guard + floor-not-cage --------------------------------
+
+  it('the locked stance stops applying via the toggle path (no double-count)', () => {
+    const severing = useSeveringStore()
+    const dao = useDaoStore()
+    const pipelines = usePipelinesStore()
+    unlockRealmX()
+    const qiBase = pipelines.qiPerSecond.toNumber()
+    expect(qiBase).toBeGreaterThan(0)
+
+    dao.toggleStance('breathingTrance')
+    expect(pipelines.qiPerSecond.toNumber() / qiBase).toBeCloseTo(TRANCE_QI, 6)
+
+    expect(severing.sever('flowingForm')).toBe(true)
+    // The worn stance is cleared: the toggle path is now neutral (the ramp carries it).
+    expect(dao.activeStance).toBe('')
+    const qiLocked = pipelines.qiPerSecond.toNumber()
+    // Ramp ONLY (0.35), NOT the stance 0.7 double-counted onto the ramp (0.245).
+    expect(qiLocked / qiBase).toBeCloseTo(CUT_QI, 6)
+    expect(qiLocked / qiBase).not.toBeCloseTo(TRANCE_QI * CUT_QI, 4)
+  })
+
+  it('floor-not-cage: another stance stacks multiplicatively on the locked ramp', () => {
+    const severing = useSeveringStore()
+    const dao = useDaoStore()
+    const pipelines = usePipelinesStore()
+    unlockRealmX()
+    dao.grantGlimpse('sword') // enable Sword Trance so it can stack on top
+    const qiBase = pipelines.qiPerSecond.toNumber()
+
+    dao.toggleStance('breathingTrance')
+    expect(severing.sever('flowingForm')).toBe(true)
+    expect(dao.activeStance).toBe('')
+
+    // Toggle Sword Trance ON TOP of the locked Breathing Trance ramp.
+    dao.toggleStance('swordTrance')
+    expect(dao.activeStance).toBe('swordTrance')
+    const SWORD_QI = 0.4
+    // ramp(0.35) × sword qi(0.4) — the two multiply (a floor, not a cage).
+    expect(pipelines.qiPerSecond.toNumber() / qiBase).toBeCloseTo(CUT_QI * SWORD_QI, 6)
+  })
+
+  it('toggleStance refuses the locked form and exposes a legible reason', () => {
+    const severing = useSeveringStore()
+    const dao = useDaoStore()
+    unlockRealmX()
+    dao.toggleStance('breathingTrance')
+    expect(severing.sever('flowingForm')).toBe(true)
+    expect(dao.lockedStance).toBe('breathingTrance')
+
+    // Re-toggling the locked form is refused; it stays cleared.
+    dao.toggleStance('breathingTrance')
+    expect(dao.activeStance).toBe('')
+    expect(dao.stanceToggleBlockReason('breathingTrance')).toContain('flesh')
+    // A non-locked stance has no toggle block reason.
+    expect(dao.stanceToggleBlockReason('swordTrance')).toBeNull()
+  })
+
+  // ---- persistence + history ----------------------------------------------
+
+  it('save/load round-trips the lockedStance and the captured ramp', () => {
+    const severing = useSeveringStore()
+    const dao = useDaoStore()
+    unlockRealmX()
+    dao.toggleStance('breathingTrance')
+    severing.sever('flowingForm')
+
+    const qiBefore = severing.transcendentQiMult.toNumber()
+    const saved = severing.save()
+    severing.load(JSON.parse(JSON.stringify(saved)))
+
+    const record = severing.severances[0]!
+    expect(record.lockedStance).toBe('breathingTrance')
+    expect(severing.lockedStance).toBe('breathingTrance')
+    expect(severing.isSevered('flowingForm')).toBe(true)
+    expect(severing.transcendentQiMult.toNumber()).toBeCloseTo(qiBefore, 6)
+  })
+
+  it('records the flowingForm cut in the eternal soul history (D24)', () => {
+    const severing = useSeveringStore()
+    const soul = useSoulStore()
+    const dao = useDaoStore()
+    unlockRealmX()
+    dao.toggleStance('breathingTrance')
+    severing.sever('flowingForm')
+
+    expect(soul.severanceHistory.length).toBe(1)
+    expect(soul.severanceHistory[0]).toMatchObject({ severable: 'flowingForm', life: 1 })
+  })
+})
+
 // ---- D32: recovery math at choice time -------------------------------------
 
 describe('recovery projection (D32)', () => {

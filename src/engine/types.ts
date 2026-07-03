@@ -106,7 +106,12 @@ export type AccumulatorKey = 'ascentCounter' | 'severanceRitual'
  * The v1 severable list (D25): real build pieces with a legible, isolatable
  * effect domain. Stance dropped to v2 (probe inversion — no weakness window).
  */
-export type SeverableKey = 'soulAspect' | 'profession' | 'extraordinaryMeridians' | 'manifestation'
+export type SeverableKey =
+  | 'soulAspect'
+  | 'profession'
+  | 'extraordinaryMeridians'
+  | 'manifestation'
+  | 'flowingForm'
 
 /** The three corpses (canonical three attachments), severed in order. */
 export type CorpseKey = 'past' | 'present' | 'future'
@@ -178,6 +183,7 @@ export type CrossTreeKeepKey =
   | 'offeringQiCost'
   | 'offeringInsightCost'
   | 'offeringPillDiscount'
+  | 'severingFlowingFormRead'
 export type AutomationKey =
   | 'nascentQiPrestige'
   | 'nascentPrimaryMeridians'

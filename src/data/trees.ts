@@ -194,4 +194,10 @@ export const CROSS_TREE_KEEPS: readonly CrossTreeKeepRow[] = [
     consumer: 'severing store offeringCost/offeringInfo (D28 pill discount)',
     rationale: 'A held Act I profession pill discounts the offering (the Present corpse\'s consumable lean) — build diversity as which offerings come easy.',
   },
+  {
+    key: 'severingFlowingFormRead',
+    reads: 'dao.activeStance',
+    consumer: 'severing store wornStance/isAcquired/contributionOf/sever (D35 Flowing Form lock)',
+    rationale: 'The Flowing Form severable reads the Act I stance being worn — the form the knife makes flesh is whatever the cultivator practices at the cut.',
+  },
 ]

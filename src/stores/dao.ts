@@ -33,6 +33,11 @@ import { STANCE_DATA, findStance } from '@/data/stances'
 import { findSectArchetype } from '@/data/sect'
 import { usePipelinesStore } from './pipelines'
 import { useSectStore } from './sect'
+// D35 — dao READS severing's lockedStance record for the Flowing Form lock.
+// Deferred lookup (called only inside functions/computeds, never at setup) to
+// avoid the dao↔severing import cycle — the same pattern realm.ts uses for
+// useSeveringStore(). severing already imports dao; this closes the loop safely.
+import { useSeveringStore } from './severing'
 import type { Element, LatticeNodeKey, StanceKey } from '@/engine/types'
 
 export interface DaoSlice {
@@ -223,10 +228,34 @@ export const useDaoStore = defineStore('dao', () => {
 
   // ---- Stances ------------------------------------------------------------
 
-  /** The active stance row, or null. Self-heals if unlock unmet (§6.1 safety). */
+  /**
+   * D35 — the stance the Flowing Form severance locked into flesh this life, or
+   * null. Deferred severing lookup (this store must not touch severing during
+   * setup; the read is lazy, matching realm.ts's cross-store pattern). A locked
+   * stance is flesh, not a toggle: it can never be worn again, and its captured
+   * modifiers are carried by the severance ramp — never by the stance path.
+   */
+  const lockedStance = computed<StanceKey | null>(() => {
+    // Cast through unknown: resolving severing's full store type here would form
+    // a dao↔severing type-inference cycle (both stores read each other's live
+    // state). The read shape is stable (severing exposes lockedStance) and is
+    // asserted by the D35 severing tests.
+    const severing = useSeveringStore() as unknown as { lockedStance: StanceKey | null }
+    return severing.lockedStance
+  })
+
+  /**
+   * The active stance row, or null. Self-heals if unlock unmet (§6.1 safety);
+   * D35 — the locked stance is treated as NEVER active (the ramp carries it, so
+   * the stance path must not double-count it).
+   */
   const activeStanceRow = computed(() => {
     const key = activeStance.value
     if (!key) return null
+    if (key === lockedStance.value) {
+      activeStance.value = ''
+      return null
+    }
     const stance = STANCE_DATA.stances.find((s) => s.key === key) ?? null
     if (stance && !meets(stance.unlock, buildGameState())) {
       activeStance.value = ''
@@ -237,6 +266,9 @@ export const useDaoStore = defineStore('dao', () => {
 
   /** Toggle a stance: if active, deactivate; otherwise activate (exclusive, maxActive 1). */
   function toggleStance(key: StanceKey): void {
+    // D35 — a form made flesh cannot be toggled. The lock is a floor, not a
+    // cage: OTHER stances still toggle freely and stack on top of the ramp.
+    if (key === lockedStance.value) return
     const stance = findStance(key)
     if (!meets(stance.unlock, buildGameState())) return
     if (activeStance.value === key) {
@@ -244,6 +276,26 @@ export const useDaoStore = defineStore('dao', () => {
     } else {
       activeStance.value = key
     }
+  }
+
+  /**
+   * D35 — a legible reason `key` cannot be toggled right now, or null. Today the
+   * only refusal is the locked form (made flesh by the Flowing Form severance).
+   */
+  function stanceToggleBlockReason(key: StanceKey): string | null {
+    if (key === lockedStance.value) {
+      return `${findStance(key).name} has been severed into flesh — it is worn permanently and can no longer be toggled.`
+    }
+    return null
+  }
+
+  /**
+   * D35 hook, called by the severing store when the Flowing Form is cut: clear
+   * the worn stance so it stops applying via the toggle path. The severance
+   * ramp now carries its captured modifiers (the double-count guard).
+   */
+  function lockActiveStance(): void {
+    activeStance.value = ''
   }
 
   // ---- Reveal + update ----------------------------------------------------
@@ -315,7 +367,10 @@ export const useDaoStore = defineStore('dao', () => {
     grantGlimpse,
     addInsight,
     activeStanceRow,
+    lockedStance,
     toggleStance,
+    stanceToggleBlockReason,
+    lockActiveStance,
     isRevealGateMet,
     isRevealed,
     update,

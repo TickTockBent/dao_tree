@@ -220,7 +220,7 @@ describe('CROSS_TREE_KEEPS (slice 9 §5)', () => {
   it('pins the row count and spot-checks the realm-x tribulation-gate row', () => {
     // Pinned so the table only changes deliberately (§5's own discipline: a
     // new row is a deliberate declaration, never an incidental drift).
-    expect(CROSS_TREE_KEEPS).toHaveLength(11)
+    expect(CROSS_TREE_KEEPS).toHaveLength(12)
     expect(CROSS_TREE_KEEPS.find((row) => row.key === 'realmXTribulationGate')).toEqual({
       key: 'realmXTribulationGate',
       reads: 'tribulationPassed',
@@ -247,11 +247,25 @@ describe('ACCUMULATOR_DATA (slice 9)', () => {
 })
 
 describe('SEVERING_DATA (slice 9)', () => {
-  it('has the three corpses in severing order and the D25 severable list', () => {
+  it('has the three corpses in severing order and the D25 + D35 severable list', () => {
     expect(SEVERING_DATA.corpses.map((c) => c.key)).toEqual(['past', 'present', 'future'])
+    // D35 added 'flowingForm' (the stance-lock severable) after the four D25 rows.
     expect(SEVERING_DATA.severables.map((s) => s.key)).toEqual([
-      'soulAspect', 'profession', 'extraordinaryMeridians', 'manifestation',
+      'soulAspect', 'profession', 'extraordinaryMeridians', 'manifestation', 'flowingForm',
     ])
+  })
+
+  it('pins the D35 contribution class per severable (passive vs conditional-lock)', () => {
+    // Principle #35's lint surface: the four D25 rows are passive
+    // (weakness-window) severables; flowingForm is the sole conditional-lock.
+    const byKey = Object.fromEntries(SEVERING_DATA.severables.map((s) => [s.key, s.contribution]))
+    expect(byKey).toEqual({
+      soulAspect: 'passive',
+      profession: 'passive',
+      extraordinaryMeridians: 'passive',
+      manifestation: 'passive',
+      flowingForm: 'conditional-lock',
+    })
   })
 })
 

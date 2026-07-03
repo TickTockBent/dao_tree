@@ -155,10 +155,17 @@ function recoverySummary(recovery: RecoveryProjectionLike): string {
           <p v-if="!severing.previousLivedWith" class="warn">
             The previous severance must be lived with (breakeven crossed) before this corpse opens.
           </p>
-          <p v-else-if="severing.liveSeverables.length === 0" class="warn">
-            Nothing you hold can yet be cut — acquire a severable first.
-          </p>
-          <ul v-else class="menu">
+          <template v-else>
+            <p v-if="severing.liveSeverables.length === 0" class="warn">
+              Nothing you hold can yet be cut — acquire a severable first.
+            </p>
+            <!-- D35: a worn stance too lopsided to survive as flesh is wearable
+                 but NOT lockable — say why (principle #35 eligibility). -->
+            <p v-if="severing.flowingFormBlockReason" class="warn">
+              {{ severing.flowingFormBlockReason }}
+            </p>
+          </template>
+          <ul v-if="severing.previousLivedWith && severing.liveSeverables.length > 0" class="menu">
             <li v-for="key in severing.liveSeverables" :key="key" class="candidate">
               <div
                 v-for="cand in [{ contribution: severing.contributionOf(key), recovery: severing.recoveryProjection(key) }]"
@@ -166,6 +173,12 @@ function recoverySummary(recovery: RecoveryProjectionLike): string {
               >
                 <p class="cand-name"><strong>{{ findSeverable(key).name }}</strong></p>
                 <p class="flavor">{{ findSeverable(key).flavor }}</p>
+                <!-- D35: the Flowing Form cut locks the CURRENTLY WORN stance into
+                     flesh — name it so the choice is legible (D11). -->
+                <p v-if="key === 'flowingForm' && severing.wornStanceName" class="locks-form">
+                  Locks <strong>{{ severing.wornStanceName }}</strong> — the form you wear becomes
+                  permanent flesh. Other stances still stack on top of it.
+                </p>
                 <p class="lost">
                   You give up: Qi ×{{ format(cand.contribution.qi) }}<span
                     v-if="!cand.contribution.insight.eq(1)"
@@ -317,6 +330,11 @@ function recoverySummary(recovery: RecoveryProjectionLike): string {
 }
 .gain {
   color: #9fd0c0;
+  font-size: 0.82rem;
+  margin: 0.25rem 0;
+}
+.locks-form {
+  color: #c9a6f0;
   font-size: 0.82rem;
   margin: 0.25rem 0;
 }
