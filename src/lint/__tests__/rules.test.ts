@@ -21,10 +21,15 @@
 //                         declared in CROSS_TREE_KEEPS; the table's own rows
 //                         are well-formed; the doReset cascade never crosses
 //                         tree membership.
+//   §6 severance shape (docs/slice-9.md §6, D25) — lint-interim stand-ins for
+//                        the three mechanical assertions (lifetime net >= 1,
+//                        bounded weakness window, >=3 live severables) that
+//                        wait on Act II sim actors, computed analytically off
+//                        SETPIECE_DATA.severance; plus the corpse-count floor.
 
 import { describe, it, expect } from 'vitest'
 import Decimal from 'break_eternity.js'
-import { REALM_DATA, findRealm } from '@/data/realms'
+import { REALM_DATA, findRealm, realmWithSoulAspect } from '@/data/realms'
 import { BODY_DATA } from '@/data/body'
 import { GATE_DATA } from '@/data/gates'
 import { SETPIECE_DATA } from '@/data/setpieces'
@@ -41,6 +46,7 @@ import { SECRET_REALM_DATA } from '@/data/secret-realm'
 import { ALCHEMY_DATA } from '@/data/alchemy'
 import { HEART_DEMON_DATA, findDemonTrial } from '@/data/heart-demons'
 import { SECLUSION_DATA } from '@/data/seclusion'
+import { SEVERING_DATA } from '@/data/severing'
 import { meets, TEMPER_TIER_ORDER } from '@/engine/meets'
 import type { GameState, ConditionClauses } from '@/engine/meets'
 import type { MaterialKey } from '@/engine/types'
@@ -723,5 +729,100 @@ describe('§5 cross-tree keeps', () => {
     expect(CROSS_TREE_KEEPS.length).toBeGreaterThan(0)
     const keys = CROSS_TREE_KEEPS.map((row) => row.key)
     expect(new Set(keys).size).toBe(keys.length)
+  })
+})
+
+// ---- §6 severance shape (lint-interim for the sim assertions) --------------
+//
+// docs/slice-9.md §6 + D25: the three mechanical assertions (lifetime net
+// >= 1, bounded weakness window, >=3 live severables) are sim assertions on
+// sampled Act II actors — but there are no Act II actors yet (today's actors
+// never pass the tribulation). Wes's ruling: express them NOW as lint-shape
+// checks computed analytically off SETPIECE_DATA.severance, the same table
+// and the same ramp math src/stores/severing.ts uses at runtime (ratioAtStep
+// recomputed locally below — store internals are not imported per this
+// file's no-store-import convention). These checks prove the DATA TABLE
+// shape is honest; they cannot and do not prove any sampled build's actual
+// lifetime experience — that is what the eventual sim assertions are for.
+
+describe('§6 severance shape (lint-interim for the sim assertions)', () => {
+  const { startFraction, capRatio, rampSteps } = SETPIECE_DATA.severance
+  // Mirrors src/stores/severing.ts RAMP_GROWTH/ratioAtStep exactly (no store
+  // import — recomputed from the signed-off SETPIECE_DATA constants).
+  const rampGrowth = Math.pow(capRatio / startFraction, 1 / (rampSteps - 1))
+  function ratioAtStep(step: number): number {
+    return Math.min(startFraction * Math.pow(rampGrowth, step), capRatio)
+  }
+
+  // 1. LIFETIME NET >= 1 (interim). Eventual sim assertion: severing is never
+  // a strict loss over a life, measured on sampled builds. This lint version
+  // proves the CONFIG cannot ship a fully-ramped loss, and pins the in-window
+  // mean to D25's recorded 1.10 so a config change that degrades the window
+  // is caught loudly — it does not prove any single build's lived experience.
+  it('capRatio >= 1 — a fully-ramped severance is never a strict loss', () => {
+    expect(capRatio).toBeGreaterThanOrEqual(1)
+  })
+
+  it('ramp-window mean ratio >= 1, pinned to D25\'s in-window net 1.10', () => {
+    let sum = 0
+    for (let step = 0; step < rampSteps; step++) sum += ratioAtStep(step)
+    const windowMean = sum / rampSteps
+    expect(windowMean, 'ramp-window mean ratio dropped below breakeven').toBeGreaterThanOrEqual(1)
+    expect(windowMean).toBeCloseTo(1.1, 2)
+  })
+
+  // 2. BOUNDED WEAKNESS WINDOW (interim). Eventual sim assertion: breakeven
+  // is reached within the ramp horizon on sampled builds. This lint version
+  // proves the window EXISTS (c < 1, D23) and that breakeven is analytically
+  // reachable inside the configured ramp — it does not prove a sampled
+  // build's ritual cadence actually carries it there in practice.
+  it('startFraction < 1 — a weakness window exists (D23)', () => {
+    expect(startFraction).toBeLessThan(1)
+  })
+
+  it('the analytic breakeven step is reachable inside the ramp horizon', () => {
+    const breakevenStep = Math.ceil(Math.log(1 / startFraction) / Math.log(rampGrowth))
+    expect(
+      breakevenStep,
+      'breakeven falls outside the ramp horizon — this config can never ship',
+    ).toBeLessThanOrEqual(rampSteps - 1)
+  })
+
+  // 3. >=3 LIVE SEVERABLES (interim, structural). Eventual sim assertion:
+  // per-BUILD liveness on sampled Act II actors (which severables a given
+  // archetype has actually acquired). This lint version proves the third
+  // severable EXISTS IN DATA for a non-meridian build — it was load-bearing
+  // (Realistic had exactly 2 before the Manifestation ring) — but it cannot
+  // prove any sampled build actually acquires 3 in practice.
+  it('>= 3 severables have a source that exists in data for a non-meridian build', () => {
+    let liveCount = 0
+
+    // soulAspect -> a realm declares soulAspect with a non-empty aspects list.
+    const soulRealm = realmWithSoulAspect()
+    if (soulRealm && (soulRealm.soulAspect?.aspects.length ?? 0) > 0) liveCount++
+
+    // profession -> ALCHEMY_DATA backs at least one recipe (the gathering
+    // pill is the profession's legible v1 contribution, per stores/severing.ts).
+    if (ALCHEMY_DATA.recipes.length > 0) liveCount++
+
+    // manifestation -> at least one lattice node declares a third
+    // (Manifestation-tier) effect entry.
+    if (LATTICE_DATA.nodes.some((node) => node.effects.length >= 3)) liveCount++
+
+    expect(
+      liveCount,
+      'fewer than 3 severables have a source backed in data for a non-meridian build',
+    ).toBeGreaterThanOrEqual(3)
+  })
+
+  // 4. CORPSE COUNT INVARIANT — the structural floor under D23's sequence:
+  // three sequential severances must be choosable, so there must be exactly
+  // 3 corpses and at least as many live severables as corpses.
+  it('exactly 3 corpses (past/present/future)', () => {
+    expect(SEVERING_DATA.corpses.length).toBe(3)
+  })
+
+  it('severables >= corpses — three sequential severances must be choosable', () => {
+    expect(SEVERING_DATA.severables.length).toBeGreaterThanOrEqual(SEVERING_DATA.corpses.length)
   })
 })
