@@ -1,9 +1,14 @@
 <script setup lang="ts">
 // DaoLatticeGraph.vue — the Dao lattice as a real SVG graph.
 //
-// 3 concentric rings (roots innermost, ring-2 mid, ring-2b outer) with 5-fold
-// radial symmetry (one element per spoke). Edges drawn from `requires`. Nodes
-// colored by element, sized by tier owned. Click a node to buy its next tier.
+// 4 concentric rings (roots innermost, ring-2, ring-2b, ring-3 outermost —
+// slice 9 / D22) with 5-fold radial symmetry (one element per spoke). Ring-3
+// carries TWO nodes per element (one continuing the ring-2 lineage, one
+// continuing ring-2b), so its two siblings are angularly offset off the
+// shared spoke to avoid overlapping. Edges drawn from `requires`. Nodes
+// colored by element, sized by tier owned (now up to 3 — Manifestation).
+// Click a node to buy its next tier; a blocked buy shows its reason (D22
+// Manifestation gate / flow-stillness conflict) as a hover title + badge.
 
 import { computed } from 'vue'
 import { useDaoStore } from '@/stores/dao'
@@ -21,11 +26,14 @@ const CENTER = VIEWBOX_SIZE / 2
 const ROOT_RING_RADIUS = 90
 const RING2_RADIUS = 175
 const RING2B_RADIUS = 235
+const RING3_RADIUS = 290
 const NODE_RADIUS_BASE = 18
 const NODE_RADIUS_OWNED_BONUS = 4
 const ELEMENT_ORDER: Element[] = ['metal', 'wood', 'water', 'fire', 'earth']
 const SPOKE_ANGLE_STEP = 360 / ELEMENT_ORDER.length
 const TOP_OFFSET_DEG = -90
+/** Ring-3 has 2 siblings per element (ring-2 lineage + ring-2b lineage); split off the shared spoke. */
+const RING3_SIBLING_OFFSET_DEG = 12
 
 const ELEMENT_COLORS: Record<Element, { fill: string; stroke: string }> = {
   metal: { fill: '#b8b8c8', stroke: '#8a8a9a' },
@@ -36,6 +44,12 @@ const ELEMENT_COLORS: Record<Element, { fill: string; stroke: string }> = {
 }
 
 // ---- Node positioning ------------------------------------------------------
+// Ring index boundaries by array position: roots 0-4, ring-2 5-9, ring-2b
+// 10-14, ring-3 15-24 (slice 9 / D22 — 2 siblings per element).
+const RING2_START = ELEMENT_ORDER.length
+const RING2B_START = ELEMENT_ORDER.length * 2
+const RING3_START = ELEMENT_ORDER.length * 3
+
 function spokeAngle(element: Element): number {
   const index = ELEMENT_ORDER.indexOf(element)
   return ((TOP_OFFSET_DEG + index * SPOKE_ANGLE_STEP) * Math.PI) / 180
@@ -44,10 +58,27 @@ function spokeAngle(element: Element): number {
 function ringRadius(key: LatticeNodeKey): number {
   const node = findLatticeNode(key)
   const index = LATTICE_DATA.nodes.indexOf(node)
-  // Roots are nodes 0-4, ring-2 are 5-9, ring-2b are 10-14.
-  if (index < ELEMENT_ORDER.length) return ROOT_RING_RADIUS
-  if (index < ELEMENT_ORDER.length * 2) return RING2_RADIUS
-  return RING2B_RADIUS
+  if (index < RING2_START) return ROOT_RING_RADIUS
+  if (index < RING2B_START) return RING2_RADIUS
+  if (index < RING3_START) return RING2B_RADIUS
+  return RING3_RADIUS
+}
+
+/**
+ * Node angle in radians. Ring-3 nodes share a spoke in pairs (one continuing
+ * the ring-2 lineage, one continuing ring-2b) — offset each sibling off the
+ * shared spoke by its parent's ring so they don't overlap.
+ */
+function nodeAngle(key: LatticeNodeKey): number {
+  const node = findLatticeNode(key)
+  const baseAngle = spokeAngle(node.element)
+  const index = LATTICE_DATA.nodes.indexOf(node)
+  if (index < RING3_START) return baseAngle
+  const parentKey = node.requires[0]
+  const parentIndex = parentKey ? LATTICE_DATA.nodes.findIndex((n) => n.key === parentKey) : -1
+  const fromRing2Lineage = parentIndex >= RING2_START && parentIndex < RING2B_START
+  const offsetRad = (RING3_SIBLING_OFFSET_DEG * Math.PI) / 180
+  return fromRing2Lineage ? baseAngle - offsetRad : baseAngle + offsetRad
 }
 
 interface PositionedNode {
@@ -63,11 +94,15 @@ interface PositionedNode {
   canBuy: boolean
   requirementsMet: boolean
   isMaxed: boolean
+  /** Why the next-tier purchase is refused right now, or null if buyable/maxed. */
+  blockReason: string | null
+  /** True when the refusal is specifically the flow/stillness-style Manifestation conflict. */
+  conflictBlocked: boolean
 }
 
 const positionedNodes = computed<PositionedNode[]>(() =>
   LATTICE_DATA.nodes.map((node) => {
-    const angle = spokeAngle(node.element)
+    const angle = nodeAngle(node.key)
     const radius = ringRadius(node.key)
     const x = CENTER + radius * Math.cos(angle)
     const y = CENTER + radius * Math.sin(angle)
@@ -86,6 +121,8 @@ const positionedNodes = computed<PositionedNode[]>(() =>
       canBuy: dao.canAffordNode(node.key),
       requirementsMet: dao.nodeRequirementsMet(node.key),
       isMaxed,
+      blockReason: isMaxed ? null : dao.nodeBuyBlockReason(node.key),
+      conflictBlocked: !isMaxed && dao.manifestationConflictBlocks(node.key),
     }
   }),
 )
@@ -124,6 +161,13 @@ function onNodeClick(key: LatticeNodeKey): void {
 }
 
 const insightPerSec = computed(() => format(pipelines.insightPerSecond))
+
+/** Legible conflict-pair labels, derived from LATTICE_DATA.conflicts (no hardcoded names). */
+const conflictLabel = computed(() =>
+  LATTICE_DATA.conflicts
+    .map(([a, b]) => `${findLatticeNode(a).name} ↔ ${findLatticeNode(b).name}`)
+    .join(', '),
+)
 </script>
 
 <template>
@@ -158,13 +202,17 @@ const insightPerSec = computed(() => format(pipelines.insightPerSecond))
         v-for="node in positionedNodes"
         :key="node.key"
         :transform="`translate(${node.x}, ${node.y})`"
-        :class="['lattice-node', { buyable: node.canBuy, locked: !node.requirementsMet, maxed: node.isMaxed }]"
+        :class="[
+          'lattice-node',
+          { buyable: node.canBuy, locked: !node.requirementsMet, maxed: node.isMaxed, 'conflict-blocked': node.conflictBlocked },
+        ]"
         @click="onNodeClick(node.key)"
       >
+        <title>{{ node.blockReason ?? node.name }}</title>
         <circle
           :r="node.radius"
           :fill="node.color.fill"
-          :stroke="node.color.stroke"
+          :stroke="node.conflictBlocked ? '#d44' : node.color.stroke"
           :stroke-width="node.tier > 0 ? 3 : 1"
         />
         <text class="node-label" text-anchor="middle" dy="0.35em">{{ node.name.charAt(0) }}</text>
@@ -175,6 +223,9 @@ const insightPerSec = computed(() => format(pipelines.insightPerSecond))
     </svg>
     <p v-if="positionedNodes.every((n) => n.tier === 0)" class="hint-text">
       Click a root node (inner ring) to glimpse it for {{ format(dao.nodeCost('metal')) }} Insight.
+    </p>
+    <p v-if="conflictPairs.length > 0" class="conflict-legend">
+      Conflicting pairs (Manifestation only): {{ conflictLabel }}
     </p>
   </div>
 </template>
@@ -228,6 +279,12 @@ const insightPerSec = computed(() => format(pipelines.insightPerSecond))
 .lattice-node.buyable:hover circle {
   filter: brightness(1.3);
 }
+.lattice-node.conflict-blocked {
+  cursor: not-allowed;
+}
+.lattice-node.conflict-blocked circle {
+  stroke-dasharray: 3 2;
+}
 .node-label {
   fill: #1a1a1a;
   font-size: 14px;
@@ -243,5 +300,11 @@ const insightPerSec = computed(() => format(pipelines.insightPerSecond))
   color: #888;
   font-size: 0.85rem;
   text-align: center;
+}
+.conflict-legend {
+  color: #d44;
+  font-size: 0.8rem;
+  text-align: center;
+  opacity: 0.8;
 }
 </style>

@@ -283,10 +283,14 @@ export function meets(condition: Condition, state: GameState): boolean {
 
 // ---- Lattice tier ordinal helper -------------------------------------------
 
-/** Tier ordinal lookup (glimpse=1, seed=2). Used by data readers. */
+/** Manifestation's tier ordinal (slice 9 / D22 — third and highest lattice tier). */
+const MANIFESTATION_TIER_ORDINAL = 3
+
+/** Tier ordinal lookup (glimpse=1, seed=2, manifestation=3). Used by data readers. */
 export function tierOrdinal(key: LatticeTierKey): number {
   if (key === 'glimpse') return 1
   if (key === 'seed') return 2
+  if (key === 'manifestation') return MANIFESTATION_TIER_ORDINAL
   return 0
 }
 

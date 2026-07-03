@@ -169,6 +169,21 @@ export const JOURNAL_DATA: JournalData = {
       title: 'What the Road Records',
       text: 'The road does not forget what you did on it. The core you forged, the aspect your soul chose, the tribulation you survived: all of it written now in the eternal record. This is the first line of your legacy. There will be more.',
     },
+    {
+      // Slice 9: Act II's arrival. tribulationPassed is now core meets()
+      // grammar (promoted from the hint shadow set in slice 9) — the second
+      // act opens on the same crossing that writes the Act I legacy.
+      key: 'actTwoOpens',
+      when: { tribulationPassed: true },
+      title: 'The Second Road',
+      text: 'Soul Formation behind you, the mortal road ends and a stranger one begins. Three corpses wait at Spirit Severing\'s gate, each one a piece of what you built. What you cut away will not be gone. It will only be waiting, three lives from now, transcended.',
+    },
+    {
+      key: 'firstManifestation',
+      when: { anyDaoNode: 3 },
+      title: 'A Truth Made Real',
+      text: 'The lattice yields something it has never given before: not a Glimpse, not a Seed, but a Manifestation, a Dao truth wearing flesh. You did not know comprehension could go this deep. Now you do, and it can be severed.',
+    },
   ],
 }
 

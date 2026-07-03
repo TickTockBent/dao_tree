@@ -239,14 +239,24 @@ describe('KEEP_RULES', () => {
 })
 
 describe('LATTICE_DATA', () => {
-  it('has exactly 15 nodes across 3 rings', () => {
-    expect(LATTICE_DATA.nodes).toHaveLength(15)
+  it('has exactly 25 nodes across 4 rings (slice 9 / D22 medium lattice)', () => {
+    expect(LATTICE_DATA.nodes).toHaveLength(25)
     expect(LATTICE_DATA.nodes[0]).toMatchObject({ key: 'metal', element: 'metal', requires: [] })
     expect(LATTICE_DATA.nodes[5]).toMatchObject({ key: 'sword', element: 'metal', requires: ['metal'] })
     expect(LATTICE_DATA.nodes[14]).toMatchObject({ key: 'endurance', element: 'earth' })
+    expect(LATTICE_DATA.nodes[15]).toMatchObject({ key: 'severingIntent', element: 'metal', requires: ['sword'] })
+    expect(LATTICE_DATA.nodes[24]).toMatchObject({ key: 'boundless', element: 'earth', requires: ['endurance'] })
   })
 
-  it('has the flow/stillness conflict', () => {
+  it('has a Manifestation tier row and every node carries 3 costs/effects', () => {
+    expect(LATTICE_DATA.tiers.map((t) => t.key)).toEqual(['glimpse', 'seed', 'manifestation'])
+    for (const node of LATTICE_DATA.nodes) {
+      expect(node.costs, `${node.key} missing a Manifestation cost`).toHaveLength(3)
+      expect(node.effects, `${node.key} missing a Manifestation effect`).toHaveLength(3)
+    }
+  })
+
+  it('has the flow/stillness conflict (unchanged — binds at Manifestation via the store)', () => {
     expect(LATTICE_DATA.conflicts).toEqual([['flow', 'stillness']])
   })
 
@@ -276,8 +286,13 @@ describe('HINT_DATA', () => {
     expect(HINT_DATA.hints[0]?.when).toEqual({ demonTrialActive: true })
   })
 
-  it('second row is actComplete', () => {
-    expect(HINT_DATA.hints[1]?.key).toBe('actComplete')
+  it('second row is severSpirit (slice 9: Manifestation nudge outranks the general actComplete row)', () => {
+    expect(HINT_DATA.hints[1]?.key).toBe('severSpirit')
+    expect(HINT_DATA.hints[1]?.when).toEqual({ anyDaoNode: 3 })
+  })
+
+  it('third row is actComplete', () => {
+    expect(HINT_DATA.hints[2]?.key).toBe('actComplete')
   })
 })
 
@@ -311,10 +326,17 @@ describe('TECHNIQUE_DATA', () => {
 })
 
 describe('JOURNAL_DATA', () => {
-  it('has 21 entries with firstBreath + actOneLegacy at the ends (slices 7/8/8.5 added 2+2+1)', () => {
-    expect(JOURNAL_DATA.entries).toHaveLength(21)
+  it('has 23 entries with firstBreath first and firstManifestation last (slice 9 added 2)', () => {
+    expect(JOURNAL_DATA.entries).toHaveLength(23)
     expect(JOURNAL_DATA.entries[0]?.key).toBe('firstBreath')
-    expect(JOURNAL_DATA.entries[20]?.key).toBe('actOneLegacy')
+    expect(JOURNAL_DATA.entries[22]?.key).toBe('firstManifestation')
+  })
+
+  it('slice 9 entries latch on the passed tribulation and the first Manifestation', () => {
+    const actTwoOpens = JOURNAL_DATA.entries.find((e) => e.key === 'actTwoOpens')
+    const firstManifestation = JOURNAL_DATA.entries.find((e) => e.key === 'firstManifestation')
+    expect(actTwoOpens?.when).toEqual({ tribulationPassed: true })
+    expect(firstManifestation?.when).toEqual({ anyDaoNode: 3 })
   })
 
   it('slice 8.5 entry latches on the first Deep Meditation rung', () => {

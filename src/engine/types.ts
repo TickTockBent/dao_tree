@@ -48,7 +48,11 @@ export type PillKey = 'gatheringPill' | 'clarityPill' | 'heavenWardingPill'
 
 export type Element = 'metal' | 'wood' | 'water' | 'fire' | 'earth'
 
-/** The 15 Dao lattice node keys (5 roots + 5 ring-2 + 5 ring-2b). */
+/**
+ * The 25 Dao lattice node keys (5 roots + 5 ring-2 + 5 ring-2b + 10 ring-3,
+ * slice 9 / D22 medium lattice). Ring-3 extends each ring-2/ring-2b node with
+ * one Manifestation-flavored successor per element branch.
+ */
 export type LatticeNodeKey =
   | 'metal'
   | 'wood'
@@ -65,9 +69,26 @@ export type LatticeNodeKey =
   | 'stillness'
   | 'death'
   | 'endurance'
+  // --- Ring 3 (slice 9 / D22): one successor per ring-2 node ---
+  | 'severingIntent'
+  | 'blossoming'
+  | 'riverOfTime'
+  | 'undying'
+  | 'unmovable'
+  // --- Ring 3 (slice 9 / D22): one successor per ring-2b node ---
+  | 'soulBlade'
+  | 'evergreen'
+  | 'eternalStillness'
+  | 'rebirth'
+  | 'boundless'
 
-/** Dao lattice tier keys. Slice 3 ships Glimpse + Seed; Manifestation/Law deferred. */
-export type LatticeTierKey = 'glimpse' | 'seed'
+/**
+ * Dao lattice tier keys. Slice 3 shipped Glimpse + Seed; slice 9 (D22) adds
+ * Manifestation — the new severable-grade power (gated behind the passed
+ * tribulation, enforced in the dao store's buy path). Law is Act III realm
+ * content, not a lattice tier (D22).
+ */
+export type LatticeTierKey = 'glimpse' | 'seed' | 'manifestation'
 
 // ---- Persistence scopes ----------------------------------------------------
 
@@ -147,6 +168,7 @@ export type AutomationKey =
   | 'sectFoundationBell'
 export type HintKey =
   | 'actComplete'
+  | 'severSpirit' // slice 9: nudge the passed-tribulation player toward Spirit Severing once a Manifestation lands
   | 'faceTribulation'
   | 'faceDemonTrial' // slice 8: a Demon Trial holds the cultivator
   | 'healScar'
@@ -186,6 +208,8 @@ export type JournalEntryKey =
   | 'scarTaken'
   | 'scarHealed'
   | 'actOneLegacy'
+  | 'actTwoOpens' // slice 9: Act II arrival (tribulationPassed — core meets() grammar)
+  | 'firstManifestation' // slice 9: first Dao lattice node reaches Manifestation tier (anyDaoNode: 3)
 
 // ---- Set-pieces ------------------------------------------------------------
 

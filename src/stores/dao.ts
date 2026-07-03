@@ -6,8 +6,21 @@
 // at Qi Condensation 4th Level. Nodes are bought with Insight; stances are
 // free toggles with an opportunity cost (§6.1).
 //
-// The graph is derived from LATTICE_DATA.nodes (15 nodes: 5 roots + 5 ring-2 +
-// 5 ring-2b) + `requires` edges. Conflicts bind at Manifestation tier (Act II).
+// The graph is derived from LATTICE_DATA.nodes (25 nodes: 5 roots + 5 ring-2 +
+// 5 ring-2b + 10 ring-3, slice 9 / D22) + `requires` edges.
+//
+// Act II gate (slice 9): buying ANY node's Manifestation tier, OR ANY tier of
+// a ring-3 node, additionally requires the passed tribulation
+// (meets({ tribulationPassed })), enforced HERE in the buy path — not by
+// price alone — so Act I's pinned pacing bands cannot move because this
+// content exists in data (ring-3's Glimpse/Seed had to be gated too: the
+// Realistic sim actor's lattice buyer is UNCAPPED — unlike Competent's
+// 8-Seed target — so over a long run it eventually affords ring-3 from
+// banked Insight alone, and the extra qi/insightMult stacking moved the
+// pinned Realistic band). The flow/stillness `conflicts` pair BINDS at
+// Manifestation: the two may hold Glimpse/Seed freely, but the purchase that
+// would put both at tier 3 is refused. Kept data-driven off
+// LATTICE_DATA.conflicts and the graph's own shape — no hardcoded keys.
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
@@ -92,11 +105,93 @@ export const useDaoStore = defineStore('dao', () => {
     return node.requires.every((req) => nodeTierOwned(req) >= 1)
   }
 
+  /** 0-indexed position of the Manifestation tier in `costs`/`effects` (owned tier becomes 3). */
+  const MANIFESTATION_TIER_INDEX = 2
+
+  /** True if the passed-tribulation gate is met (slice 9's core meets() grammar). */
+  function tribulationGateMet(): boolean {
+    return meets({ tribulationPassed: true }, buildGameState())
+  }
+
+  /**
+   * True if `key` is a ring-3 node — structurally, one that requires a node
+   * which itself has a prerequisite (depth 2 from a root). Derived from the
+   * graph shape, not a hardcoded key list, so it stays correct if the ring
+   * grows again later.
+   */
+  function isRing3Node(key: LatticeNodeKey): boolean {
+    const node = findLatticeNode(key)
+    const parentKey = node.requires[0]
+    if (!parentKey) return false
+    return findLatticeNode(parentKey).requires.length > 0
+  }
+
+  /**
+   * True if the NEXT tier purchase of `key` needs the passed-tribulation
+   * gate: any node's Manifestation tier (D22's severable-grade power), OR
+   * ANY tier of a ring-3 node — ring-3 is whole-cloth Act II content, not
+   * just its Manifestation peak. Without gating ring-3's Glimpse/Seed too,
+   * an unbounded cheapest-first buyer (the Realistic sim actor has no Seed
+   * cap, unlike Competent) eventually affords them mid-Act-I from banked
+   * Insight alone and the extra qi/insightMult stacking moves the pinned
+   * pacing bands — caught by `npm run sim` during this slice's implementation.
+   */
+  function needsTribulationGate(key: LatticeNodeKey, nextTierIndex: number): boolean {
+    return nextTierIndex === MANIFESTATION_TIER_INDEX || isRing3Node(key)
+  }
+
+  /** The other node key in a `conflicts` pair containing `key`, or null (data-driven, no hardcoded keys). */
+  function conflictPartner(key: LatticeNodeKey): LatticeNodeKey | null {
+    for (const [a, b] of LATTICE_DATA.conflicts) {
+      if (a === key) return b
+      if (b === key) return a
+    }
+    return null
+  }
+
+  /**
+   * True if buying `key`'s Manifestation tier would violate its `conflicts`
+   * pairing — i.e. the partner already holds Manifestation. Glimpse/Seed on
+   * both sides of a conflict pair is always fine; only tier 3 binds (D22).
+   */
+  function manifestationConflictBlocks(key: LatticeNodeKey): boolean {
+    const partner = conflictPartner(key)
+    if (!partner) return false
+    return nodeTierOwned(partner) >= MANIFESTATION_TIER_INDEX + 1
+  }
+
   function canAffordNode(key: LatticeNodeKey): boolean {
     if (!nodeRequirementsMet(key)) return false
     const node = findLatticeNode(key)
-    if (nodeTierOwned(key) >= node.costs.length) return false
+    const nextTierIndex = nodeTierOwned(key)
+    if (nextTierIndex >= node.costs.length) return false
+    if (needsTribulationGate(key, nextTierIndex)) {
+      if (!tribulationGateMet()) return false
+      if (nextTierIndex === MANIFESTATION_TIER_INDEX && manifestationConflictBlocks(key)) return false
+    }
     return insight.value.gte(nodeCost(key))
+  }
+
+  /**
+   * Human-legible reason the NEXT tier purchase of `key` is currently
+   * refused, or null if it is buyable (or already maxed — nothing to refuse).
+   * Surfaced by the lattice graph so a conflict-blocked or pre-tribulation
+   * attempt is legible, not just silently inert (§4.2/D22).
+   */
+  function nodeBuyBlockReason(key: LatticeNodeKey): string | null {
+    const node = findLatticeNode(key)
+    if (!nodeRequirementsMet(key)) return 'Requires a prerequisite Glimpse first.'
+    const nextTierIndex = nodeTierOwned(key)
+    if (nextTierIndex >= node.costs.length) return null
+    if (needsTribulationGate(key, nextTierIndex)) {
+      if (!tribulationGateMet()) return 'Act II content — pass the First Tribulation first.'
+      const partner = conflictPartner(key)
+      if (nextTierIndex === MANIFESTATION_TIER_INDEX && partner && manifestationConflictBlocks(key)) {
+        return `${findLatticeNode(partner).name} already holds Manifestation — the two cannot both stand at that depth.`
+      }
+    }
+    if (insight.value.lt(nodeCost(key))) return 'Not enough Insight yet.'
+    return null
   }
 
   /** Buy the next tier of a lattice node. Returns true on success. */
@@ -212,6 +307,10 @@ export const useDaoStore = defineStore('dao', () => {
     nodeCost,
     nodeRequirementsMet,
     canAffordNode,
+    tribulationGateMet,
+    isRing3Node,
+    manifestationConflictBlocks,
+    nodeBuyBlockReason,
     buyNodeTier,
     grantGlimpse,
     addInsight,

@@ -43,6 +43,17 @@ export const HINT_DATA: HintData = {
       text: 'A heart demon holds you fast. It cannot make you fail, only make you wait — see the trial through, and it releases you with a Dao Heart to show for it.',
     },
     {
+      // Slice 9: a Manifestation has landed — a legible severable is now
+      // live. This condition (anyDaoNode: 3) is a STRICT subset of
+      // actComplete's (tribulationPassed: true, since Manifestation is
+      // gated on the passed tribulation) — sits ABOVE it so the more
+      // actionable nudge wins once it applies; actComplete still covers the
+      // window between crossing the tribulation and the first Manifestation.
+      key: 'severSpirit',
+      when: { anyDaoNode: 3 },
+      text: 'A Dao Manifestation has taken shape, a severable truth ready for the blade. Enter Spirit Severing and cut the first corpse loose.',
+    },
+    {
       // Act I complete — tribulation passed, Legacy recorded. Final Act I state.
       key: 'actComplete',
       when: { tribulationPassed: true },
