@@ -329,3 +329,32 @@ pass; (b) the finding suggests a PLAYER-facing lesson (the trance
 punishes always-on use) — whether the game should teach it (a hint, a
 journal beat) is a content question for the narrative-spine pass, not a
 balance fix.
+
+## D30 — Offerings bill at the corpse just cut
+
+*2026-07-03, amends D28's billing detail; prompted by the Act II spine
+model's finding #2.* D28's implementation billed each offering at
+`nextCorpse` — the corpse AHEAD — so living with the Past's cut was
+billed at the Present's rite, and the insight-heavy Future basket
+carried 12 of 18 offerings while the qi-heavy Past basket was
+unreachable for an optimal player.
+
+**Ruling (Wes):** bill at the corpse **just cut**. You sever the Past,
+you pay the Past's qi-heavy rite for twelve turnings while mastering
+that loss — the resource you burn matches the thing you gave up. "The
+doing of it while diminished was the severance" (D27): you severed your
+relationship to qi, and now you burn qi to master that severance. The
+verb and the cost speak the same language.
+
+**Complete rule:** offeringCorpse = the most recent severance's corpse;
+pre-first-cut practice offerings bill at the Past (the rite being
+practiced toward — qi-heavy, universally affordable, the right on-ramp);
+post-third-cut offerings stay at the Future (the last cut, still being
+mastered to cap).
+
+**Calibration consequence:** finding #1 (the insight bottleneck) is
+partly a billing artifact — under this rule the insight-heavy load drops
+from ~18 offerings to the Future's 12, redistributing Past→qi,
+Present→consumables, Future→insight at 12 steps each. The billing fix
+lands and RE-MEASURES before any basket base is touched (rule 0.1:
+separate the artifact from the real pricing problem first).
