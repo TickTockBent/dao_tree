@@ -34,6 +34,7 @@ import { ALCHEMY_DATA } from '@/data/alchemy'
 // mechanics are re-derived here so no severing/dao mutation ever touches a
 // measured run). See the ACT II SPINE banner far below.
 import { SEVERING_DATA, OFFERING_DATA, findOfferingBasket } from '@/data/severing'
+import { STANCE_DATA } from '@/data/stances'
 import { ACCUMULATOR_DATA } from '@/data/accumulators'
 import { findBodyBuyable } from '@/data/body'
 import type { Condition } from '@/engine/meets'
@@ -1946,6 +1947,16 @@ interface Act2Piece {
   acquired: boolean
   severed: boolean
   ratio: number
+  /**
+   * D35 / principle #35 — the CONDITIONAL-LOCK class (Flowing Form). The piece's
+   * live contribution is a voluntary TOGGLE (a worn stance), so its baseline in
+   * the PASSIVE pipeline is 1, not m: pre-cut it contributes nothing passive
+   * (the toggle is not the passive rate), and the lock imposes a NOVEL cost —
+   * post-cut the ramp carries axisValue(m,ratio) as a fresh passive factor (no
+   * inBaseRate divide, because there was no passive m to remove). Undefined on
+   * every ordinary (inBaseRate / acquired-in-Act-II) piece → those are unchanged.
+   */
+  conditionalLock?: boolean
 }
 
 function act2PieceAxisFactor(piece: Act2Piece, axis: 'qi' | 'insight'): Decimal {
@@ -1955,7 +1966,11 @@ function act2PieceAxisFactor(piece: Act2Piece, axis: 'qi' | 'insight'): Decimal 
     return piece.inBaseRate ? av.div(m) : av
   }
   if (!piece.acquired) return new Decimal(1)
-  return piece.inBaseRate ? new Decimal(1) : m
+  // Conditional-lock (Flowing Form): the pre-cut toggle is NOT in the passive
+  // rate (baseline 1), so acquired-not-severed reads 1 — exactly like an
+  // in-base piece before its contribution is removed, but here the "1" is the
+  // honest passive baseline of a voluntary stance rather than a folded-in m.
+  return piece.inBaseRate || piece.conditionalLock ? new Decimal(1) : m
 }
 
 /**
@@ -2504,6 +2519,21 @@ interface Act2ActorPolicy {
   readonly holdsPill: boolean
   /** Offerings land only on the check-in grid (Realistic); null = analytic (time-to-afford). */
   readonly cadenceCheckinSeconds: number | null
+  /**
+   * D35 — the stance this build WEARS at Act II entry (a Breathing-Trance user's
+   * lockable form). Set → the Flowing Form is a live severable IFF the stance is
+   * lockable (cap·m > 1 on every axis; Sword Trance 0.4·2.0=0.8 < 1 NEVER locks —
+   * mirrors the severing store's stanceLockRecoverable exactly). Null = no stance.
+   */
+  readonly wearsStance?: string | null
+  /**
+   * D35 — a build that owns NO Seed nodes (MeridianProbe) learns the post-D34
+   * cheap-Manifestation route: it BUYS these lattice nodes to the Manifestation
+   * tier from scratch across Act II (full glimpse+seed+manifestation chain +
+   * prerequisite roots' glimpse), making manifestation a live severable. The
+   * cheapest root+ring-2 path (~12k insight). Empty/undefined = no such purchase.
+   */
+  readonly manifestFromScratch?: readonly string[]
 }
 
 interface Act2ActorRow {
@@ -2558,6 +2588,37 @@ interface Act2ActorResult {
   longestCorpse: string
   longestWindowH: number
   missingSeverables: string[]
+  manifestFromScratch: boolean
+  manifestAcquireSeconds: number
+  /**
+   * D35 Call-1 SURVIVABILITY measure — present only when this actor severs the
+   * Flowing Form. During the trough (qi at 0.35·baseline), can it fill the NEXT
+   * offering's qi cost, and how does the first post-cut offering compare to the
+   * pre-cut cadence? verdict is SURVIVABLE / STALLED (never FAIL).
+   */
+  flowingFormSurvivability?: {
+    troughFlowingFactorQi: number
+    troughQiRate: Decimal
+    baselineQiRate: Decimal
+    nextOfferingQiCost: Decimal
+    nextOfferingInsightCost: Decimal
+    qiTimeToAffordSeconds: number
+    firstOfferingWallSeconds: number
+    preCutCadenceSeconds: number
+    windowBudgetSeconds: number
+    verdict: 'SURVIVABLE' | 'STALLED'
+  }
+  /**
+   * D35 conditional-class PREVIEW (baseline-1 form) — present only with a Flowing
+   * Form severance. cap·m per axis + the qi-axis baseline-1 breakeven step
+   * (ratio·m ≥ 1), which lands LATER than the standard step 7.
+   */
+  conditionalClassPreview?: {
+    capMQi: number
+    capMInsight: number
+    baselineOneBreakevenStepQi: number
+    standardBreakevenStep: number
+  }
 }
 
 /**
@@ -2642,6 +2703,35 @@ function runActIIActor(policy: Act2ActorPolicy): Act2ActorResult {
     manifestInsightCost = manifestInsightCost.add(node.costs[MANIFESTATION_TIER_INDEX]!)
     manifestBoughtKeys.push(node.key)
   }
+  // D35 — the cheap-Manifestation route for a build that owns NO Seeds
+  // (MeridianProbe). It cannot reach Manifestation off owned Seeds, so it BUYS
+  // the named nodes from scratch across Act II: the FULL chain per node (glimpse
+  // + seed + manifestation) plus each prerequisite root's glimpse (to unlock the
+  // ring-2 node). The cheapest root+ring-2 path — metal root (3,400) + Sword
+  // Intent (8,550) = 11,950 insight (~12k), yielding a real two-axis severable.
+  // manifestInsightCost here is the WHOLE purchase (not just the tier cost).
+  let manifestFromScratch = false
+  if (manifestBoughtKeys.length === 0 && policy.manifestFromScratch && policy.manifestFromScratch.length > 0) {
+    manifestFromScratch = true
+    manifestMultQi = new Decimal(1)
+    manifestMultInsight = new Decimal(1)
+    manifestInsightCost = new Decimal(0)
+    manifestBoughtKeys.length = 0
+    const glimpseNeeded = new Set<string>()
+    for (const key of policy.manifestFromScratch) {
+      const node = LATTICE_DATA.nodes.find((n) => n.key === key)!
+      for (const tierCost of node.costs) manifestInsightCost = manifestInsightCost.add(tierCost)
+      for (const req of node.requires) glimpseNeeded.add(req)
+      const effect = node.effects[MANIFESTATION_TIER_INDEX]!
+      if ('qiMult' in effect) manifestMultQi = manifestMultQi.times(effect.qiMult)
+      else manifestMultInsight = manifestMultInsight.times(effect.insightMult)
+      manifestBoughtKeys.push(key)
+    }
+    for (const req of glimpseNeeded) {
+      if (policy.manifestFromScratch.includes(req)) continue // already paid in full
+      manifestInsightCost = manifestInsightCost.add(LATTICE_DATA.nodes.find((n) => n.key === req)!.costs[0]!)
+    }
+  }
   const manifestAvailable = manifestBoughtKeys.length > 0
   const manifestPiece: Act2Piece = {
     key: 'manifestation',
@@ -2671,12 +2761,47 @@ function runActIIActor(policy: Act2ActorPolicy): Act2ActorResult {
       }
     : null
 
+  // --- Piece: Flowing Form (D35 — "Sever the Flowing Form", the stance-lock) ---
+  // A Breathing-Trance user (LatticeFocused) wears its lockable form; the lock is
+  // its natural THIRD cut. m = the worn stance's modifiers verbatim (Breathing
+  // Trance qi 0.7 / insight 2.0), run through the standard ramp on BOTH axes as a
+  // CONDITIONAL-LOCK piece (baseline 1). Eligibility MIRRORS the severing store's
+  // stanceLockRecoverable exactly: worn AND cap·m > 1 on every axis — Breathing
+  // Trance (2.0·0.7=1.4, 2.0·2.0=4.0) locks; Sword Trance (2.0·0.4=0.8) NEVER
+  // does (a worn-but-too-lopsided form is not offered). The end-state stance is
+  // toggled OFF at every measured Act I end (activeStance=''), so baseQi/baseInsight
+  // are already the clean no-trance base — the ramp carries the whole stance, no
+  // double-count; the trough qi reads exactly 0.35·baseline (D35's 0.7·0.5).
+  const wornStanceRow =
+    policy.wearsStance != null
+      ? (STANCE_DATA.stances.find((s) => s.key === policy.wearsStance) ?? null)
+      : null
+  const flowingFormLockable =
+    wornStanceRow !== null &&
+    ACT2_CAP_RATIO * (wornStanceRow.modifiers.qiMult ?? 1) > 1 &&
+    ACT2_CAP_RATIO * (wornStanceRow.modifiers.insightMult ?? 1) > 1
+  const flowingFormPiece: Act2Piece | null =
+    flowingFormLockable && wornStanceRow !== null
+      ? {
+          key: 'flowingForm',
+          label: 'flowing form',
+          mQi: new Decimal(wornStanceRow.modifiers.qiMult ?? 1),
+          mInsight: new Decimal(wornStanceRow.modifiers.insightMult ?? 1),
+          inBaseRate: false,
+          acquired: true, // worn at entry → a live severable from the first choice
+          severed: false,
+          ratio: 0,
+          conditionalLock: true,
+        }
+      : null
+
   // Resolve the policy's sever order against what this end-state actually carries.
   const pieceForKey = (key: string): Act2Piece | null => {
     if (key === 'soulAspect') return aspectPiece
     if (key === 'extraordinaryMeridians') return extPiece
     if (key === 'manifestation') return manifestAvailable ? manifestPiece : null
     if (key === 'profession') return professionPiece
+    if (key === 'flowingForm') return flowingFormPiece
     return null
   }
   const severOrder: Act2Piece[] = []
@@ -2692,6 +2817,7 @@ function runActIIActor(policy: Act2ActorPolicy): Act2ActorResult {
   if (extPiece) allPieces.push(extPiece)
   if (manifestAvailable) allPieces.push(manifestPiece)
   if (professionPiece) allPieces.push(professionPiece)
+  if (flowingFormPiece) allPieces.push(flowingFormPiece)
 
   const corpses = SEVERING_DATA.corpses
   const severCountNow = (): number => allPieces.filter((p) => p.severed).length
@@ -2745,14 +2871,26 @@ function runActIIActor(policy: Act2ActorPolicy): Act2ActorResult {
   advance(ACT2_TRIBULATION_SECONDS)
 
   // 2) Acquire manifestation nodes (insight) — the insight competition begins.
+  //    Owned-Seed builds pay only the Manifestation-tier cost per node; the
+  //    cheap-route build (MeridianProbe) pays the WHOLE from-scratch chain
+  //    (manifestInsightCost already holds the full ~12k), modeled against its
+  //    real Act II insight rate.
+  let manifestAcquireSeconds = 0
   if (manifestAvailable) {
-    for (const node of manifestBoughtKeys) {
-      const cost = new Decimal(
-        LATTICE_DATA.nodes.find((n) => n.key === node)!.costs[MANIFESTATION_TIER_INDEX]!,
-      )
-      advanceAfford(new Decimal(0), cost)
-      insightBank = insightBank.sub(cost).max(0)
+    const acquireStart = simSeconds
+    if (manifestFromScratch) {
+      advanceAfford(new Decimal(0), manifestInsightCost)
+      insightBank = insightBank.sub(manifestInsightCost).max(0)
+    } else {
+      for (const node of manifestBoughtKeys) {
+        const cost = new Decimal(
+          LATTICE_DATA.nodes.find((n) => n.key === node)!.costs[MANIFESTATION_TIER_INDEX]!,
+        )
+        advanceAfford(new Decimal(0), cost)
+        insightBank = insightBank.sub(cost).max(0)
+      }
     }
+    manifestAcquireSeconds = simSeconds - acquireStart
     manifestPiece.acquired = true
   }
 
@@ -2769,10 +2907,16 @@ function runActIIActor(policy: Act2ActorPolicy): Act2ActorResult {
   const lifetimeNetConst = fullRampSum / ACT2_RAMP_STEPS
   let longestCorpse = '—'
   let longestWindowH = 0
+  // D35 SURVIVABILITY accumulators — pre-Flowing-Form cadence (mean secs/offering
+  // across the earlier cuts) is the yardstick the trough offering is measured against.
+  let preFlowingWindowSeconds = 0
+  let preFlowingOfferings = 0
+  let flowingFormSurvivability: Act2ActorResult['flowingFormSurvivability']
 
   for (let severIndex = 0; severIndex < severOrder.length; severIndex++) {
     const piece = severOrder[severIndex]!
     const liveNow = liveSeverableCount()
+    const isFlowingForm = piece.key === 'flowingForm'
 
     // The cut: qi rate just before vs at the trough (ratio = startFraction).
     // D33: the realm-x substage bump is gone (null-stripped to identity), so the
@@ -2787,11 +2931,20 @@ function runActIIActor(policy: Act2ActorPolicy): Act2ActorResult {
       ? 0
       : qiBeforeCut.sub(qiAtTrough).div(qiBeforeCut).toNumber()
     const ritualsAtSever = rituals
+    // D35 — the Flowing Form's own axis factor at the trough (ratio = 0.5): for
+    // Breathing Trance this is m·c = 0.7·0.5 = 0.35 exactly (the deepest window
+    // in the game). Captured against the clean no-trance baseline rate.
+    const troughFlowingFactorQi = isFlowingForm
+      ? act2PieceAxisFactor(piece, 'qi').toNumber()
+      : 0
 
     const weaknessStart = simSeconds
     let stepsSince = 0
     let severQiSacrificed = new Decimal(0)
     let severInsightSacrificed = new Decimal(0)
+    let firstOfferingWallSeconds = 0
+    let firstOfferingQiCost = new Decimal(0)
+    let firstOfferingInsightCost = new Decimal(0)
     // D30: offering corpse = the corpse JUST CUT (the store bills severances[last].corpse).
     const corpseCutIndex = Math.min(severIndex, corpses.length - 1)
     const offeringCorpseIndex = corpseCutIndex
@@ -2807,7 +2960,13 @@ function runActIIActor(policy: Act2ActorPolicy): Act2ActorResult {
       const costQi = new Decimal(basket.qiBase).times(scale)
       const costInsight = new Decimal(basket.insightBase).times(scale)
       piece.ratio = act2RatioAtStep(stepsSince)
+      const offeringWallStart = simSeconds
       advanceAfford(costQi, costInsight)
+      if (stepsSince === 0) {
+        firstOfferingWallSeconds = simSeconds - offeringWallStart
+        firstOfferingQiCost = costQi
+        firstOfferingInsightCost = costInsight
+      }
       qiBank = qiBank.sub(costQi).max(0)
       insightBank = insightBank.sub(costInsight).max(0)
       severQiSacrificed = severQiSacrificed.add(costQi)
@@ -2818,6 +2977,38 @@ function runActIIActor(policy: Act2ActorPolicy): Act2ActorResult {
       totalOfferings++
     }
     piece.ratio = act2RatioAtStep(stepsSince)
+
+    // D35 Call-1 SURVIVABILITY: measure the trough offering against the pre-cut
+    // cadence. Non-Flowing-Form cuts feed the cadence yardstick; the Flowing Form
+    // cut is measured against it. STALLED only if the trough qi cannot fill even
+    // one offering inside the whole weakness-window budget (never here — the
+    // Lattice actor is insight-bound and its qi rate dwarfs the Future qi cost).
+    if (isFlowingForm) {
+      const preCutCadenceSeconds = preFlowingOfferings > 0 ? preFlowingWindowSeconds / preFlowingOfferings : 0
+      const qiTimeToAffordSeconds = qiAtTrough.lte(0)
+        ? Infinity
+        : firstOfferingQiCost.div(qiAtTrough).toNumber()
+      const windowBudgetSeconds = preCutCadenceSeconds * ACT2_RAW_BREAKEVEN_STEPS
+      const survivable =
+        qiAtTrough.gt(0) &&
+        Number.isFinite(qiTimeToAffordSeconds) &&
+        (windowBudgetSeconds <= 0 || qiTimeToAffordSeconds <= windowBudgetSeconds)
+      flowingFormSurvivability = {
+        troughFlowingFactorQi,
+        troughQiRate: qiAtTrough,
+        baselineQiRate: baseQi,
+        nextOfferingQiCost: firstOfferingQiCost,
+        nextOfferingInsightCost: firstOfferingInsightCost,
+        qiTimeToAffordSeconds,
+        firstOfferingWallSeconds,
+        preCutCadenceSeconds,
+        windowBudgetSeconds,
+        verdict: survivable ? 'SURVIVABLE' : 'STALLED',
+      }
+    } else {
+      preFlowingWindowSeconds += simSeconds - weaknessStart
+      preFlowingOfferings += ACT2_RAW_BREAKEVEN_STEPS
+    }
 
     totalQiSacrificed = totalQiSacrificed.add(severQiSacrificed)
     totalInsightSacrificed = totalInsightSacrificed.add(severInsightSacrificed)
@@ -2845,6 +3036,29 @@ function runActIIActor(policy: Act2ActorPolicy): Act2ActorResult {
   }
 
   const minLifetimeNet = rows.length === 0 ? lifetimeNetConst : Math.min(...rows.map((r) => Number(r.lifetimeNet)))
+
+  // D35 conditional-class PREVIEW (baseline-1). A lock imposes a NOVEL cost, so
+  // its baseline is 1 (not m): the qi-axis "breakeven" is where the passive
+  // ratio·m first clears 1 (0.7·ratio ≥ 1 → ratio ≥ 1.43), which lands LATER
+  // than the standard ratio-crosses-1 step 7. cap·m > 1 on every axis is the
+  // shippability floor (Breathing Trance qi 1.4 / insight 4.0). Present only
+  // when the Flowing Form is actually severed by this actor.
+  let conditionalClassPreview: Act2ActorResult['conditionalClassPreview']
+  const severedFlowingForm = severOrder.find((p) => p.key === 'flowingForm' && p.severed)
+  if (severedFlowingForm) {
+    const ffQi = severedFlowingForm.mQi.toNumber()
+    const ffInsight = severedFlowingForm.mInsight.toNumber()
+    const baselineBreakRawQi =
+      ACT2_START_FRACTION * ffQi >= 1
+        ? 0
+        : Math.ceil(Math.log(1 / (ACT2_START_FRACTION * ffQi)) / Math.log(ACT2_RAMP_GROWTH))
+    conditionalClassPreview = {
+      capMQi: ACT2_CAP_RATIO * ffQi,
+      capMInsight: ACT2_CAP_RATIO * ffInsight,
+      baselineOneBreakevenStepQi: baselineBreakRawQi + 1,
+      standardBreakevenStep: ACT2_BREAKEVEN_STEP_DISPLAY,
+    }
+  }
 
   return {
     name: policy.name,
@@ -2882,6 +3096,10 @@ function runActIIActor(policy: Act2ActorPolicy): Act2ActorResult {
     longestCorpse,
     longestWindowH,
     missingSeverables,
+    manifestFromScratch,
+    manifestAcquireSeconds,
+    flowingFormSurvivability,
+    conditionalClassPreview,
   }
 }
 
@@ -2901,20 +3119,29 @@ function runActIIRoster(): Act2ActorResult[] {
     {
       // The meridian build: aspect → ext → manifestation. The ext track is a clean
       // 5.96× (owned in Act I) — its cut is the deepest weakness window in the roster.
+      // D35 — it owns NO Seeds, so it LEARNS the post-D34 cheap-Manifestation route:
+      // buy the cheapest root+ring-2 chain (Metal Root + Sword Intent) to the
+      // Manifestation tier from scratch (~12k insight) across Act II, making the
+      // manifestation its honest third cut → §6[3] 2 → 3.
       name: 'MeridianProbe-ActII',
       actIRunner: spineRunner(MERIDIAN_PROBE_CONFIG),
       severOrderKeys: ['soulAspect', 'extraordinaryMeridians', 'manifestation'],
       holdsPill: false,
       cadenceCheckinSeconds: null,
+      manifestFromScratch: ['metal', 'sword'],
     },
     {
-      // The lattice build: aspect → manifestation → profession-or-ext (whichever its
-      // Act I actually acquired — measured; a pure lattice build has neither).
+      // The lattice build: aspect → manifestation → FLOWING FORM. D35 — a pure
+      // lattice build owns neither profession nor ext, but it WEARS Breathing
+      // Trance, so the stance-lock (Sever the Flowing Form) is its natural third
+      // cut → §6[3] 2 → 3. wearsStance gates the Flowing Form through the store's
+      // exact stanceLockRecoverable rule (Breathing Trance locks; Sword Trance never).
       name: 'LatticeFocused-ActII',
       actIRunner: spineRunner(LATTICE_CONFIG),
-      severOrderKeys: ['soulAspect', 'manifestation', 'profession', 'extraordinaryMeridians'],
+      severOrderKeys: ['soulAspect', 'manifestation', 'flowingForm'],
       holdsPill: false,
       cadenceCheckinSeconds: null,
+      wearsStance: 'breathingTrance',
     },
   ]
   return policies.map(runActIIActor)
@@ -2948,6 +3175,13 @@ function printActIIRoster(actors: Act2ActorResult[], spine: Act2Result): void {
     console.log(
       `  Act I banks carried in: ${actor.qiBankStart.toExponential(2)} qi, ${actor.insightBankStart.toNumber().toFixed(0)} insight.`,
     )
+    if (actor.manifestFromScratch) {
+      console.log(
+        `  D35 cheap-Manifestation route (owns no Seeds): buys [${actor.manifestNodesBought.join(' + ')}] to the Manifestation tier from scratch — ` +
+          `full chain ${actor.manifestInsightSpent.toExponential(3)} insight (Metal Root 3,400 + Sword Intent 8,550 = ~12k), ` +
+          `acquired in ${actor.manifestAcquireSeconds.toFixed(0)}s (${(actor.manifestAcquireSeconds / 3600).toFixed(2)}h) at its real Act II insight rate → manifestation becomes the honest third cut.`,
+      )
+    }
     if (actor.missingSeverables.length > 0) {
       console.log(`  MISSING severables (policy named, end-state lacks): [${actor.missingSeverables.join(', ')}] — see the ≥3 preview below.`)
     }
@@ -2985,6 +3219,30 @@ function printActIIRoster(actors: Act2ActorResult[], spine: Act2Result): void {
       `  §6[3] ≥ 3 live severables at first corpse choice: ${actor.liveAtFirstChoice} → ${live3 ? 'PREVIEW-OK' : 'PREVIEW-BREACH'}` +
         `${live3 ? '' : ` — FINDING: ${actor.name} carries only ${actor.liveAtFirstChoice} live severables (missing: ${actor.missingSeverables.join(', ') || 'none named'}); three sequential severances are impossible for this build as-is`}.`,
     )
+    // §6[4] CONDITIONAL-CLASS PREVIEW (D35 / principle #35) — only for a build that
+    // severs the Flowing Form (baseline-1 form; cap·m > 1 every axis + breakeven-within-horizon).
+    const ccp = actor.conditionalClassPreview
+    if (ccp) {
+      const capOk = ccp.capMQi > 1 && ccp.capMInsight > 1
+      const beOk = ccp.baselineOneBreakevenStepQi <= ACT2_RAMP_STEPS
+      console.log(
+        `  §6[4] conditional-class (Flowing Form, baseline-1): cap·m qi ${ccp.capMQi.toFixed(3)}× / insight ${ccp.capMInsight.toFixed(3)}× > 1 on every axis → ${capOk ? 'PREVIEW-OK' : 'PREVIEW-BREACH'}; ` +
+          `qi-axis baseline-1 breakeven (ratio·m ≥ 1 → 0.7·ratio ≥ 1 → ratio ≥ 1.429) at step ${ccp.baselineOneBreakevenStepQi} ` +
+          `(LATER than the standard ratio-crosses-1 step ${ccp.standardBreakevenStep}) ≤ ${ACT2_RAMP_STEPS} horizon → ${beOk ? 'PREVIEW-OK' : 'PREVIEW-BREACH'} ` +
+          '(insight axis clears baseline-1 at step 1 — 2.0·0.5 = 1.0; the qi axis is the binding one).',
+      )
+    }
+    // D35 Call-1 SURVIVABILITY (the headline hard constraint) — the ×0.35 trough
+    // must still fill the next offering and make forward progress. SURVIVABLE / STALLED.
+    const ffs = actor.flowingFormSurvivability
+    if (ffs) {
+      console.log(
+        `  D35 SURVIVABILITY (Flowing Form trough): flowing-form qi factor ${ffs.troughFlowingFactorQi.toFixed(3)}× (= 0.7·0.5, the deepest window) → ` +
+          `trough qi rate ${ffs.troughQiRate.toExponential(3)}/s (baseline ${ffs.baselineQiRate.toExponential(3)}/s) | next offering qi cost ${ffs.nextOfferingQiCost.toExponential(3)} ` +
+          `(insight ${ffs.nextOfferingInsightCost.toExponential(3)}) | qi time-to-afford ${ffs.qiTimeToAffordSeconds.toFixed(1)}s vs pre-cut cadence ${ffs.preCutCadenceSeconds.toFixed(0)}s/offering ` +
+          `(window budget ${ffs.windowBudgetSeconds.toFixed(0)}s); first post-cut offering wall ${ffs.firstOfferingWallSeconds.toFixed(0)}s → VERDICT ${ffs.verdict}.`,
+      )
+    }
   }
 
   // --- CROSS-ACTOR summary ----------------------------------------------------
@@ -3009,8 +3267,18 @@ function printActIIRoster(actors: Act2ActorResult[], spine: Act2Result): void {
   const breaches = actors.filter((a) => a.liveAtFirstChoice < 3)
   console.log(
     `  §6[3] roster status: ${breaches.length === 0 ? 'all actors PREVIEW-OK' : `${breaches.length} PREVIEW-BREACH → [${breaches.map((b) => `${b.name}: ${b.liveAtFirstChoice} live`).join('; ')}]`}` +
-      ' — the load-bearing Manifestation (§2) is what a non-meridian, non-alchemist build leans on for the third cut.',
+      ' — D35 closed both prior breaches through CHOICES (D31): Lattice via the Flowing Form (it wears the trance), Meridian via the cheap-Manifestation route (~12k insight).',
   )
+  // D35 SURVIVABILITY headline — restated at roster scope so the hard constraint is unmissable.
+  const survActor = actors.find((a) => a.flowingFormSurvivability)
+  if (survActor?.flowingFormSurvivability) {
+    const s = survActor.flowingFormSurvivability
+    console.log(
+      `  D35 SURVIVABILITY (Call 1, headline): ${survActor.name} Flowing-Form trough qi ${s.troughQiRate.toExponential(3)}/s (${s.troughFlowingFactorQi.toFixed(3)}× = 0.35·baseline) ` +
+        `fills the next offering's ${s.nextOfferingQiCost.toExponential(3)} qi in ${s.qiTimeToAffordSeconds.toFixed(1)}s (window budget ${s.windowBudgetSeconds.toFixed(0)}s) → VERDICT ${s.verdict}. ` +
+        'The ×0.35 qi trough is the deepest window in the game; insight (2.0·0.5 = 1.0 at trough, ramping to 4.0) never dips — the Lattice actor stays insight-bound and makes forward progress.',
+    )
+  }
 
   // --- The consolidated tune-pass inputs (chunk A's four + the roster's) ------
   const realistic = actors.find((a) => a.name === 'Realistic-ActII')
@@ -3027,9 +3295,11 @@ function printActIIRoster(actors: Act2ActorResult[], spine: Act2Result): void {
     `  1. ⟨tune⟩ INSIGHT-AS-BOTTLENECK — RESOLVED BY D34 (spine + roster): the Future insight base (24,000 → 5,200, ×1.5/step) + ` +
       `Manifestation costs (6k–50k → 3k–25k; 8-node total 75k → 37.5k) were both drawn from the lattice insight trickle. Re-measured roster insight-bound ` +
       `share of waited time: Realistic ${insBoundPct(realistic)}%, Meridian ${insBoundPct(meridian)}%, Lattice ${insBoundPct(lattice)}% ` +
-      '(pre-D34: 94.4/90.6/100.0; pre-D30: 98.4/99.9/100.0). The Lattice specialist — the tell for the whole faucet-to-demand ratio — drops ' +
-      '100→75.6% (D34 target 70–80%). Move #1 lowered the Manifestation to a moderate-bank price; move #2 sized the Future rite to ≈ ONE ring-3 node ' +
-      '(27.2k insight vs the 25k ring-3, was 126k ≈ "three"). Present held at 4,600 (the Lattice bind floor). Sized per D34 criteria, signed off in range.',
+      '(pre-D34: 94.4/90.6/100.0; pre-D30: 98.4/99.9/100.0). NOTE the live figures now carry the D35 THIRD cut (item 9): the Lattice specialist — the ' +
+      'tell for the whole faucet-to-demand ratio — sat at 75.6% on its 2-cut D34 profile (D34 target 70–80%), and the insight-heavy Flowing Form / Future rite ' +
+      'lifts it to the live figure above (Meridian likewise rises with its from-scratch Manifestation). Move #1 lowered the Manifestation to a moderate-bank price; ' +
+      'move #2 sized the Future rite to ≈ ONE ring-3 node (27.2k insight vs the 25k ring-3, was 126k ≈ "three"). Present held at 4,600 (the Lattice bind floor). ' +
+      'The 2-cut D34 sizing was signed off in range; the D35 3rd-cut lift is a NEW observation for Gate-D (does the insight-heavy third rite belong inside the band?).',
   )
   console.log(
     `  2. ⟨tune⟩ CORPSE-BASKET BILLING — RESOLVED BY D30 (spine + roster): offerings now bill at the corpse JUST CUT (was ` +
@@ -3076,6 +3346,19 @@ function printActIIRoster(actors: Act2ActorResult[], spine: Act2Result): void {
       'spread: the Realistic hoarder now bank-covers everything (Act II collapses to ~0.5h), while the Lattice/Meridian specialists still feel their ' +
       'insight rites. Per D34 this is an observation INSTRUMENT at the settled spread, NOT an experience target (Act II durations move as content fills in); ' +
       'the experience-actor-fastest inversion is a fact to revisit when the almanac/loot layer add texture to Act II idle windows. No Gate-D band pinned here yet.',
+  )
+  const ffLattice = actors.find((a) => a.flowingFormSurvivability)?.flowingFormSurvivability
+  const ccpLattice = actors.find((a) => a.conditionalClassPreview)?.conditionalClassPreview
+  console.log(
+    `  9. ⟨tune⟩ D35 — SEVER THE FLOWING FORM + THE CHEAP-MANIFESTATION ROUTE (roster, both §6[3] breaches CLOSED via CHOICES): ` +
+      `pre-D35 the roster carried 2 PREVIEW-BREACH (Lattice + Meridian at 2 live). Both close through D31 choices, not price moves. ` +
+      `LATTICE: it wears Breathing Trance, so the stance-lock is its natural third cut (aspect → manifestation → Flowing Form) → §6[3] 2 → 3 PREVIEW-OK. ` +
+      `The Flowing Form is the CONDITIONAL-LOCK class (principle #35): m = the worn stance verbatim (qi 0.7 / insight 2.0), baseline 1 (a novel cost imposed, not a benefit removed). ` +
+      `cap·m = ${ccpLattice ? ccpLattice.capMQi.toFixed(2) : '1.40'}× qi / ${ccpLattice ? ccpLattice.capMInsight.toFixed(2) : '4.00'}× insight > 1 on every axis; the qi-axis baseline-1 breakeven lands at step ${ccpLattice ? ccpLattice.baselineOneBreakevenStepQi : 10} ` +
+      `(LATER than the standard step 7, still ≤ 12) — PREVIEW-OK. Eligibility mirrors the store exactly: Breathing Trance locks, Sword Trance (2.0·0.4 = 0.8 < 1) NEVER does. ` +
+      `SURVIVABILITY (Call 1, the hard constraint): the ×0.35 qi trough (${ffLattice ? ffLattice.troughQiRate.toExponential(2) : 'n/a'}/s) fills the next offering's qi in ${ffLattice ? ffLattice.qiTimeToAffordSeconds.toFixed(1) : 'n/a'}s → ${ffLattice ? ffLattice.verdict : 'n/a'} — the number holds. ` +
+      `MERIDIAN: owns no Seeds, so it banks ~12k insight for the cheapest root+ring-2 chain (Metal Root + Sword Intent) to the Manifestation tier from scratch (aspect → ext → manifestation) → §6[3] 2 → 3 PREVIEW-OK. ` +
+      `All roster actors now ≥ 3 live at first choice; nothing asserted (Gate-D gates the assertable form).`,
   )
   console.log(
     '  (ACT II TUNE-PASS INPUTS end — every line answerable from the evidence above; nothing asserted, no error token emitted.)',
