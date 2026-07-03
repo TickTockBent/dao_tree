@@ -24,3 +24,4 @@ export { HEART_DEMON_DATA, type HeartDemonData, type DemonTrialRow, type TrialOb
 export { SECLUSION_DATA, type SeclusionData, type SeclusionRung, findSeclusionRung } from './seclusion'
 export { ACCUMULATOR_DATA } from './accumulators'
 export { SEVERING_DATA, type SeveringData, type CorpseRow, type SeverableRow, findCorpse, findSeverable } from './severing'
+export { CROSS_TREE_KEEPS, type CrossTreeKeepRow } from './trees'

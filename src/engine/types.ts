@@ -161,6 +161,20 @@ export type KeepRuleKey =
   | 'qiInsightSurvivesFoundation'
   | 'foundationSurvivesNascentSoul'
   | 'soulCarriesTheClimb'
+/**
+ * Slice 9 §5 — CROSS_TREE_KEEPS row keys (src/data/trees.ts). Each key names
+ * one declared Act I → Act II read; a future Act II addition that reads Act I
+ * (or pre-existing life-scoped) state adds a member here alongside its row.
+ */
+export type CrossTreeKeepKey =
+  | 'realmXTribulationGate'
+  | 'daoManifestationGate'
+  | 'journalActTwoOpens'
+  | 'severingSoulAspectRead'
+  | 'severingProfessionRead'
+  | 'severingExtraordinaryMeridiansRead'
+  | 'severingManifestationRead'
+  | 'hintSeverSpiritRead'
 export type AutomationKey =
   | 'nascentQiPrestige'
   | 'nascentPrimaryMeridians'

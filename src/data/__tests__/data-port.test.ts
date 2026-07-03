@@ -5,6 +5,7 @@
 
 import { describe, it, expect } from 'vitest'
 import {
+  CROSS_TREE_KEEPS,
   REALM_DATA,
   SETPIECE_DATA,
   BODY_DATA,
@@ -200,6 +201,20 @@ describe('TREE_DATA', () => {
       'severing:life',
     ])
     expect(TREE_DATA.layers.x).toEqual({ scope: 'tree', tree: 'act2' })
+  })
+})
+
+describe('CROSS_TREE_KEEPS (slice 9 §5)', () => {
+  it('pins the row count and spot-checks the realm-x tribulation-gate row', () => {
+    // Pinned so the table only changes deliberately (§5's own discipline: a
+    // new row is a deliberate declaration, never an incidental drift).
+    expect(CROSS_TREE_KEEPS).toHaveLength(8)
+    expect(CROSS_TREE_KEEPS.find((row) => row.key === 'realmXTribulationGate')).toEqual({
+      key: 'realmXTribulationGate',
+      reads: 'tribulationPassed',
+      consumer: 'realm x (Spirit Severing) reveal/unlock',
+      rationale: 'Act II\'s first content only reveals/unlocks once Act I\'s tribulation is crossed (D11 — veil the ahead, never the now).',
+    })
   })
 })
 

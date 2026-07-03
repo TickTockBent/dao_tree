@@ -9,7 +9,7 @@
 // engine hard-fails (defense in depth ahead of the linter) if it encounters a
 // layer with no entry here.
 
-import type { LayerId, Scope, TreeId } from '@/engine/types'
+import type { CrossTreeKeepKey, LayerId, Scope, TreeId } from '@/engine/types'
 
 export interface TreeRow {
   readonly id: TreeId
@@ -76,3 +76,104 @@ export const TREE_DATA: TreeData = {
     severing: { scope: 'life' },
   },
 }
+
+// ---- §5 cross-tree keeps (docs/slice-9.md §5) ------------------------------
+//
+// "Act II's tree reads Act I state through explicit keep-rules — every
+// Act I → Act II dependency is DECLARED, not emergent." KEEP_RULES (above,
+// keep-rules.ts) is the exception mechanism WITHIN tree scope (a realm keeps
+// a lower realm's `best`/`milestones` across its own tree's cascade).
+// CROSS_TREE_KEEPS is a DIFFERENT, additional surface: it declares every
+// place Act II code reads a fact that originated in Act I (or in a
+// pre-existing life-scoped system Act I built out, e.g. the Dao lattice or
+// the Alchemy profession slot) — regardless of whether that fact is
+// tree-scoped, life-scoped, or eternal. Nothing about persistence scope
+// forces this to be declared; only this table + the lint below does.
+//
+// DISCIPLINE: any future Act II addition that reads Act I (or Act-I-adjacent
+// life-scoped) state MUST add a row here. The lint in rules.test.ts
+// ('§5 cross-tree keeps') enforces the mechanically-checkable subset:
+//   - every clause key an act2-tree realm's reveal/unlock condition uses must
+//     appear as some row's `reads` value (auto-iterated off TREE_DATA/
+//     REALM_DATA — a future act2 realm with an undeclared read fails);
+//   - every row's `reads` value is itself well-formed: a valid
+//     ConditionClauses key, or a dotted store descriptor ("store.field");
+//   - the doReset cascade (engine/doReset.ts's treeResetKeepKeys) never
+//     lets a realm reset a realm in a different tree — the runtime
+//     same-tree guard, re-checked here as a data invariant over every
+//     REALM_DATA pair.
+// What the lint CANNOT check: that a store-level `reads` descriptor (e.g.
+// "body.soulAspect") is actually the field a consumer reads — that's a
+// code-review discipline, not a data-shape one. It also does not, and
+// cannot without inventing false precision, distinguish an Act I entry that
+// merely RECORDS a fact (e.g. the journal's own `tribulationPassed` entry)
+// from an Act II entry that CONSUMES it (`actTwoOpens`) purely from the
+// clause key — both use the same key. Only rows for genuine Act II
+// consumers are declared below; Act I's own record-keeping of its own facts
+// is not a cross-tree read and is deliberately NOT enumerated here.
+
+export interface CrossTreeKeepRow {
+  readonly key: CrossTreeKeepKey
+  /**
+   * The Act I (or Act-I-adjacent life-scoped) state read. Either a
+   * ConditionClauses key (meets()-expressible — e.g. 'tribulationPassed') or
+   * a dotted store descriptor ("store.field", e.g. 'body.soulAspect') for
+   * reads that bypass meets() entirely (raw store getters).
+   */
+  readonly reads: string
+  /** What Act II thing reads it. */
+  readonly consumer: string
+  /** One-line rationale. */
+  readonly rationale: string
+}
+
+export const CROSS_TREE_KEEPS: readonly CrossTreeKeepRow[] = [
+  {
+    key: 'realmXTribulationGate',
+    reads: 'tribulationPassed',
+    consumer: 'realm x (Spirit Severing) reveal/unlock',
+    rationale: 'Act II\'s first content only reveals/unlocks once Act I\'s tribulation is crossed (D11 — veil the ahead, never the now).',
+  },
+  {
+    key: 'daoManifestationGate',
+    reads: 'tribulationPassed',
+    consumer: 'dao store tribulationGateMet() — Manifestation tier + ring-3 node buy gate',
+    rationale: 'Manifestation-grade lattice power and whole ring-3 nodes are Act II-caliber content layered onto the pre-existing (Act I) lattice; gating them on the crossing keeps Act I\'s pinned pacing bands from moving.',
+  },
+  {
+    key: 'journalActTwoOpens',
+    reads: 'tribulationPassed',
+    consumer: 'journal actTwoOpens entry',
+    rationale: 'The journal entry announcing Act II\'s arrival latches on the same crossing that opens realm x.',
+  },
+  {
+    key: 'severingSoulAspectRead',
+    reads: 'body.soulAspect',
+    consumer: 'severing store isAcquired/contributionOf (soulAspect severable)',
+    rationale: 'The soulAspect severable\'s availability and its live contribution both read the Act I-chosen Nascent Soul aspect.',
+  },
+  {
+    key: 'severingProfessionRead',
+    reads: 'alchemy.professionChosen',
+    consumer: 'severing store isAcquired (profession severable)',
+    rationale: 'The profession severable is only available once Act I\'s profession slot has been picked.',
+  },
+  {
+    key: 'severingExtraordinaryMeridiansRead',
+    reads: 'body.extraordinaryMeridians',
+    consumer: 'severing store isAcquired/contributionOf (extraordinaryMeridians severable)',
+    rationale: 'The extraordinary-meridian severable\'s availability threshold and contribution magnitude both read the Act I body buyable count.',
+  },
+  {
+    key: 'severingManifestationRead',
+    reads: 'anyDaoNode',
+    consumer: 'severing store isAcquired (manifestation severable)',
+    rationale: 'The manifestation severable is available once any lattice node reaches the Manifestation tier (anyDaoNode >= 3) — the same tribulation-gated threshold as daoManifestationGate.',
+  },
+  {
+    key: 'hintSeverSpiritRead',
+    reads: 'anyDaoNode',
+    consumer: 'hints severSpirit nudge',
+    rationale: 'The hint pointing the player at Spirit Severing fires on the same Manifestation-reached signal (anyDaoNode >= 3) as the manifestation severable\'s own availability check.',
+  },
+]

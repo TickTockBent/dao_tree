@@ -16,6 +16,11 @@
 //   §7.6 alchemy data          — closed economy, accelerant-only effects, §6.6 optionality.
 //   §6.3 demon trial data      — completability by construction, ascending thresholds,
 //                                resolvable trial keys, positive sources/bleed/repeat.
+//   §5 cross-tree keeps (docs/slice-9.md §5, distinct from the early-game-spec
+//                         §5 above) — every act2-tree realm's clause keys are
+//                         declared in CROSS_TREE_KEEPS; the table's own rows
+//                         are well-formed; the doReset cascade never crosses
+//                         tree membership.
 
 import { describe, it, expect } from 'vitest'
 import Decimal from 'break_eternity.js'
@@ -24,6 +29,7 @@ import { BODY_DATA } from '@/data/body'
 import { GATE_DATA } from '@/data/gates'
 import { SETPIECE_DATA } from '@/data/setpieces'
 import { KEEP_RULES } from '@/data/keep-rules'
+import { TREE_DATA, CROSS_TREE_KEEPS } from '@/data/trees'
 import { LATTICE_DATA } from '@/data/lattice'
 import { STANCE_DATA } from '@/data/stances'
 import { SECT_DATA } from '@/data/sect'
@@ -36,8 +42,9 @@ import { ALCHEMY_DATA } from '@/data/alchemy'
 import { HEART_DEMON_DATA, findDemonTrial } from '@/data/heart-demons'
 import { SECLUSION_DATA } from '@/data/seclusion'
 import { meets, TEMPER_TIER_ORDER } from '@/engine/meets'
-import type { GameState } from '@/engine/meets'
+import type { GameState, ConditionClauses } from '@/engine/meets'
 import type { MaterialKey } from '@/engine/types'
+import { treeResetKeepKeys } from '@/engine/doReset'
 
 /**
  * A synthetic, fully-empty GameState — built from real REALM_DATA/LATTICE_DATA
@@ -595,5 +602,126 @@ describe('§8.5 seclusion data', () => {
       const costKeys = Object.keys(rung).filter((k) => k.toLowerCase().includes('cost'))
       expect(costKeys).toEqual(['qiCost'])
     }
+  })
+})
+
+// ---- §5 cross-tree keeps (slice 9 / docs/slice-9.md §5) ---------------------
+//
+// "Act II's tree reads Act I state through explicit keep-rules — every
+// Act I → Act II dependency is DECLARED, not emergent." CROSS_TREE_KEEPS
+// (src/data/trees.ts) is that declaration surface; these checks make sure it
+// stays honest as the data grows.
+
+/**
+ * A completeness-checked sample `Condition` covering every `ConditionClauses`
+ * key. `satisfies` forces this object to have a property for every key in the
+ * grammar — if `meets.ts` adds a clause, this literal fails to type-check
+ * until it is updated, so `ALL_CONDITION_CLAUSE_KEYS` can never silently fall
+ * out of sync with the real grammar (caught by `npm run build`, this file's
+ * own gate).
+ */
+const SAMPLE_ALL_CLAUSES = {
+  qi: 0,
+  meridians: 0,
+  primaryMeridiansAll: true,
+  temperTier: 'skin',
+  realm: ['q', 0],
+  daoNode: ['metal', 0],
+  daoElementTier: ['metal', 0],
+  anyDaoNode: 0,
+  coreForged: true,
+  coreBelowCeiling: true,
+  sectJoined: true,
+  contribution: 0,
+  achievement: ['q', 0],
+  secretRealmClears: 0,
+  professionChosen: true,
+  corruption: 0,
+  daoHeartStacks: 0,
+  seclusionRungs: 0,
+  tribulationPassed: true,
+} satisfies ConditionClauses
+
+const ALL_CONDITION_CLAUSE_KEYS: readonly string[] = Object.keys(SAMPLE_ALL_CLAUSES)
+
+/** Layer ids belonging to a given tree, derived from TREE_DATA (no hardcoded ids). */
+function layerIdsInTree(treeId: string): string[] {
+  return Object.entries(TREE_DATA.layers)
+    .filter(([, entry]) => entry.scope === 'tree' && entry.tree === treeId)
+    .map(([id]) => id)
+}
+
+describe('§5 cross-tree keeps', () => {
+  it('every act2-tree realm\'s reveal/unlock clause keys are declared in CROSS_TREE_KEEPS', () => {
+    // Auto-iterating: derives act2 membership from TREE_DATA, not a
+    // hardcoded realm id — a future act2 realm with an undeclared read fails.
+    const act2LayerIds = new Set(layerIdsInTree('act2'))
+    const declaredReads = new Set(CROSS_TREE_KEEPS.map((row) => row.reads))
+    for (const realm of REALM_DATA) {
+      if (!act2LayerIds.has(realm.id)) continue
+      const clauseKeys = [
+        ...Object.keys(realm.reveal ?? {}),
+        ...Object.keys(realm.unlock ?? {}),
+      ]
+      for (const clauseKey of clauseKeys) {
+        expect(
+          declaredReads.has(clauseKey),
+          `${realm.id}'s reveal/unlock reads "${clauseKey}" — undeclared in CROSS_TREE_KEEPS`,
+        ).toBe(true)
+      }
+    }
+  })
+
+  it('every CROSS_TREE_KEEPS row\'s `reads` value is a valid ConditionClauses key or a dotted store descriptor', () => {
+    // This is the mechanically-honest half of the §5 spec's part (b): it
+    // CANNOT tell an Act I entry that merely records a fact (the journal's
+    // own `tribulationPassed` entry) apart from an Act II entry that
+    // consumes it (`actTwoOpens`) — both use the identical clause key, so
+    // "assert journal/hint consumers of an act2-consumed key are declared"
+    // is not checkable without inventing a hardcoded distinction. What IS
+    // checkable, and is checked here: every declared `reads` value is
+    // well-formed — either a real clause in the meets() grammar, or a dotted
+    // "store.field" descriptor — so the table itself cannot silently rot
+    // with a typo'd or renamed read.
+    const dottedStoreDescriptor = /^[a-z]+\.[a-zA-Z]+$/
+    for (const row of CROSS_TREE_KEEPS) {
+      const isConditionClauseKey = ALL_CONDITION_CLAUSE_KEYS.includes(row.reads)
+      const isDottedStoreDescriptor = dottedStoreDescriptor.test(row.reads)
+      expect(
+        isConditionClauseKey || isDottedStoreDescriptor,
+        `${row.key}: reads "${row.reads}" is neither a ConditionClauses key nor a dotted store descriptor`,
+      ).toBe(true)
+    }
+  })
+
+  it('the doReset cascade never resets a realm across tree membership (data invariant on the runtime same-tree guard)', () => {
+    // Exercises engine/doReset.ts's treeResetKeepKeys over every REALM_DATA
+    // pair using today's TREE_DATA/REALM_DATA as the fixture: whenever a
+    // cascade actually fires (non-null), the resetter and its target must
+    // share a tree. Turns the same-tree guard from "trust the runtime code"
+    // into "assert it holds over the real data" — it catches a future
+    // doReset.ts regression that weakens/removes the tree-equality check
+    // while this data still declares two trees; it does not (and cannot)
+    // prove the guard's logic is correct in the abstract.
+    const neverGranted = () => false
+    for (const resetter of REALM_DATA) {
+      for (const target of REALM_DATA) {
+        if (target.id === resetter.id) continue
+        const keepKeys = treeResetKeepKeys(target.id, resetter.id, neverGranted)
+        if (keepKeys === null) continue // not a cascade target (scope/tree/row mismatch)
+        const resetterTree = TREE_DATA.layers[resetter.id]?.tree
+        const targetTree = TREE_DATA.layers[target.id]?.tree
+        expect(
+          targetTree,
+          `${resetter.id} (tree ${resetterTree}) cascades onto ${target.id} (tree ${targetTree}) — crosses tree membership`,
+        ).toBe(resetterTree)
+      }
+    }
+  })
+
+  it('CROSS_TREE_KEEPS is non-empty with unique keys', () => {
+    expect(CROSS_TREE_KEEPS.length).toBeGreaterThan(0)
+    const keys = CROSS_TREE_KEEPS.map((row) => row.key)
+    expect(new Set(keys).size).toBe(keys.length)
   })
 })
