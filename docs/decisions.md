@@ -468,3 +468,45 @@ target — Act II's Realistic 9h is a number that will move as content
 fills in, not a band to defend. The inversion (experience actor fastest)
 is a fact to observe, revisited when the almanac/loot layer add texture
 to Act II's idle windows.
+
+## D35 — Sever the Flowing Form: the stance-lock severable (Q11 closed)
+
+*2026-07-03, the Q11 design pass; all three calls ruled.* Option A (sever
+the stance system, m = best stance mult) is PROVABLY dead: a toggle's
+contribution was never passive, so nullifying it changes nothing and the
+ramp starts at 0.5×2.0 = 1.0 exactly — a pure buff, D25's inversion
+derived from arithmetic instead of discovered by probe. Generalized as
+design principle #35.
+
+**The shape (Option C):** you must be WEARING a stance to sever it. The
+knife makes the form flesh — permanent, involuntary, its modifiers
+captured verbatim as the m (trance: qi 0.7 / insight 2.0) and run through
+the STANDARD ramp on both axes: qi ×0.35 at the cut (the deepest window
+in the game) healing through ×0.7 (where the toggle used to be) to ×1.4
+at cap; insight ×1.0 → ×4.0.
+
+**Call 1 — full ramp, both axes.** The tamer variant (downside constant)
+is a permanent tax, not a severance — no recovery arc, no mastery path
+back. The severity is what makes the recovery meaningful. Constraint: the
+×0.35 trough must be SURVIVABLE — the actor must still fill the first
+offering step and make forward progress (measured in the sim before
+shipping; if it can't, the number is wrong regardless of the design).
+D32's recovery projection is the informed-consent safety net.
+
+**Call 2 — the lock is a floor, not a cage.** Other stances stack on top
+of the locked form's passive base. Mechanically: killing Sword Trance to
+pay for the lock is an invisible cost the ramp never compensates.
+Thematically: the cultivator practices other forms FROM the locked one —
+depth, not restriction; stacking Sword Trance over the trance-lock during
+the window is emergent strategy from two existing systems.
+
+**Call 3 — the name ships:** "Sever the Flowing Form" — the form is made
+permanent, not destroyed.
+
+**Assertion form (new class, generalized now):** conditional-contribution
+severables assert **cap·m > 1 on every axis + breakeven within horizon**
+(baseline 1, not m — a novel cost imposed rather than a benefit removed).
+Roster consequence: Lattice closes its 2-live breach via the Flowing Form
+(it is the stance user); Meridian's honest route is the post-D34 cheap
+Manifestation path (~12k insight) — both breaches close through CHOICES
+(D31), and the sim policies learn both.

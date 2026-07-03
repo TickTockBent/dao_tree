@@ -122,3 +122,17 @@ theme (the pass-by-pass history is in git).
 34. **Steam soft-yes discipline**: save-migration and achievement
     scaffolding are cheap to build in and expensive to retrofit — option
     value decays fastest of all parked decisions.
+35. **Severing a conditional thing cannot create an unconditional loss.**
+    The general form of the stance inversion (D25→D29) and the metalSoul
+    trap (D1): a severable candidate whose live contribution is CONDITIONAL
+    (toggled, triggered, situational) produces a pure-buff inversion under
+    the standard ramp — nullifying it changes the passive pipeline by
+    nothing, and ratio×m starts at c·m ≥ 1 for any m ≥ 1/c. Only
+    unconditional, passive contributions create a real weakness window
+    through the c·m start. Lint-checkable: every severable declares its
+    contribution class; conditional-class severables must use the
+    LOCK shape (the conditional thing becomes permanent — a novel cost
+    imposed, not a benefit removed) and its own assertion form: **cap·m > 1
+    on every axis + breakeven within horizon** (the standard lifetime-net
+    form assumes baseline m; a lock's baseline is 1). Checked at proposal
+    time, never discovered by probe again.

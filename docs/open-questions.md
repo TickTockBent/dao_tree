@@ -75,20 +75,10 @@ severance ritual; stance to v2.)*
 the sim's always-on trance usage caused the inversion, 85.2% of the gap
 closed by insight-binding-only engagement. No data change.)*
 
-## Q11 — Stance as severable v2 *(trigger: the Act II tune pass; unblocked by D29)*
-
-D31's coverage ruling names the stance as the severable that closes both
-roster breaches (MeridianProbe and LatticeFocused each land 2 live
-severables — each lacks what the other's identity provides). D29 cleared
-the trance's data (the D25 inversion was sim policy error), so the
-redesign is unblocked — but D29's numbers also show the trance is
-~net-neutral for the lattice optimizer even when used well, so severing
-it as-captured would still have no felt weakness window. The design task:
-give the stance severable a real m (what is actually lost when you sever
-your relationship to technique itself?) that fits D23's shape. Candidate
-framing: sever the STANCE SYSTEM (all stances, the toggle itself), not
-one stance's effect — the loss is flexibility, priced as the best-stance
-uptime the build actually uses.
+*(Q11 — stance as severable v2 — designed and closed 2026-07-03, moved to
+[decisions.md](decisions.md) D35: "Sever the Flowing Form" — the stance-lock
+shape, full ramp both axes, floor-not-cage, with design principle #35 and
+the conditional-contribution assertion class.)*
 
 ## Q12 — Realm-x substage qiMults: decouple scaling from compensation *(trigger: the Act II tune pass, with D30's re-measured numbers)*
 
