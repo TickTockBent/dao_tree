@@ -136,3 +136,12 @@ theme (the pass-by-pass history is in git).
     on every axis + breakeven within horizon** (the standard lifetime-net
     form assumes baseline m; a lock's baseline is 1). Checked at proposal
     time, never discovered by probe again.
+36. **The death boundary splits state into what the body built and what
+    the soul knows.** Body-built state is life-scoped, rebuilt each life;
+    soul-known state is soul-scoped and persists. Power resets; identity
+    carries. When a system contains both, split it at the boundary rather
+    than choosing one scope for the whole. (The general form of the Dao
+    Heart resolution, D36 — farmable stacks die with the flesh, the
+    endurance record carries; also the Q6 audit criterion, and the reason
+    karma's floor is zero while every within-life accumulator floors
+    above it.)

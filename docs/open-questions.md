@@ -14,15 +14,10 @@ doesn't have; v1 shipped an Insight inversion instead. The modifier family
 (gain-from-spending, cost-from-time, progress-from-stillness) is recorded in
 `secret-realm.ts`'s header. Build the plumbing when Act II adds its sites.
 
-## Q3 — Dao Heart scope across reincarnation *(trigger: slice 10 Samsara design, FIRST)*
-
-Currently life-scoped; the lean was eternal — but eternal + the repeat
-ladder's farmability = an unbounded meta-currency across lives. That is
-either the demonic fantasy fully expressed or the thing Samsara soft-caps —
-and it is THE question Samsara's economy answers before any numbers are
-written. Likely resolution shape: an instance of the accumulator math
-(diminishing per axis, unbounded breadth — see
-[architecture.md](architecture.md)).
+*(Q3 — Dao Heart scope across reincarnation — decided 2026-07-04, moved to
+[decisions.md](decisions.md) D36: split at the death boundary. The farmable
+stacks are body-state and die with the flesh; the endurance record is
+soul-state and carries. No unbounded meta-currency — principle #36.)*
 
 ## Q4 — Seclusion rungs across reincarnation *(trigger: slice 10 implementation)*
 
@@ -47,6 +42,11 @@ grade (soul, or raw material for the world-side chronicle?), Dao Heart
 (soul, presumably — but decided, not defaulted), achievements (file-scoped
 by construction — the Steam-account analog). A named design task, not an
 emergent discovery.
+
+**Audit criterion set by D36 (2026-07-04):** for each item, ask "did the
+body build this, or does the soul know it?" — body-state dies, soul-state
+carries, and what belongs to neither is probably world-scoped (principle
+#36). Audit table delivered same day; closes when Wes rules on it.
 
 ## Q7 — Event-driven achievements *(trigger: when a slice touches the relevant systems)*
 

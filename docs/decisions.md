@@ -510,3 +510,62 @@ Roster consequence: Lattice closes its 2-live breach via the Flowing Form
 (it is the stance user); Meridian's honest route is the post-D34 cheap
 Manifestation path (~12k insight) — both breaches close through CHOICES
 (D31), and the sim policies learn both.
+
+## D36 — Karma pays for firsts; Dao Heart splits at the death boundary (DQ1 / Q3 closed)
+
+*2026-07-04, the slice-10 design pass, first ruling.*
+
+**Karma income prices novelty.** Every income source is an accumulator row
+paying `base × rⁿ` (n = prior lives that already earned it) with **floor
+f = 0** — and the zero floor is the design, not a tuning value. Every other
+accumulator in the game floors above zero (ascents f = 0.05, the severance
+ritual f = 0.25) because those mechanics should never vanish — a breath,
+never nothing. Karma is the one accumulator where hitting zero is correct:
+doing the same thing again genuinely isn't a first anymore and shouldn't
+pay like one. The game doesn't pretend the tenth identical life is as
+interesting as the first. Grade-class sources pay **personal-best deltas
+only** (the actTwoEntryGrade latch mechanic).
+
+**Consequence: karma is the engine of the build-sequencing dynasty
+metagame** (principle #30). "Gatherer this life, sect the next, lattice
+hermit after" is now the karma-optimal path *by the math* — each life
+encounters firsts the previous builds couldn't reach — with the incentive
+stated by the income table rather than enforced by a rule. Repeating a
+favorite build is never punished; it just doesn't re-earn the repeated
+parts. Diminishing novelty, honestly priced.
+
+**Granularity requirement (spec-blocking):** firsts must be granular
+enough that a similar build in different circumstances still generates
+them — "first Nascent Soul as a meridian build," "first Wandering Sage met
+during Core Formation," and "first Flowing Form severed" are distinct
+firsts, never collapsed into their coarse parents. The granularity of the
+firsts table is THE tuning lever for how hard karma pushes exploration
+versus tolerating build loyalty. **The granularity scheme goes into the
+slice-10 spec before the firsts table is written.**
+
+**Dao Heart splits at the death boundary (Q3 closed).** Q3's tension
+(eternal + farmable = unbounded meta-currency) dissolves once Dao Heart is
+recognized as two things wearing one name. The farmable stacks — power
+gained from facing heart demons — are **body-state**: built in flesh, they
+die with it (life-scoped, as today). The endurance record — which trials
+the soul has faced — is **soul-state** and carries forever: identity,
+chronicle material, karma deed-rows (full on the soul's first clear of
+each trial type, decaying to zero on repeats), and a potential gate for
+future demonic content. Principle #20's question ("unbounded
+meta-currencies are explicit decisions") is answered concretely: **no** —
+power is bounded per-life by construction, identity is bounded by
+wider-not-taller math. The demonic fantasy survives whole: each life
+rebuilds its demon-fighting power from scratch (so each life's demons are
+real challenges, never stomped by carried stacks), while the soul's record
+of having faced the deepest trials persists.
+
+**The death boundary generalizes** into design principle #36 and becomes
+the Q6 audit criterion: for every currently-eternal state, ask "did the
+body build this, or does the soul know it?" Body-state dies; soul-state
+carries; what belongs to neither is probably world-scoped.
+
+**Enforcement:** lint-shape — every karma income row has r < 1 and f = 0,
+grade rows are delta-typed (boundedness provable from the data shape);
+dynasty-harness assertion (when pinned) — a repeat-sequence of N identical
+lives earns strictly less than any breadth-sequence of equal length; §6.6
+no-Samsara run unchanged.
