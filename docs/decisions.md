@@ -569,3 +569,67 @@ grade rows are delta-typed (boundedness provable from the data shape);
 dynasty-harness assertion (when pinned) — a repeat-sequence of N identical
 lives earns strictly less than any breadth-sequence of equal length; §6.6
 no-Samsara run unchanged.
+
+## D37 — The scope audit: the death boundary sorts it; the chronicle founds the world scope (Q4/Q6 closed, DQ3 folded)
+
+*2026-07-04, the slice-10 design pass, second ruling. The audit table
+"turned an item-by-item judgment call into a mechanical sort" (Wes).*
+
+**The table (ruled as delivered):**
+- **Life-scoped, unchanged** (body-built, dies at rebirth): body
+  (meridians/temper/soul aspect — aspect is a per-life configuration,
+  re-chosen fresh), gate checkpoint deeds (re-fire per §8.1), sect
+  personal standing, alchemy profession choice, secret, severing actives
+  (D23), demons' corruption + daoHeartStacks (D36).
+- **Promoted eternal → soul** (the soul knows it): the soul store
+  (already the harness bridge), seclusion rungs + Deep Meditation
+  knowledge (Q4 confirmed — "a new body does not unlearn it"), legacy
+  grades/personal bests (karma's delta inputs; read by the chronicle,
+  owned by the soul), and the **journal** — the soul's accreted memory.
+  The strand workshop decided this row: revisitation only works if a new
+  life can visit the spring a past life saw. Entries never re-announce.
+- **Splits at the boundary (#36 applied):** demons (D36); the dao lattice
+  at rebirth — Glimpses carry free, Seeds carry only via memory-fragment
+  purchase, Manifestations die but re-walk at a steep discount driven by
+  a new soul accumulator ("the walked path"); insight banks and stance
+  toggles die.
+- **Neither body nor soul:** achievements stay file-scoped (D9b); the
+  **chronicle is world-scoped and is the founding world-scope instance**
+  — the DQ7/DQ8 merger. "The chronicle was always the world's record
+  dressed up as a player feature" (Wes): epitaphs, encounter provenance,
+  what the springs remember — persists after death, belongs to no soul.
+  One structure, three consumers: epitaph rendering, karma computation at
+  death, future shrine/strand reads. Sect seed-stores wait for the
+  almanac era.
+- **New states:** karma balance → soul; rebirth counter → soul (doubles
+  as the strand gate clause); roots (pending DQ5) → life-scoped
+  configuration purchased at rebirth; studied techniques → life, retained
+  only via memory fragments.
+
+**The Seed-recovery karma cost is the continuity lever (⟨tune⟩, ruled
+direction):** it controls how much build-continuity a player can buy
+across lives versus how much they must rebuild. Too cheap → every life
+starts with a near-complete lattice (kills the re-discovery arc); too
+expensive → persistence feels vestigial. Sweet spot: **one life's worth
+of karma buys back a few Seeds, not all of them** — enough that WHICH
+Seeds to carry expresses a real preference, never so much that carrying
+is automatic. Tune with dynasty-harness evidence.
+
+**The chronicle curation rule (schema-level, not a post-hoc filter):** as
+a world-scope accumulator the chronicle obeys wider-not-taller (#21) — and
+for the chronicle the diminishing return is a VOLUME constraint expressed
+as curation. A thousand-life save must not produce a thousand-entry
+chronicle nobody reads: later lives' entries are briefer and more
+selective **unless something genuinely novel happened — which karma
+already measures**. The karma receipt is the curation signal. The dynasty
+history reads the way real ones do: founding lives get chapters, the
+middle era gets summaries, only exceptional late lives get full
+treatment. The data shape must support per-entry richness tiers from day
+one.
+
+**DQ3 folded (the rebirth cut):** fully determined by the table plus the
+committed graded lattice rule — everything life-scoped resets, soul/world/
+file-scoped state is topologically unreachable by the rebirth cascade.
+Enforcement: the reincarnation closure lint (§8.1 committed design) —
+rebirth is a compiled cascade tier over TREE_DATA's differentiated scope
+enum, never a hand-written reset list.

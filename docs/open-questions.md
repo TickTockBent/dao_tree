@@ -19,11 +19,10 @@ doesn't have; v1 shipped an Insight inversion instead. The modifier family
 stacks are body-state and die with the flesh; the endurance record is
 soul-state and carries. No unbounded meta-currency — principle #36.)*
 
-## Q4 — Seclusion rungs across reincarnation *(trigger: slice 10 implementation)*
-
-Not really open — a confirmation checkpoint. Shipped eternal by design
-intent ("QoL is never clawed back"); the Samsara implementer must not
-"helpfully" reset them.
+*(Q4 — Seclusion rungs across reincarnation — confirmed 2026-07-04 in
+[decisions.md](decisions.md) D37: soul-scoped, the soul learned to
+cultivate unattended. The Samsara implementer must not "helpfully" reset
+them.)*
 
 ## Q5 — Negation in `meets()` *(trigger: next hint-grammar touch)*
 
@@ -33,20 +32,13 @@ combinator retires most shadow keys. Related: the achievement registry's
 "not expressible" list (Q7) partly overlaps — negation would unlock "core at
 its ceiling."
 
-## Q6 — Eternal-scope differentiation audit *(trigger: slice 10 Samsara design)*
-
-When Samsara differentiates today's `eternal` scope into `soul | world | dao`
-(see architecture.md), every currently-eternal state needs an explicit
-assignment: seclusion rungs (soul? dao?), Deep Meditation knowledge, legacy
-grade (soul, or raw material for the world-side chronicle?), Dao Heart
-(soul, presumably — but decided, not defaulted), achievements (file-scoped
-by construction — the Steam-account analog). A named design task, not an
-emergent discovery.
-
-**Audit criterion set by D36 (2026-07-04):** for each item, ask "did the
-body build this, or does the soul know it?" — body-state dies, soul-state
-carries, and what belongs to neither is probably world-scoped (principle
-#36). Audit table delivered same day; closes when Wes rules on it.
+*(Q6 — Eternal-scope differentiation audit — ruled 2026-07-04, moved to
+[decisions.md](decisions.md) D37: the death boundary (D36/#36) sorted the
+full table mechanically. Headlines: journal → soul (the soul's accreted
+memory — the strand-revisitation requirement decided it); chronicle →
+world, the FOUNDING world-scope instance with a schema-level curation
+rule; enforcement = the reincarnation-closure lint over the
+differentiated scope enum.)*
 
 ## Q7 — Event-driven achievements *(trigger: when a slice touches the relevant systems)*
 
