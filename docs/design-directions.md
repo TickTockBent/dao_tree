@@ -157,6 +157,13 @@ the worldview to see it (D11's deepest expression).
 - **Content-matrix discipline:** few locations × few strands, deep
   outcomes. Three springs with real consequences beat thirty with flavor
   text.
+- **Release cadence (Wes, 2026-07-04): one strand = one self-contained
+  arc.** Strands ship individually post-launch, each a complete arc
+  (genesis event, nurture content, revisitation outcomes, tapestry
+  interactions), never as a batch. This is the cost control — and it
+  makes each strand a content-update headline. Architectural consequence:
+  the strand registry must be additive-by-construction (a new strand is a
+  data entry + authored content, never a migration).
 
 **What slice 10 reserves (cheap, in-passing):** the `dao` scope enum seat
 (planned anyway, now with a named intended citizen); the rebirth counter as
