@@ -25,6 +25,16 @@ import { useHeartDemonsStore } from '@/stores/heartDemons'
 import { useDaoStore } from '@/stores/dao'
 import { useSectStore } from '@/stores/sect'
 import { useSoulStore } from '@/stores/soul'
+// Karma instrumentation (slice 10 step 2, D36 + D40). The karma store + firsts
+// table are used READ-ONLY (recordFirst/settleLife are the shipped receipt math;
+// deriveBuildMark is the shipped qualifier rule) — the sim measures the shipped
+// economy, never a mirror of it. legacy/tribulation stores are read for the
+// grade-delta rows.
+import { useKarmaStore } from '@/stores/karma'
+import { useLegacyStore } from '@/stores/legacy'
+import { useTribulationStore } from '@/stores/tribulation'
+import { KARMA_DATA, deriveBuildMark } from '@/data/karma'
+import type { BuildInvestment } from '@/data/karma'
 import { findRealm } from '@/data/realms'
 import { SETPIECE_DATA } from '@/data/setpieces'
 import { LATTICE_DATA } from '@/data/lattice'
@@ -45,8 +55,8 @@ import type { PillKey, SectArchetypeKey, SecretRealmSiteKey } from '@/engine/typ
 // FROM dynasty.ts (one direction only); dynasty.ts imports nothing at runtime
 // from here, so the two never form a runtime cycle and importing pacing.ts for
 // its single-life adapter (e.g. from a test) is safe.
-import type { SoulBridge, LifeResult, DynastySequenceSpec } from './dynasty'
-import { printDynastySection } from './dynasty'
+import type { SoulBridge, LifeResult, DynastySequenceSpec, KarmaCarry, KarmaLifeMeasurement } from './dynasty'
+import { printDynastySection, printDynastyKarmaSection } from './dynasty'
 
 // ---- Pinned budgets (from the old pacing sim, pass-3 tune) ------------------
 // Pinned budgets from the old pacing sim (reference targets for future parity pins).
@@ -3439,6 +3449,14 @@ function printActIIRoster(actors: Act2ActorResult[], spine: Act2Result): void {
 //    conservatively (carry only what soul.ts already carries) and defers.
 function runLifeToTribulation(policy: Act2ActorPolicy, incoming: SoulBridge): LifeResult {
   const result = runActIIActor(policy, incoming)
+  // KARMA (slice 10 step 2, D36 + D40). Derive this life's firsts from its
+  // ACTUAL outcomes (the live pinia is still the Act I end-state here — Act II is
+  // analytic and mutates no store — plus the Act II result for the pieces the
+  // analytic model owns/severs), then settle through the REAL karma store seeded
+  // from the incoming soul-scoped carry. Read-only usage of the store: the
+  // measured math is the shipped math.
+  const firsts = deriveLifeKarmaFirsts(result)
+  const settlement = settleLifeKarma(incoming.karma, firsts)
   const SECONDS_PER_HOUR = 3600
   return {
     name: policy.name,
@@ -3450,7 +3468,177 @@ function runLifeToTribulation(policy: Act2ActorPolicy, incoming: SoulBridge): Li
     offerings: result.totalOfferings,
     severedKeys: result.severedSeverableKeys,
     finalAscents: result.lifeFinalAscents,
+    karma: settlement.measurement,
+    settledKarma: settlement.carry,
   }
+}
+
+// ---- KARMA firsts derivation + settlement (slice 10 step 2) ------------------
+//
+// The valid karma event keys (recordFirst throws on an unknown key — mirroring
+// achievements.award — so the derivation only ever records rows that exist).
+const KARMA_EVENT_KEYS: ReadonlySet<string> = new Set(KARMA_DATA.map((row) => row.key))
+
+/** One derived first: an event key + its resolved qualifier tuple. */
+export interface DerivedFirst {
+  readonly key: string
+  readonly qualifiers: Readonly<Record<string, string>>
+}
+
+/** The firsts a single life earned, split by how they settle. */
+export interface LifeKarmaFirsts {
+  /** Non-grade firsts (milestones + deeds + encounters) — recorded unconditionally. */
+  readonly nonGrade: readonly DerivedFirst[]
+  /** Grade-row → this life's grade index; recorded only on a personal-best improvement (D40). */
+  readonly gradeValues: readonly (readonly [string, number])[]
+  /** The derived buildMark (reported so the qualifier rule is legible). */
+  readonly buildMark: string
+}
+
+/**
+ * Derive the firsts a life earned from its ACTUAL outcomes.
+ *
+ * QUALIFIER RESOLUTION (conservative v0 — FLAGGED for Wes):
+ *  - rootShape = 'rootless' (the only vocabulary value pre-roots).
+ *  - buildMark = deriveBuildMark(investment) with the investment SNAPSHOT taken
+ *    at life end (conservative; event-time snapshots are finer and deferred).
+ *  - realmEra (encounters) = the highest realm era reached at life end. The sim
+ *    only knows coarse (life-end) timing for a site clear, so the era is resolved
+ *    to the terminal realm — FLAGGED; event-time era resolution is deferred.
+ */
+function deriveLifeKarmaFirsts(result: Act2ActorResult): LifeKarmaFirsts {
+  const realm = useRealmStore()
+  const body = useBodyStore()
+  const sect = useSectStore()
+  const alchemy = useAlchemyStore()
+  const dao = useDaoStore()
+  const secretRealm = useSecretRealmStore()
+  const legacy = useLegacyStore()
+  const trib = useTribulationStore()
+
+  // buildMark investment snapshot (life-end; conservative v0).
+  const investment: BuildInvestment = {
+    meridians: body.primaryMeridians + body.extraordinaryMeridians,
+    latticeNodes: LATTICE_DATA.nodes.filter((node) => dao.nodeTierOwned(node.key) >= 1).length,
+    sectMilestones: sect.milestones.length,
+    // No cumulative brew counter exists (pills are crafted + consumed); the
+    // held-pill count is the conservative life-end proxy. FLAGGED — a lifetime
+    // brew tally is the finer measure, deferred.
+    pillsBrewed: ALCHEMY_DATA.recipes.reduce(
+      (sum, recipe) => sum + alchemy.pillCount(recipe.key),
+      0,
+    ),
+  }
+  const buildMark = deriveBuildMark(investment)
+  const milestoneQualifiers = { rootShape: 'rootless', buildMark }
+
+  // Realm-reached is derived from the UNLOCK LATCH, not realmBest: an n/s
+  // cascade wipes the lower realms' `best` back to 0 (only n survives, via the
+  // soulCarriesTheClimb keep rule, and s is the terminal), but the `unlocked`
+  // latch PERSISTS through every reset (realm.ts resetRealm keeps `unlocked`).
+  // So at life end realmBest sees only n/s, while isUnlocked durably records
+  // every realm the life actually climbed through (you cannot unlock a realm
+  // without meeting the prior realm's climb gate). realm x stays locked (no
+  // tribulation set-piece is simulated) → reachRealm:x correctly never fires.
+  const REALM_CLIMB_ORDER: readonly ('q' | 'f' | 'c' | 'n' | 's')[] = ['q', 'f', 'c', 'n', 's']
+  let terminalEra = 'q'
+  for (const id of REALM_CLIMB_ORDER) if (realm.isUnlocked(id)) terminalEra = id
+
+  const nonGrade: DerivedFirst[] = []
+  const record = (key: string, qualifiers: Readonly<Record<string, string>>): void => {
+    if (KARMA_EVENT_KEYS.has(key)) nonGrade.push({ key, qualifiers })
+  }
+
+  // MILESTONES (rootShape + buildMark). Realm-reached q..s via the unlock latch.
+  for (const id of REALM_CLIMB_ORDER) {
+    if (realm.isUnlocked(id)) record(`reachRealm:${id}`, milestoneQualifiers)
+  }
+  // passFirstTribulation: the actor reached the tribulation trigger and Act II
+  // ran — the crossing is the premise of a dynasty life, so it always fires.
+  record('passFirstTribulation', milestoneQualifiers)
+  // latticeManifestation: no Act I actor reaches Manifestation (tier 3); the
+  // Act II model owns/severs it analytically, so derive it from the result.
+  if (result.manifestAvailable || result.severedSeverableKeys.includes('manifestation')) {
+    record('latticeManifestation', milestoneQualifiers)
+  }
+  if (alchemy.professionChosen) record('chooseProfession', milestoneQualifiers)
+  if (sect.joined) record('joinSect', milestoneQualifiers)
+
+  // DEEDS — severances (headline-only, no qualifiers per KARMA_DATA). Heart-demon
+  // trials (endureTrial:*) are NOT exercised by any roster actor — the sim never
+  // ticks heartDemons for these profiles — so those deed rows never fire (noted).
+  for (const key of result.severedSeverableKeys) {
+    record(`severed:${key}`, {})
+  }
+
+  // ENCOUNTERS — secret-realm site first-clears (realmEra qualifier).
+  for (const row of KARMA_DATA) {
+    if (!row.key.startsWith('clearedSite:')) continue
+    const siteKey = row.key.slice('clearedSite:'.length) as SecretRealmSiteKey
+    if ((secretRealm.clears[siteKey] ?? 0) >= 1) {
+      record(row.key, { realmEra: terminalEra })
+    }
+  }
+
+  // GRADE DELTAS (delta-typed, unqualified; recorded only on a personal-best
+  // improvement across lives — resolved against the carried bests in settlement).
+  // legacy/tribulation grades are recorded ONLY on the tribulation crossing,
+  // which the roster does not simulate (it stops at the trigger) — so those two
+  // rows stay -1 and never fire (noted in report).
+  const gradeValues: (readonly [string, number])[] = [
+    ['foundationGradeDelta', body.foundationGrade],
+    ['coreGradeDelta', body.coreGrade],
+    ['legacyGradeDelta', legacy.actOneGrade],
+    ['tribulationGradeDelta', trib.tribGrade],
+  ]
+
+  return { nonGrade, gradeValues, buildMark }
+}
+
+/**
+ * Settle a life's firsts through the REAL karma store, seeded from the incoming
+ * soul-scoped carry (mirrors how runActIIActor seeds soul.load per life). Calls
+ * the shipped recordFirst/settleLife — the measured math is the shipped math.
+ * Grade deltas record only on a personal-best improvement vs the carried bests.
+ */
+export function settleLifeKarma(
+  carried: KarmaCarry,
+  firsts: LifeKarmaFirsts,
+): { measurement: KarmaLifeMeasurement; carry: KarmaCarry } {
+  const karma = useKarmaStore()
+  // Seed the store from the carried soul-scoped karma (balance + firsts history).
+  karma.load({ balance: carried.balance, lifeLedger: [], firstsHistory: { ...carried.firstsHistory } })
+
+  const firedEventKeys = new Set<string>()
+  for (const first of firsts.nonGrade) {
+    karma.recordFirst(first.key, first.qualifiers)
+    firedEventKeys.add(first.key)
+  }
+  const nextGradeBests: Record<string, number> = { ...carried.gradeBests }
+  for (const [row, value] of firsts.gradeValues) {
+    if (value >= 0 && value > (carried.gradeBests[row] ?? -1)) {
+      karma.recordFirst(row)
+      firedEventKeys.add(row)
+      nextGradeBests[row] = value
+    }
+  }
+
+  const receipt = karma.settleLife()
+  const measurement: KarmaLifeMeasurement = {
+    total: receipt.total,
+    milestoneHeadline: receipt.milestoneHeadline,
+    milestoneEcho: receipt.milestoneEcho,
+    deedEncounter: receipt.deedEncounter,
+    gradeDelta: receipt.gradeDelta,
+    cumulativeBalance: karma.balance,
+    firedEventKeys: [...firedEventKeys],
+  }
+  const carry: KarmaCarry = {
+    firstsHistory: { ...karma.firstsHistory },
+    balance: karma.balance,
+    gradeBests: nextGradeBests,
+  }
+  return { measurement, carry }
 }
 
 // Demo roster policies (each a real Act I end-state + a severing policy, reused
@@ -3479,12 +3667,38 @@ const DYNASTY_LATTICE_POLICY: Act2ActorPolicy = {
   wearsStance: 'breathingTrance',
 }
 
+// A distinct competent-tier spine build for the equal-competence breadth arm of
+// the karma repeat-vs-breadth comparison (D36). Sect-focused: opens the spine +
+// joins the sect, no lattice/pills — its only Act II severable is the soul aspect.
+const DYNASTY_SECT_POLICY: Act2ActorPolicy = {
+  name: 'Sect',
+  actIRunner: spineRunner(SECT_CONFIG),
+  severOrderKeys: ['soulAspect'],
+  holdsPill: false,
+  cadenceCheckinSeconds: null,
+}
+
 const DYNASTY_ROSTER: DynastySequenceSpec<Act2ActorPolicy>[] = [
   { label: 'Competent ×3', sequence: [DYNASTY_COMPETENT_POLICY, DYNASTY_COMPETENT_POLICY, DYNASTY_COMPETENT_POLICY] },
   { label: 'Realistic ×3', sequence: [DYNASTY_REALISTIC_POLICY, DYNASTY_REALISTIC_POLICY, DYNASTY_REALISTIC_POLICY] },
   {
     label: 'Mixed (Competent → Realistic → Lattice)',
     sequence: [DYNASTY_COMPETENT_POLICY, DYNASTY_REALISTIC_POLICY, DYNASTY_LATTICE_POLICY],
+  },
+]
+
+// The karma-measurement roster (spec §6.1 step 2): the three repeat/mixed
+// sequences above (so the numbers show headlines decaying ×r per repeat and
+// grade deltas drying up once bests latch) PLUS one equal-length, equal-
+// competence BREADTH sequence — three distinct competent spine builds — for the
+// D36 repeat<breadth comparison against Competent ×3 (MEASURED, not asserted).
+const DYNASTY_KARMA_BREADTH_LABEL = 'Breadth (Competent → Lattice → Sect)'
+const DYNASTY_KARMA_REPEAT_LABEL = 'Competent ×3'
+const DYNASTY_KARMA_ROSTER: DynastySequenceSpec<Act2ActorPolicy>[] = [
+  ...DYNASTY_ROSTER,
+  {
+    label: DYNASTY_KARMA_BREADTH_LABEL,
+    sequence: [DYNASTY_COMPETENT_POLICY, DYNASTY_LATTICE_POLICY, DYNASTY_SECT_POLICY],
   },
 ]
 
@@ -4301,6 +4515,15 @@ export function runPacingSim(): void {
   // appended AFTER every existing section: no pinned band moves, no assertion,
   // no error token. Dynasty assertions await a Gate-D sign-off.
   printDynastySection(DYNASTY_ROSTER, runLifeToTribulation)
+
+  // Karma income instrumentation (slice 10 step 2, D36 + D40). Appended AFTER
+  // every existing section (pure insertion): per-actor income decomposed by the
+  // four classes + the breadth-vs-repeat comparison. PREVIEW — v0 weights, no
+  // assertion, no error token. Feeds Wes's Gate-D pricing ruling.
+  printDynastyKarmaSection(DYNASTY_KARMA_ROSTER, runLifeToTribulation, {
+    repeatLabel: DYNASTY_KARMA_REPEAT_LABEL,
+    breadthLabel: DYNASTY_KARMA_BREADTH_LABEL,
+  })
 }
 
 // Executed via `npm run sim` (tsx src/sim/pacing.ts) — the sim's sole entry

@@ -39,6 +39,48 @@ export interface SeveranceRecord {
 }
 
 /**
+ * The soul-scoped karma carry (slice 10 / D36 + D40). Karma is SOUL-scoped, so
+ * it threads across rebirth alongside the ascent counter. This mirrors exactly
+ * what the real karma store (stores/karma.ts) persists between lives:
+ *   - `firstsHistory` — canonical first-key → times earned in PRIOR lives (the
+ *     n in `base × rⁿ`); both headlines and qualified variants get a key here.
+ *   - `balance` — the accumulated karma (signed by type; all v1 income positive).
+ *   - `gradeBests` — grade-row → best index earned so far (the personal-best
+ *     latch). NOT in the store's own slice: grade-delta rows pay only on
+ *     improvement (D40), which the harness resolves against these carried bests
+ *     BEFORE calling recordFirst (the store then pays the shipped decay math).
+ * The settlement itself always runs through the REAL store (recordFirst /
+ * settleLife) — this struct is the carried snapshot, never a re-implementation.
+ */
+export interface KarmaCarry {
+  readonly firstsHistory: Readonly<Record<string, number>>
+  readonly balance: number
+  readonly gradeBests: Readonly<Record<string, number>>
+}
+
+/** The cold-start karma carry: a soul that has earned no firsts. */
+export function emptyKarmaCarry(): KarmaCarry {
+  return { firstsHistory: {}, balance: 0, gradeBests: {} }
+}
+
+/**
+ * One life's measured karma income, decomposed by the four D40 classes plus the
+ * cumulative balance. Filled by the runLife adapter from the REAL store's
+ * receipt (stores/karma.ts previewReceipt/settleLife) — the measured math IS the
+ * shipped math. `firedEventKeys` is the distinct KARMA_DATA event keys this life
+ * earned (for the roster's unreachable-rows report).
+ */
+export interface KarmaLifeMeasurement {
+  readonly total: number
+  readonly milestoneHeadline: number
+  readonly milestoneEcho: number
+  readonly deedEncounter: number
+  readonly gradeDelta: number
+  readonly cumulativeBalance: number
+  readonly firedEventKeys: readonly string[]
+}
+
+/**
  * The persistence bridge: exactly what the soul store carries across a
  * reincarnation. Everything NOT in here is life-scoped and resets.
  */
@@ -49,6 +91,8 @@ export interface SoulBridge {
   readonly severanceRituals: number
   /** Which severables were cut, per life (data only; no mechanical effect yet). */
   readonly severanceHistory: readonly SeveranceRecord[]
+  /** Soul-scoped karma carry (D36 + D40): firsts history + balance + grade bests. */
+  readonly karma: KarmaCarry
 }
 
 /**
@@ -71,6 +115,19 @@ export interface LifeResult {
   readonly severedKeys: readonly string[]
   /** soul.ascents after the life (carry-in + this life's n/s cascades). */
   readonly finalAscents: number
+  /**
+   * This life's measured karma income (D36 + D40). Computed by the adapter from
+   * the life's ACTUAL outcomes via the REAL karma store, seeded from the
+   * incoming bridge's karma carry — additive, never read by the observation-only
+   * printer, so the existing DYNASTY section stays byte-identical.
+   */
+  readonly karma: KarmaLifeMeasurement
+  /**
+   * The karma carry AFTER this life settled (firsts history folded, balance
+   * paid, grade bests latched). carryForward folds this into the outgoing
+   * bridge — the settled history IS what the next life carries.
+   */
+  readonly settledKarma: KarmaCarry
 }
 
 /** One life's slot in a dynasty: what went in, what happened, what carries out. */
@@ -83,7 +140,7 @@ export interface DynastyLife {
 
 /** The cold-start bridge: a soul that has never lived (identity for life 1). */
 export function emptyBridge(): SoulBridge {
-  return { ascents: 0, severanceRituals: 0, severanceHistory: [] }
+  return { ascents: 0, severanceRituals: 0, severanceHistory: [], karma: emptyKarmaCarry() }
 }
 
 /**
@@ -102,6 +159,11 @@ export function carryForward(incoming: SoulBridge, result: LifeResult, lifeNumbe
     ascents: result.finalAscents,
     severanceRituals: incoming.severanceRituals + result.offerings,
     severanceHistory: [...incoming.severanceHistory, ...newHistoryRows],
+    // Fold the settled karma history: the adapter already ran the REAL store's
+    // recordFirst/settleLife against `incoming.karma`, so the outgoing carry is
+    // simply this life's settled snapshot (firsts folded, balance paid, bests
+    // latched). carryForward stays PURE — no store call here.
+    karma: result.settledKarma,
   }
 }
 
@@ -186,6 +248,148 @@ export function printDynastySection<Policy>(
   )
   console.log(
     '   via reclimbGainMult and the ritual count discounts Act II offerings, both compounding across lives.)',
+  )
+}
+
+// ---- DYNASTY KARMA (measurement) --------------------------------------------
+//
+// The measure-first deliverable (spec §6.1 / §7 step 2, D40's income-shape
+// directive): per-actor karma income across the dynasty sequences, DECOMPOSED by
+// the four classes — milestone headlines / milestone echoes / deed+encounter
+// firsts / grade deltas — alongside totals + cumulative balance. The SHAPE
+// (percent of dynasty income by class) is the D40 check: is karma a
+// novelty-incentive (headlines + fresh echoes/deeds dominate) or has it
+// collapsed into a performance-incentive (grade deltas dominate)?
+//
+// PREVIEW discipline (slice-9): observation ONLY, no assertion, and the error
+// token is NEVER emitted. Pure insertion — printed AFTER every existing section.
+// The income here uses v0 RELATIVE CLASS WEIGHTS (src/data/karma.ts) for
+// MEASUREMENT ONLY; Wes prices real class bases against these numbers at the
+// Gate-D pause.
+
+/** Per-class dynasty totals (the shape summary's accumulator). */
+interface KarmaShapeTotals {
+  milestoneHeadline: number
+  milestoneEcho: number
+  deedEncounter: number
+  gradeDelta: number
+  total: number
+}
+
+function freshShapeTotals(): KarmaShapeTotals {
+  return { milestoneHeadline: 0, milestoneEcho: 0, deedEncounter: 0, gradeDelta: 0, total: 0 }
+}
+
+/** Run a sequence and accumulate its per-class dynasty shape + total. */
+function measureSequenceKarma<Policy>(
+  sequence: readonly Policy[],
+  runLife: (policy: Policy, incoming: SoulBridge) => LifeResult,
+): { lives: DynastyLife[]; shape: KarmaShapeTotals } {
+  const lives = runDynasty(sequence, runLife)
+  const shape = freshShapeTotals()
+  for (const life of lives) {
+    const k = life.result.karma
+    shape.milestoneHeadline += k.milestoneHeadline
+    shape.milestoneEcho += k.milestoneEcho
+    shape.deedEncounter += k.deedEncounter
+    shape.gradeDelta += k.gradeDelta
+    shape.total += k.total
+  }
+  return { lives, shape }
+}
+
+/** Percent of a dynasty total (0 when the total is 0 — never NaN). */
+function pctOf(part: number, total: number): string {
+  if (total <= 0) return '0.0%'
+  return `${((part / total) * 100).toFixed(1)}%`
+}
+
+/**
+ * Append the "DYNASTY KARMA (measurement)" section. Runs each spec, prints the
+ * per-life income + four-class decomposition + cumulative balance, then a
+ * per-actor SHAPE summary (percent of dynasty income by class). Finally the
+ * breadth-vs-repeat comparison (D36 repeat<breadth, MEASURED not asserted): the
+ * repeat sequence's headlines decay ×r per re-earn and its grade deltas dry up
+ * once bests latch, so a breadth sequence of equal length + competence out-earns
+ * it. `comparison` names the repeat + breadth specs (must be labels in `specs`).
+ */
+export function printDynastyKarmaSection<Policy>(
+  specs: readonly DynastySequenceSpec<Policy>[],
+  runLife: (policy: Policy, incoming: SoulBridge) => LifeResult,
+  comparison: { readonly repeatLabel: string; readonly breadthLabel: string },
+): void {
+  console.log(
+    '\n=== DYNASTY KARMA (measurement; v0 relative class weights — NOT priced; PREVIEW, no assertion) ===',
+  )
+  console.log(
+    '  Per-actor karma income across the dynasty sequences, decomposed by the four D40 classes (milestone',
+  )
+  console.log(
+    '  headlines / milestone echoes / deed+encounter firsts / grade deltas) + cumulative balance. Income runs',
+  )
+  console.log(
+    '  through the REAL karma store (recordFirst/settleLife, seeded per-life from the soul-scoped karma carry),',
+  )
+  console.log(
+    '  so the measured math IS the shipped math. Bases are v0 relative weights for MEASUREMENT ONLY (Wes prices',
+  )
+  console.log('  class bases / VARIANT_SHARE / KARMA_DECAY_RATIO against these numbers at the Gate-D pause).')
+
+  const shapeByLabel = new Map<string, KarmaShapeTotals>()
+  for (const spec of specs) {
+    const { lives, shape } = measureSequenceKarma(spec.sequence, runLife)
+    shapeByLabel.set(spec.label, shape)
+
+    console.log(`\n  -- ${spec.label} (${spec.sequence.length} lives) --`)
+    for (const life of lives) {
+      const k = life.result.karma
+      console.log(
+        `  life ${life.lifeNumber} [${life.result.name}]: income ${k.total.toFixed(2)} ` +
+          `(milestone headline ${k.milestoneHeadline.toFixed(2)}, echo ${k.milestoneEcho.toFixed(2)}, ` +
+          `deed+encounter ${k.deedEncounter.toFixed(2)}, grade delta ${k.gradeDelta.toFixed(2)}) ` +
+          `→ balance ${k.cumulativeBalance.toFixed(2)}`,
+      )
+    }
+    console.log(
+      `    SHAPE: dynasty income ${shape.total.toFixed(2)} = ` +
+        `milestone headline ${pctOf(shape.milestoneHeadline, shape.total)}, ` +
+        `milestone echo ${pctOf(shape.milestoneEcho, shape.total)}, ` +
+        `deed+encounter ${pctOf(shape.deedEncounter, shape.total)}, ` +
+        `grade delta ${pctOf(shape.gradeDelta, shape.total)}`,
+    )
+    const noveltyShare =
+      shape.milestoneHeadline + shape.milestoneEcho + shape.deedEncounter
+    console.log(
+      `    D40 read: novelty classes (headline+echo+deed+encounter) ${pctOf(noveltyShare, shape.total)} ` +
+        `vs grade deltas ${pctOf(shape.gradeDelta, shape.total)} ` +
+        `(${noveltyShare >= shape.gradeDelta ? 'novelty-weighted' : 'performance-weighted'}).`,
+    )
+  }
+
+  // Breadth-vs-repeat (D36 repeat<breadth at equal length + competence). MEASURED.
+  const repeat = shapeByLabel.get(comparison.repeatLabel)
+  const breadth = shapeByLabel.get(comparison.breadthLabel)
+  if (repeat && breadth) {
+    console.log('\n  -- breadth vs repeat (D36 repeat<breadth; equal length + competence; MEASURED, not asserted) --')
+    console.log(
+      `  repeat  [${comparison.repeatLabel}]: dynasty income ${repeat.total.toFixed(2)} ` +
+        `(headlines decay ×KARMA_DECAY_RATIO per re-earn; grade deltas dry up once bests latch).`,
+    )
+    console.log(
+      `  breadth [${comparison.breadthLabel}]: dynasty income ${breadth.total.toFixed(2)} ` +
+        `(distinct builds ring distinct headlines/deeds — fresh firsts pay full base).`,
+    )
+    const delta = breadth.total - repeat.total
+    const ratio = repeat.total > 0 ? breadth.total / repeat.total : 0
+    console.log(
+      `  observed: breadth − repeat = ${delta.toFixed(2)} ` +
+        `(breadth/repeat = ${ratio.toFixed(2)}×) — ` +
+        `${delta > 0 ? 'breadth out-earns repeat, the D36 direction' : 'repeat ≥ breadth here (see report)'}.`,
+    )
+  }
+
+  console.log(
+    '\n  (DYNASTY KARMA section end — observation-only; v0 weights; no band moved, nothing asserted, no error token.)',
   )
 }
 

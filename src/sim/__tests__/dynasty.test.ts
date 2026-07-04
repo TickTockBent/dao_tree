@@ -8,14 +8,23 @@
 //    guard at its EOF means the import does not re-run the whole sim.
 
 import { describe, it, expect } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
 import {
   runDynasty,
   carryForward,
   emptyBridge,
+  emptyKarmaCarry,
   type SoulBridge,
   type LifeResult,
+  type KarmaLifeMeasurement,
 } from '../dynasty'
-import { runLifeToTribulation, DYNASTY_COMPETENT_POLICY } from '../pacing'
+import {
+  runLifeToTribulation,
+  DYNASTY_COMPETENT_POLICY,
+  settleLifeKarma,
+  type LifeKarmaFirsts,
+} from '../pacing'
+import { KARMA_DECAY_RATIO, VARIANT_SHARE } from '@/data/karma'
 
 // A full real-sim boot per life; give the integration tests generous headroom.
 const REAL_SIM_TIMEOUT_MS = 120000
@@ -31,6 +40,17 @@ const FAKE_ASCENTS_PER_LIFE = 5
 const FAKE_OFFERINGS_PER_LIFE = 12
 const FAKE_BASE_RECLIMB_SECONDS = 5000
 const FAKE_RECLIMB_SPEEDUP_PER_ASCENT = 10
+// A fixed fake karma measurement + carry (the harness-logic tests exercise the
+// bridge threading, not the income math — the real math is covered separately).
+const FAKE_KARMA_MEASUREMENT: KarmaLifeMeasurement = {
+  total: 0,
+  milestoneHeadline: 0,
+  milestoneEcho: 0,
+  deedEncounter: 0,
+  gradeDelta: 0,
+  cumulativeBalance: 0,
+  firedEventKeys: [],
+}
 function fakeRunLife(policy: FakePolicy, incoming: SoulBridge): LifeResult {
   return {
     name: policy.name,
@@ -45,6 +65,8 @@ function fakeRunLife(policy: FakePolicy, incoming: SoulBridge): LifeResult {
     offerings: FAKE_OFFERINGS_PER_LIFE,
     severedKeys: [...policy.severs],
     finalAscents: incoming.ascents + FAKE_ASCENTS_PER_LIFE,
+    karma: FAKE_KARMA_MEASUREMENT,
+    settledKarma: emptyKarmaCarry(),
   }
 }
 
@@ -144,4 +166,89 @@ describe('dynasty carry (real single-life sim)', () => {
     },
     REAL_SIM_TIMEOUT_MS,
   )
+})
+
+// ---- Karma income settlement (real karma store; the shipped receipt math) ----
+//
+// settleLifeKarma seeds the REAL karma store from the carried soul-scoped karma
+// and calls the shipped recordFirst/settleLife — so these assert the measured
+// math IS the shipped math. Fast (no sim boot); each test owns a fresh pinia.
+
+/** A one-milestone firsts profile (headline + one buildMark echo), no grades. */
+function milestoneFirsts(): LifeKarmaFirsts {
+  return {
+    nonGrade: [{ key: 'reachRealm:q', qualifiers: { rootShape: 'rootless', buildMark: 'meridian' } }],
+    gradeValues: [],
+    buildMark: 'meridian',
+  }
+}
+
+/** A mixed profile: a milestone (headline+echo), a deed (headline-only), a grade. */
+function mixedFirsts(foundationGrade: number): LifeKarmaFirsts {
+  return {
+    nonGrade: [
+      { key: 'reachRealm:q', qualifiers: { rootShape: 'rootless', buildMark: 'meridian' } },
+      { key: 'severed:soulAspect', qualifiers: {} },
+    ],
+    gradeValues: [['foundationGradeDelta', foundationGrade]],
+    buildMark: 'meridian',
+  }
+}
+
+describe('karma income settlement (real karma store)', () => {
+  it('is deterministic — identical inputs settle to identical measurement + carry', () => {
+    setActivePinia(createPinia())
+    const runA = settleLifeKarma(emptyKarmaCarry(), mixedFirsts(2))
+    setActivePinia(createPinia())
+    const runB = settleLifeKarma(emptyKarmaCarry(), mixedFirsts(2))
+    expect(runB.measurement).toEqual(runA.measurement)
+    expect(runB.carry).toEqual(runA.carry)
+  })
+
+  it('decomposition sums to total (the four classes reconstruct the income)', () => {
+    setActivePinia(createPinia())
+    const { measurement } = settleLifeKarma(emptyKarmaCarry(), mixedFirsts(2))
+    const sum =
+      measurement.milestoneHeadline +
+      measurement.milestoneEcho +
+      measurement.deedEncounter +
+      measurement.gradeDelta
+    expect(sum).toBeCloseTo(measurement.total, 10)
+    expect(measurement.total).toBeGreaterThan(0)
+  })
+
+  it('a repeat life pays a re-earned first × KARMA_DECAY_RATIO (headline AND echo decay)', () => {
+    setActivePinia(createPinia())
+    const lifeOne = settleLifeKarma(emptyKarmaCarry(), milestoneFirsts())
+    // Carry life 1's settled history into life 2, re-earning the SAME first.
+    const lifeTwo = settleLifeKarma(lifeOne.carry, milestoneFirsts())
+    // Both the headline (base·r) and its echo (VARIANT_SHARE·base·r) decay by r,
+    // so the whole re-earned income scales by exactly KARMA_DECAY_RATIO.
+    expect(lifeTwo.measurement.total).toBeCloseTo(lifeOne.measurement.total * KARMA_DECAY_RATIO, 10)
+    expect(KARMA_DECAY_RATIO).toBeLessThan(1)
+    // Sanity: the echo is a real fraction of the headline (VARIANT_SHARE), i.e.
+    // the milestone genuinely rang both a headline and an echo.
+    expect(lifeOne.measurement.milestoneEcho).toBeCloseTo(
+      lifeOne.measurement.milestoneHeadline * VARIANT_SHARE,
+      10,
+    )
+  })
+
+  it('grade deltas pay only on a personal-best improvement across lives', () => {
+    setActivePinia(createPinia())
+    // Life 1: first-ever foundation grade 2 → the delta fires.
+    const lifeOne = settleLifeKarma(emptyKarmaCarry(), mixedFirsts(2))
+    expect(lifeOne.measurement.gradeDelta).toBeGreaterThan(0)
+    expect(lifeOne.carry.gradeBests['foundationGradeDelta']).toBe(2)
+
+    // Life 2: SAME grade 2 (no improvement) → the delta dries up (pays nothing).
+    const lifeTwo = settleLifeKarma(lifeOne.carry, mixedFirsts(2))
+    expect(lifeTwo.measurement.gradeDelta).toBe(0)
+    expect(lifeTwo.carry.gradeBests['foundationGradeDelta']).toBe(2)
+
+    // Life 3: a NEW personal best (grade 4) → the delta fires again + best latches.
+    const lifeThree = settleLifeKarma(lifeTwo.carry, mixedFirsts(4))
+    expect(lifeThree.measurement.gradeDelta).toBeGreaterThan(0)
+    expect(lifeThree.carry.gradeBests['foundationGradeDelta']).toBe(4)
+  })
 })
