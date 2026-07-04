@@ -737,3 +737,40 @@ choice in the game): the karma receipt — firsts earned, what they pay,
 what repeats paid nothing — then the two-item menu. Mid-Act-II rebirth is
 nothing special: the scope topology handles all of it, no special-case
 code path.
+
+## D40 — Firsts are headline plus echoes; income shape is measured, not assumed (granularity ruled)
+
+*2026-07-04, fifth ruling — the last spec-blocking item. The slice-10
+design pass is settled; the spec ([slice-10.md](slice-10.md)) compiles
+D36–D40.*
+
+**The scheme:** a first = an event key × a declared qualifier tuple from
+a typed, closed vocabulary; axes are per-row opt-in. v1 axes:
+**rootShape** (declared at rebirth; life 1 = rootless), **buildMark**
+(derived by one fixed rule from the sim-actor grammar — gatherer /
+meridian / lattice / sect / pill / balanced — so the harness measures per
+build for free), **realmEra** (realm at event time), **worldContext**
+(RESERVED, zero instances until the almanac).
+
+**Payment — headline plus echoes:** the bare event pays its full base
+exactly once ever (the true first); each qualified variant pays
+`variantShare × base` (a real first, a smaller bell). Both decay
+`r^n, f = 0` per D36. The exploration-vs-loyalty lever is two explicit
+knobs: `variantShare` and the axis vocabulary. Grade-delta rows take NO
+qualifiers — the delta already prices improvement; qualifying it would
+double-pay.
+
+**Lint shapes (all provable from data):** qualifier keys from the typed
+union; per-class allowed-axes enforcement; the table's total expansion
+count PINNED (adding an axis to a row is a deliberate commit, Gate-D
+style); every row r < 1, f = 0; grade rows delta-typed and unqualified.
+
+**Income-shape decomposition directive (Wes, carried into the pricing
+probe):** the harness measures per-actor karma income **decomposed by
+class** — milestone headlines / milestone echoes / deed+encounter firsts /
+grade deltas — alongside the total. The total matters for pricing; **the
+shape tells whether karma is doing its job as a novelty-incentive rather
+than a performance-incentive** (if 80% comes from grade deltas and 10%
+from echoes, variantShare barely matters and "get better" has drowned out
+"explore"). Class-level base rates are tuned to produce the wanted
+distribution. Measure the shape alongside the total, then tune.

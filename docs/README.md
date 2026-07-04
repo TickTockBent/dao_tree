@@ -12,6 +12,7 @@ history). Each file has one job:
 | [architecture.md](architecture.md) | **Engine-shaping structures**: typed accumulators, scope model, save lineage, the multi-life harness plan. |
 | [design-directions.md](design-directions.md) | **Planned/parked systems** not yet scheduled into a slice: the celestial almanac + loot layer, the spirit garden, build sequencing, the narrative spine. |
 | [calibration.md](calibration.md) | **The sim record**: pinned pacing bands, probe results, and the measurement methods that produced them. |
+| [slice-9.md](slice-9.md), [slice-10.md](slice-10.md) | **Slice specs** — each slice's signed-off design compiled into an operational plan (scope, build order, assertion list). Slice 9: Act II / Spirit Severing (COMPLETE). Slice 10: Samsara (design signed off 2026-07-04). |
 | [flavor/](flavor/) | **Prose drafts kept for future use** — candidate journal/flavor text not yet wired to any content key. |
 
 Older design docs (the original spec suite) were retired at `0c75e51`;
