@@ -180,6 +180,24 @@ compound the surplus). Probe flag: `counterfactualSeverEffect` (⊘), in
 `assertProbeFlagsExclusive`; base-profile output verified pure-insertion vs
 pre-change capture; sim wall-time 50.3 → ~65s (+28%).
 
+## Post-itch re-derivation list (constants that encode sim assumptions)
+
+Values shipped from sim-derived measurements that should be re-derived
+from **real player save data** once itch generates it. Each is labeled
+⟨provisional⟩ at its definition site.
+
+1. **BUILD_MARK_BASELINES** (`src/data/karma.ts`, D41 addendum) — the
+   buildMark qualifier's universal-investment baselines are the dynasty
+   ROSTER's per-axis medians. Real players' universal levels may differ;
+   misclassification stakes rise sharply when roots grow the echo
+   surface. Re-derive from real saves; re-derivation is a deliberate
+   Gate-D-style commit (the expansion pin doesn't move, but measured
+   echo distributions do).
+2. **Realistic band cadence assumptions** (the [48.5–62.4h] pin's
+   24–36min check-in grid) — pre-labeled in the pin since D13/D26; the
+   almanac's banking-knob wake re-derives the band, and real-save
+   cadence distributions replace the assumed grid.
+
 ## Methods (reusable)
 
 - **Attribution before action** — counterfactual-probe the suspected cause

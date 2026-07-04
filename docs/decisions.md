@@ -836,3 +836,27 @@ genuine dynasty project, roughly life 15–20 of a well-played dynasty —
 the long-tail retention horizon; the grade-up is a chronicle event).
 Technique fragments: **separate flat track at ~8** — carry a couple
 alongside Seeds without competing at the margin.
+
+**Addendum (same day, on the orchestrator's two surfaced reservations —
+"surface reservations like this as we go"):**
+1. **buildMark baselines: flag, don't fix.** Roster-median derivation is
+   the best available v1 method AND the one place sim assumptions leak
+   into shipped data. Ship the roster medians labeled ⟨provisional⟩;
+   **re-derive from real player saves post-itch** — added to the
+   post-itch re-derivation list ([calibration.md](calibration.md))
+   alongside the Realistic band's cadence assumptions. Low stakes now
+   (echoes 15–23% of income, buildMark one axis of four); high stakes
+   once roots multiply the echo surface.
+2. **The 1.3–1.5× hard target is WITHDRAWN — the structural constraint
+   was underweighted.** Build-invariant milestones dominate the table BY
+   DESIGN, and forcing the ratio against that structure would be
+   "experientially dishonest" (deed rows must never out-pay milestone
+   rows: reaching Nascent Soul is a bigger moment than completing an
+   expedition — parity is the ceiling). **Revised acceptance:** direction
+   holds + exact ratio quantified; if below 1.3×, project the roots
+   contribution analytically — pre-roots thinness is the system working
+   as designed with a size-1 vocabulary, not a present problem needing a
+   future fix. If the projection reaches 1.3–1.5×, v1 ships as-is and
+   the **post-roots re-measurement is a named Gate-D item**; if roots
+   don't close it even in projection, the class bases get the harder
+   look.
