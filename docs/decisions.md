@@ -633,3 +633,75 @@ file-scoped state is topologically unreachable by the rebirth cascade.
 Enforcement: the reincarnation closure lint (§8.1 committed design) —
 rebirth is a compiled cascade tier over TREE_DATA's differentiated scope
 enum, never a hand-written reset list.
+
+## D38 — The rebirth economy: two-item menu, escalating fragments, shape/purchase roots (DQ4/DQ5 ruled)
+
+*2026-07-04, the slice-10 design pass, third ruling. "Ships as written,"
+with six shaping reads recorded.*
+
+**The menu is two items — memory fragments and roots — and the cut is the
+design:** boons overlap roots, and a four-item screen where two items are
+filler dilutes the rebirth moment instead of sharpening it. Every karma
+point goes to a real choice: *what do I carry, and what body do I build.*
+
+**Fragments escalate, and the real payoff is separation of concerns.**
+Flat pricing makes "how many Seeds can I carry" a function of karma
+income — every karma retune implicitly retunes the continuity lever and
+vice versa. Escalation decouples them: **the curve's shape controls
+continuity, karma income controls how far up the curve you reach —
+independently tunable. Two knobs for two jobs.** The self-enforcing
+ceiling is the mechanical payoff; the player-feel payoff is "I can afford
+three Seeds — which three?": the build-sequencing metagame at its
+smallest scale, stating what you valued about your last life's lattice.
+
+**Techniques ride a separate flat-or-shallow track.** Tools, not
+comprehension — less identity-defining than Seeds, so cheaper, and never
+competing with Seeds for the escalation curve's expensive upper slots.
+"Carry a technique" must never crowd out "carry a Seed" at the margin.
+
+**Roots: count + identity are configuration (free-ish), purity is the
+purchase.** Three reads ruled in:
+1. **The first rebirth decision is a genre choice, not a power choice.**
+   Single-element deep-and-narrow vs five-element wide-and-slow is a
+   playstyle declaration; gating it behind karma would punish exactly the
+   exploration karma's income rewards. Nominal cost prevents thoughtless
+   clicking; the power axis is purity. (Five-element Act III Authority
+   payoff: recorded, not built.)
+2. **Purity is the dynasty project** — Mortal → Earth → Heaven grade-ups
+   are dynasty-scale prestige events, dozens of lives out, **recorded by
+   the chronicle**. Retention without new content: the genre's core
+   pleasure at the meta level. Because purity scales discount MAGNITUDE
+   (never unlocks new discounts), Heaven-grade single-element and
+   Heaven-grade five-element are different shapes at the same power level
+   — no dominant strategy by construction.
+3. **Discounts are speed, never access.** A root never unlocks a lattice
+   node an unrooted cultivator can't reach — only makes reaching it
+   faster. v1 effect domain: lattice-region discounts ONLY (profession
+   affinity and aspect-menu coloring are separate future domains that add
+   without conflicting).
+
+**The baseline invariant is the most important line:** an unspent rebirth
+is byte-identical to today's game — zero discounts with no root, zero
+fragments with no carry — so every existing test, pinned band, and
+calibrated number stays valid by construction. Loot-never-gate applied to
+the meta-economy: karma spending is loot for the NEXT life, never a gate
+on the current one. **Verified, not assumed:** the unspent-rebirth path
+runs through the existing sim roster and byte-identity is confirmed.
+
+**Pins (dynasty-harness-measured):** no root configuration dominates —
+swept across count/identity/purity combinations **at every purity grade**
+(dominance emerges at Heaven where discounts are large, not at Mortal
+where everything looks equal); the wider-not-taller dynasty bound — a
+maxed save (Heaven purity, full carry) finishes lives faster but never
+trivially, the bounded multiple keeping the game recognizable at dynasty
+endgame.
+
+**Measure-first directive (spec-blocking, tuning order):** karma income
+must be measurable per-life BEFORE spending is priced. The dynasty
+harness's first job is measuring karma income distributions across the
+build roster (each actor's firsts profile differs, so each actor's income
+differs); the pricing grid is then tuned against measured incomes — first
+fragment affordable on a modest life, Heaven purity requiring many lives'
+surplus, the escalation knee at the typical single-life income.
+**Measure-first, price-against-measurement produces numbers you can
+defend.** Price-first produces the tribulation-bank kind of debt.
