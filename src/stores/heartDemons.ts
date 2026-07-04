@@ -31,6 +31,7 @@ import { HEART_DEMON_DATA, findDemonTrial } from '@/data/heart-demons'
 import type { HeartDemonTrialKey } from '@/data/heart-demons'
 import { findRealm } from '@/data/realms'
 import { usePipelinesStore } from './pipelines'
+import { useSoulStore } from './soul'
 import type { ForgePushKey, TribGradeKey, FoundationBandTier } from '@/engine/types'
 
 export interface DemonsSlice {
@@ -175,6 +176,12 @@ export const useHeartDemonsStore = defineStore('heartDemons', () => {
 
   /** Clear the active trial: grant a stack, flush banked corruption. */
   function clearTrial(): void {
+    // Slice 10 / D36: the FLESH keeps the power (daoHeartStacks, life-scoped),
+    // the SOUL keeps the record that it faced this trial (soul-scoped, carries
+    // across rebirth). This one write is the only behavioral touch in the
+    // slice-10 skeleton; the counter it writes has no reader yet.
+    const clearedTrial = activeTrial.value
+    if (clearedTrial !== null) useSoulStore().recordTrialEndured(clearedTrial)
     daoHeartStacks.value += 1
     activeTrial.value = null
     corruption.value += banked.value

@@ -34,6 +34,15 @@ import {
 // OFFERING_DATA (D28) is not re-exported through the data barrel — the
 // severing store imports it from its source module directly, and so do we.
 import { OFFERING_DATA } from '@/data/severing'
+// KARMA_DATA (slice 10 / D36+D40) is not re-exported through the data barrel
+// (a new-slice table); import from source directly.
+import {
+  KARMA_DATA,
+  KARMA_DECAY_RATIO,
+  KARMA_FLOOR,
+  VARIANT_SHARE,
+  karmaExpansion,
+} from '@/data/karma'
 
 describe('FACTORY_NUMERICS', () => {
   it('matches the 0.2.x values', () => {
@@ -190,7 +199,7 @@ describe('GATE_DATA', () => {
 })
 
 describe('TREE_DATA', () => {
-  it('has 6 tree-scoped realms across 2 acts + 8 life + 4 eternal', () => {
+  it('has 6 tree-scoped realms across 2 acts + 8 life + 5 soul + 1 world (D37 scope audit)', () => {
     expect(TREE_DATA.trees.map((t) => t.id)).toEqual(['act1', 'act2'])
     const scopes = Object.entries(TREE_DATA.layers).map(([id, e]) => `${id}:${e.scope}`)
     expect(scopes).toEqual([
@@ -200,19 +209,30 @@ describe('TREE_DATA', () => {
       // topological).
       'x:tree',
       'b:life', 'gate:life', 'dao:life', 'sect:life',
-      'journal:eternal', 'legacy:eternal',
+      // Slice 10 / D37: the old 'eternal' scope differentiated into soul |
+      // world | file. The journal (the soul's accreted memory) and legacy
+      // grades (karma's delta inputs) are SOUL-scoped.
+      'journal:soul', 'legacy:soul',
       // Slice 7: expeditions + the profession are life-scoped (never cascade-reset).
       'secret:life', 'alchemy:life',
-      // Slice 8: corruption + Dao Heart stacks are life-scoped.
+      // Slice 8: corruption + Dao Heart stacks are life-scoped (body-built; the
+      // soul's endurance record lives on the soul slice — D36).
       'demons:life',
-      // Slice 8.5: Deep Meditation rungs are eternal (QoL is never clawed back).
-      'seclusion:eternal',
-      // Slice 9: soul accumulators are eternal-until-Samsara; active
-      // severances are life-scoped (severed things return next life).
-      'soul:eternal',
+      // Slice 8.5 / D37 (Q4): Deep Meditation rungs are SOUL-scoped — a new
+      // body does not unlearn how to cultivate unattended.
+      'seclusion:soul',
+      // Slice 9 / D37: soul accumulators are SOUL-scoped; active severances are
+      // life-scoped (severed things return next life).
+      'soul:soul',
       'severing:life',
+      // Slice 10 / D36+D40: karma balance + firsts ledger are SOUL-scoped.
+      'karma:soul',
+      // Slice 10 / D37: the chronicle is the founding WORLD-scope instance.
+      'chronicle:world',
     ])
     expect(TREE_DATA.layers.x).toEqual({ scope: 'tree', tree: 'act2' })
+    // D37: 'eternal' is gone entirely — no layer may carry it.
+    expect(scopes.some((s) => s.endsWith(':eternal'))).toBe(false)
   })
 })
 
@@ -604,5 +624,52 @@ describe('SECLUSION_DATA (slice 8.5)', () => {
     expect(SECLUSION_DATA.rungs.map((r) => r.qiCost)).toEqual([
       500, 50000, 2000000, 50000000, 10000000000,
     ])
+  })
+})
+
+describe('KARMA_DATA (slice 10 / D36+D40)', () => {
+  it('has the 25-row v1 firsts table with the drafted class distribution', () => {
+    // ⚠️ DESIGN-REVIEWABLE: this row set is drafted from existing game events
+    // and awaits Wes's review at the pricing pause. The pin makes any change
+    // deliberate.
+    expect(KARMA_DATA).toHaveLength(25)
+    const byClass = KARMA_DATA.reduce<Record<string, number>>((acc, row) => {
+      acc[row.class] = (acc[row.class] ?? 0) + 1
+      return acc
+    }, {})
+    expect(byClass).toEqual({ milestone: 10, 'grade-delta': 4, deed: 8, encounter: 3 })
+  })
+
+  it('pins the exact row keys (the reviewable event list)', () => {
+    expect(KARMA_DATA.map((r) => r.key)).toEqual([
+      'reachRealm:q', 'reachRealm:f', 'reachRealm:c', 'reachRealm:n', 'reachRealm:s', 'reachRealm:x',
+      'passFirstTribulation', 'latticeManifestation', 'chooseProfession', 'joinSect',
+      'legacyGradeDelta', 'foundationGradeDelta', 'coreGradeDelta', 'tribulationGradeDelta',
+      'endureTrial:whisperingDoubt', 'endureTrial:hungryShadow', 'endureTrial:hollowCrown',
+      'severed:soulAspect', 'severed:profession', 'severed:extraordinaryMeridians',
+      'severed:manifestation', 'severed:flowingForm',
+      'clearedSite:verdantHollow', 'clearedSite:invertedSpiritLand', 'clearedSite:shatteredStarVault',
+    ])
+  })
+
+  it('the v0 tuning knobs match the measurement-only placeholders', () => {
+    // ⟨tune⟩ — NOT priced. Wes prices against the dynasty-harness measurements.
+    expect(KARMA_DECAY_RATIO).toBe(0.5)
+    expect(VARIANT_SHARE).toBe(0.25)
+    // f = 0 IS THE DESIGN (D36), not a tuning value.
+    expect(KARMA_FLOOR).toBe(0)
+  })
+
+  it('the expansion decomposes to the pinned firsts count', () => {
+    // Gate-D style: adding an axis to a row (or growing an axis vocabulary —
+    // e.g. roots shipping) changes this number deliberately.
+    const expansion = karmaExpansion()
+    expect(expansion).toEqual({
+      rows: 25,
+      headlines: 25,
+      variants: 96,
+      total: 121,
+      variantsByClass: { milestone: 60, 'grade-delta': 0, deed: 18, encounter: 18 },
+    })
   })
 })

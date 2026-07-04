@@ -29,6 +29,8 @@ import { useSeclusionStore } from '@/stores/seclusion'
 import { useAchievementsStore } from '@/stores/achievements'
 import { useSoulStore } from '@/stores/soul'
 import { useSeveringStore } from '@/stores/severing'
+import { useKarmaStore } from '@/stores/karma'
+import { useChronicleStore } from '@/stores/chronicle'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -56,6 +58,8 @@ const seclusion = useSeclusionStore()
 const achievements = useAchievementsStore()
 const soul = useSoulStore()
 const severing = useSeveringStore()
+const karma = useKarmaStore()
+const chronicle = useChronicleStore()
 const nav = useNavStore()
 
 // Slice providers (each store owns its save slice; game store assembles).
@@ -75,6 +79,10 @@ game.registerSliceProvider({ id: 'seclusion', save: seclusion.save, load: seclus
 game.registerSliceProvider({ id: 'ach', save: achievements.save, load: achievements.load, fresh: achievements.fresh })
 game.registerSliceProvider({ id: 'soul', save: soul.save, load: soul.load, fresh: soul.fresh })
 game.registerSliceProvider({ id: 'severing', save: severing.save, load: severing.load, fresh: severing.fresh })
+// Slice 10 (D36/D37): karma (soul-scoped) + the chronicle (world-scoped). Both
+// are inert skeletons — no updater; the crossing wires them in later chunks.
+game.registerSliceProvider({ id: 'karma', save: karma.save, load: karma.load, fresh: karma.fresh })
+game.registerSliceProvider({ id: 'chronicle', save: chronicle.save, load: chronicle.load, fresh: chronicle.fresh })
 
 // System updaters (forward pass, in dependency order: body before realm, etc.).
 game.registerUpdater({ id: 'body', update: body.update })

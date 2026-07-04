@@ -9,6 +9,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import Decimal from 'break_eternity.js'
 import { bootTestStores } from '@/test-setup'
 import { useHeartDemonsStore } from '@/stores/heartDemons'
+import { useSoulStore } from '@/stores/soul'
 import { useGameStore } from '@/stores/game'
 import { useBodyStore } from '@/stores/body'
 import { useRealmStore } from '@/stores/realm'
@@ -319,6 +320,38 @@ describe('heartDemons: rushed-breakthrough end-to-end', () => {
     realm.prestige('f')
     expect(demons.corruption).toBe(0)
     expect(demons.touched).toBe(false)
+  })
+})
+
+describe('heartDemons: soul-side endurance record (slice 10 / D36)', () => {
+  beforeEach(() => bootTestStores())
+
+  it('clearing a trial writes the SOUL-side endurance record (the one behavioral touch)', () => {
+    const demons = useHeartDemonsStore()
+    const soul = useSoulStore()
+    expect(soul.trialsEndured).toEqual({})
+
+    // Endure and clear whisperingDoubt.
+    const seconds = (findDemonTrial('whisperingDoubt').objective as { seconds: number }).seconds
+    fireTrial('whisperingDoubt')
+    demons.update(seconds)
+    expect(demons.activeTrial).toBeNull()
+    expect(demons.daoHeartStacks).toBe(1) // the FLESH kept the power (life-scoped)
+    expect(soul.trialsEndured).toEqual({ whisperingDoubt: 1 }) // the SOUL kept the record
+  })
+
+  it('the endurance record survives even as the body-side daoHeartStacks would die at rebirth', () => {
+    // D36: power is life-scoped (daoHeartStacks), the record is soul-scoped.
+    // Here we only prove the record is a distinct, additive soul counter.
+    const demons = useHeartDemonsStore()
+    const soul = useSoulStore()
+    const seconds = (findDemonTrial('whisperingDoubt').objective as { seconds: number }).seconds
+    fireTrial('whisperingDoubt')
+    demons.update(seconds)
+    // Simulate the ladder repeating the final trial elsewhere by clearing again.
+    fireTrial('whisperingDoubt')
+    demons.update(seconds)
+    expect(soul.trialsEndured.whisperingDoubt).toBe(2)
   })
 })
 

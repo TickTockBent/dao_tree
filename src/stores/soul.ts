@@ -35,10 +35,37 @@ export interface SoulSlice {
   severanceRituals: number
   /** Per-attachment severance record (D24; three-lives transcendence data). */
   severanceHistory: SeveranceHistoryRow[]
+  /**
+   * Slice 10 / D37: the rebirth counter. Latched forever (only ever rises);
+   * doubles as the strand gate clause (post-slice) and the `rebirths` core
+   * meets() clause. 0 today — nothing increments it yet (the step-4 crossing
+   * does).
+   */
+  rebirths: number
+  /**
+   * Slice 10 / D36: the SOUL-side endurance record — per demon-trial-key, how
+   * many times the soul has FACED that trial (survives rebirth). The trial's
+   * POWER (daoHeartStacks) is body-state and dies with the flesh; this record
+   * is identity and carries. Write-only in the skeleton — nothing reads it yet.
+   */
+  trialsEndured: Record<string, number>
+  /**
+   * Slice 10 / D37: the lattice "walked path" accumulator — how many
+   * Manifestation-tier nodes the soul has walked in prior lives, driving the
+   * Manifestation re-walk discount. Data only; no consumer yet.
+   */
+  walkedManifestations: number
 }
 
 export function freshSoulSlice(): SoulSlice {
-  return { ascents: 0, severanceRituals: 0, severanceHistory: [] }
+  return {
+    ascents: 0,
+    severanceRituals: 0,
+    severanceHistory: [],
+    rebirths: 0,
+    trialsEndured: {},
+    walkedManifestations: 0,
+  }
 }
 
 export const useSoulStore = defineStore('soul', () => {
@@ -49,6 +76,11 @@ export const useSoulStore = defineStore('soul', () => {
   const severanceHistory = computed<readonly SeveranceHistoryRow[]>(
     () => slice.value.severanceHistory,
   )
+  const rebirths = computed(() => slice.value.rebirths)
+  const trialsEndured = computed<Readonly<Record<string, number>>>(
+    () => slice.value.trialsEndured,
+  )
+  const walkedManifestations = computed(() => slice.value.walkedManifestations)
 
   /** An n/s cascade wiped c — the next re-climb is ascent k+1. Called from realm.ts. */
   function recordAscent(): void {
@@ -60,11 +92,38 @@ export const useSoulStore = defineStore('soul', () => {
     slice.value = { ...slice.value, severanceRituals: slice.value.severanceRituals + 1 }
   }
 
-  /** Record a severance in the eternal history (D24). */
+  /** Record a severance in the soul history (D24). */
   function recordSeverance(severable: SeverableKey, life: number): void {
     slice.value = {
       ...slice.value,
       severanceHistory: [...slice.value.severanceHistory, { severable, life }],
+    }
+  }
+
+  /**
+   * Record that the soul has ENDURED a demon trial of this key (D36). Called
+   * one line into heartDemons' trial-clear path — the ONLY behavioral touch in
+   * the slice-10 skeleton. Increments a per-key counter that carries across
+   * rebirth; nothing reads it yet (identity/chronicle/karma consumers land in
+   * later chunks).
+   */
+  function recordTrialEndured(trialKey: string): void {
+    const nextEndured = { ...slice.value.trialsEndured }
+    nextEndured[trialKey] = (nextEndured[trialKey] ?? 0) + 1
+    slice.value = { ...slice.value, trialsEndured: nextEndured }
+  }
+
+  /** Latch a rebirth (D37). Only ever rises; the step-4 crossing calls this. */
+  function recordRebirth(): void {
+    slice.value = { ...slice.value, rebirths: slice.value.rebirths + 1 }
+  }
+
+  /** Add to the walked-path accumulator (D37). No consumer yet. */
+  function recordWalkedManifestations(count: number): void {
+    if (count <= 0) return
+    slice.value = {
+      ...slice.value,
+      walkedManifestations: slice.value.walkedManifestations + count,
     }
   }
 
@@ -107,6 +166,14 @@ export const useSoulStore = defineStore('soul', () => {
       severanceHistory: Array.isArray(loaded.severanceHistory)
         ? [...loaded.severanceHistory]
         : [],
+      // Slice 10 fields default cleanly for older saves (backward-compatible).
+      rebirths: typeof loaded.rebirths === 'number' ? loaded.rebirths : 0,
+      trialsEndured:
+        loaded.trialsEndured && typeof loaded.trialsEndured === 'object'
+          ? { ...loaded.trialsEndured }
+          : {},
+      walkedManifestations:
+        typeof loaded.walkedManifestations === 'number' ? loaded.walkedManifestations : 0,
     }
   }
   function fresh(): Record<string, unknown> {
@@ -118,9 +185,15 @@ export const useSoulStore = defineStore('soul', () => {
     ascents,
     severanceRituals,
     severanceHistory,
+    rebirths,
+    trialsEndured,
+    walkedManifestations,
     recordAscent,
     recordSeveranceRitual,
     recordSeverance,
+    recordTrialEndured,
+    recordRebirth,
+    recordWalkedManifestations,
     reclimbGainMult,
     save,
     load,

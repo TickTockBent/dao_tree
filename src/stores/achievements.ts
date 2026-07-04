@@ -1,10 +1,15 @@
-// src/stores/achievements.ts — ETERNAL-scoped achievement record (slice: 'ach').
+// src/stores/achievements.ts — FILE-scoped achievement record (slice: 'ach').
 //
-// Scope: eternal. Never reset — not by realm cascade (achievements is not a
-// realm layer, so doReset never visits it), not by tribulation, not by
-// anything short of a hard save wipe. When Samsara differentiates the eternal
-// scope (ledger #19), achievements are effectively FILE-scoped (the Steam
-// account analog): they persist across reincarnations by construction.
+// Scope: file (D37 — the Steam-account analog, D9b). Never reset — not by realm
+// cascade (achievements is not a TREE_DATA layer, so doReset never visits it),
+// not by tribulation, not by the reincarnation cascade, not by anything short
+// of a hard save wipe. Slice 10 / D37's scope audit resolved the old
+// "effectively file-scoped" note: achievements sit ABOVE the soul (they persist
+// across reincarnations by construction — the reincarnation-closure lint proves
+// no file/soul/world layer is reachable by rebirth). The 'ach' slice lives
+// outside TREE_DATA.layers on purpose: it is not a cascade participant, so it
+// carries no LayerId seat and its file scope is documented here rather than in
+// the layer registry.
 //
 // Pure record: no gameplay effects, no pipeline factors. The gate store
 // ("Deeds") owns buff-carrying checkpoints; this store owns the permanent

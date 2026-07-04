@@ -65,6 +65,7 @@ describe('meets', () => {
     daoHeartStacks: 0,
     seclusionRungs: 0,
     tribulationPassed: false,
+    rebirths: 0,
   }
 
   it('empty condition is always true', () => {

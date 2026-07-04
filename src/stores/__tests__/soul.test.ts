@@ -26,7 +26,84 @@ describe('soul store: fresh slice shape', () => {
   })
 
   it('freshSoulSlice matches the initial store state', () => {
-    expect(freshSoulSlice()).toEqual({ ascents: 0, severanceRituals: 0, severanceHistory: [] })
+    expect(freshSoulSlice()).toEqual({
+      ascents: 0,
+      severanceRituals: 0,
+      severanceHistory: [],
+      // Slice 10 / D36+D37 soul-side additions.
+      rebirths: 0,
+      trialsEndured: {},
+      walkedManifestations: 0,
+    })
+  })
+
+  it('exposes the slice-10 soul-side fields, all zero on a fresh soul', () => {
+    const soul = useSoulStore()
+    expect(soul.rebirths).toBe(0)
+    expect(soul.trialsEndured).toEqual({})
+    expect(soul.walkedManifestations).toBe(0)
+  })
+})
+
+describe('soul store: slice-10 soul-side recorders (D36/D37)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('recordRebirth latches the rebirth counter upward', () => {
+    const soul = useSoulStore()
+    soul.recordRebirth()
+    soul.recordRebirth()
+    expect(soul.rebirths).toBe(2)
+  })
+
+  it('recordTrialEndured accumulates per-trial-key endurance counts', () => {
+    const soul = useSoulStore()
+    soul.recordTrialEndured('whisperingDoubt')
+    soul.recordTrialEndured('whisperingDoubt')
+    soul.recordTrialEndured('hollowCrown')
+    expect(soul.trialsEndured).toEqual({ whisperingDoubt: 2, hollowCrown: 1 })
+  })
+
+  it('recordWalkedManifestations adds to the walked-path accumulator (ignores non-positive)', () => {
+    const soul = useSoulStore()
+    soul.recordWalkedManifestations(3)
+    soul.recordWalkedManifestations(2)
+    soul.recordWalkedManifestations(0)
+    soul.recordWalkedManifestations(-5)
+    expect(soul.walkedManifestations).toBe(5)
+  })
+
+  it('round-trips the slice-10 fields through save/load', () => {
+    const soul = useSoulStore()
+    soul.recordRebirth()
+    soul.recordTrialEndured('hungryShadow')
+    soul.recordWalkedManifestations(4)
+    const saved = soul.save()
+
+    setActivePinia(createPinia())
+    const reloaded = useSoulStore()
+    reloaded.load(saved)
+    expect(reloaded.rebirths).toBe(1)
+    expect(reloaded.trialsEndured).toEqual({ hungryShadow: 1 })
+    expect(reloaded.walkedManifestations).toBe(4)
+  })
+
+  it('load(undefined) defaults the slice-10 fields (older saves have none)', () => {
+    const soul = useSoulStore()
+    soul.load(undefined)
+    expect(soul.rebirths).toBe(0)
+    expect(soul.trialsEndured).toEqual({})
+    expect(soul.walkedManifestations).toBe(0)
+  })
+
+  it('load of an OLD soul slice (pre-slice-10) fills the new fields cleanly', () => {
+    const soul = useSoulStore()
+    soul.load({ ascents: 3, severanceRituals: 1, severanceHistory: [{ severable: 'soulAspect', life: 1 }] })
+    expect(soul.ascents).toBe(3)
+    expect(soul.rebirths).toBe(0)
+    expect(soul.trialsEndured).toEqual({})
+    expect(soul.walkedManifestations).toBe(0)
   })
 })
 

@@ -82,6 +82,13 @@ export interface ConditionClauses {
    * grammar touch should shrink the shadow set, not grow it).
    */
   tribulationPassed: true
+  /**
+   * Rebirths latched >= N (slice 10 / D37). Reads soul.rebirths — always 0
+   * today (nothing increments it until the step-4 crossing). Follows the
+   * tribulationPassed promotion pattern: a real core clause from the moment it
+   * ships, its first consumer (the strand gate) lands post-slice.
+   */
+  rebirths: number
 }
 
 /** A condition object: any subset of clauses, AND-combined. Empty = always true. */
@@ -172,6 +179,8 @@ export interface GameState {
   seclusionRungs: number
   /** The first tribulation has been passed (slice 9; promoted core clause). */
   tribulationPassed: boolean
+  /** Rebirths latched (slice 10; reads soul.rebirths — 0 until the crossing). */
+  rebirths: number
 }
 
 // ---- Evaluation ------------------------------------------------------------
@@ -256,6 +265,8 @@ function clauseHolds<K extends keyof ConditionClauses>(
       return state.seclusionRungs >= (value as number)
     case 'tribulationPassed':
       return state.tribulationPassed
+    case 'rebirths':
+      return state.rebirths >= (value as number)
     default:
       // Exhaustiveness check — unknown keys should never reach here because
       // the type system rejects them at the call site. This default is

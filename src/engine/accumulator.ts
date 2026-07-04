@@ -17,10 +17,12 @@ import type { AccumulatorKey } from './types'
 
 /**
  * Where an accumulator lives across the reset topology:
- * - 'soul'  — carried by the reincarnating cultivator. Until Samsara
- *   differentiates the eternal scope (slice 10, open-questions Q6), soul
- *   instances persist via the 'eternal' layer scope in TREE_DATA.
- * - 'world' — RESERVED: living in the world, findable by any life.
+ * - 'soul'  — carried by the reincarnating cultivator. Slice 10 / D37
+ *   differentiated the old pre-Samsara 'eternal' TREE_DATA scope into
+ *   soul | world | file; soul-scoped accumulators now persist via the 'soul'
+ *   layer scope, topologically unreachable by the reincarnation cascade.
+ * - 'world' — RESERVED: living in the world, findable by any life (the
+ *   chronicle is the founding world-scope instance — see stores/chronicle.ts).
  * - 'dao'   — RESERVED: comprehension/philosophical progress.
  */
 export type AccumulatorScope = 'soul' | 'world' | 'dao'

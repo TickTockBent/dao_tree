@@ -50,7 +50,17 @@ import { SEVERING_DATA } from '@/data/severing'
 import { meets, TEMPER_TIER_ORDER } from '@/engine/meets'
 import type { GameState, ConditionClauses } from '@/engine/meets'
 import type { MaterialKey } from '@/engine/types'
-import { treeResetKeepKeys } from '@/engine/doReset'
+import { treeResetKeepKeys, reincarnationResetLayers } from '@/engine/doReset'
+import {
+  KARMA_DATA,
+  KARMA_DECAY_RATIO,
+  KARMA_FLOOR,
+  VARIANT_SHARE,
+  CLASS_ALLOWED_AXES,
+  AXIS_VOCAB_SIZE,
+  karmaExpansion,
+} from '@/data/karma'
+import type { KarmaQualifierAxis } from '@/data/karma'
 
 /**
  * A synthetic, fully-empty GameState — built from real REALM_DATA/LATTICE_DATA
@@ -93,6 +103,7 @@ function syntheticEmptyState(): GameState {
     daoHeartStacks: 0,
     seclusionRungs: 0,
     tribulationPassed: false,
+    rebirths: 0,
   }
 }
 
@@ -654,6 +665,7 @@ const SAMPLE_ALL_CLAUSES = {
   daoHeartStacks: 0,
   seclusionRungs: 0,
   tribulationPassed: true,
+  rebirths: 0,
 } satisfies ConditionClauses
 
 const ALL_CONDITION_CLAUSE_KEYS: readonly string[] = Object.keys(SAMPLE_ALL_CLAUSES)
@@ -915,5 +927,153 @@ describe('principle #35 severable contribution classes', () => {
         'Sword Trance unexpectedly lockable — the qi axis 0.4 must fail cap·m > 1 at k=2.0',
       ).toBe(false)
     }
+  })
+})
+
+// ---- §1 scope differentiation + the reincarnation-closure lint (slice 10) ---
+//
+// D37 differentiated the old 'eternal' scope into soul | world | file (the
+// death boundary #36 sorts it). Rebirth is a COMPILED cascade tier over
+// TREE_DATA's differentiated enum (engine/doReset.ts reincarnationResetLayers).
+// These checks prove — FROM THE DATA — that the reincarnation closure resets
+// exactly tree + life layers and that soul/world/file state is topologically
+// unreachable by rebirth, exactly the way the tree-leak lint proves the tree
+// cascade never leaks into a non-tree layer.
+
+const KNOWN_SCOPES = new Set(['tree', 'life', 'soul', 'world', 'file'])
+const CARRIED_SCOPES = new Set(['soul', 'world', 'file']) // survive rebirth by construction
+
+describe('§1 scope differentiation (D37)', () => {
+  it('every layer has exactly one valid scope, and tree scope implies a tree id', () => {
+    for (const [layerId, entry] of Object.entries(TREE_DATA.layers)) {
+      expect(KNOWN_SCOPES.has(entry.scope), `${layerId} has invalid scope ${entry.scope}`).toBe(true)
+      if (entry.scope === 'tree') {
+        expect(entry.tree, `${layerId} is tree-scoped but declares no tree`).toBeDefined()
+      } else {
+        expect(entry.tree, `${layerId} is ${entry.scope}-scoped but declares a tree`).toBeUndefined()
+      }
+    }
+  })
+
+  it("'eternal' no longer exists anywhere in TREE_DATA (grep-proof from data)", () => {
+    const scopes = Object.values(TREE_DATA.layers).map((e) => e.scope)
+    expect(scopes).not.toContain('eternal')
+  })
+})
+
+describe('§1 reincarnation-closure lint (rebirth is topologically bounded)', () => {
+  const closure = reincarnationResetLayers()
+  const closureSet = new Set<string>(closure)
+
+  it('the closure resets exactly the tree-scoped + life-scoped layers', () => {
+    const expected = Object.entries(TREE_DATA.layers)
+      .filter(([, entry]) => entry.scope === 'tree' || entry.scope === 'life')
+      .map(([id]) => id)
+      .sort()
+    expect([...closure].sort()).toEqual(expected)
+  })
+
+  it('every layer the closure resets is tree- or life-scoped (never a carried scope)', () => {
+    for (const layerId of closure) {
+      const scope = TREE_DATA.layers[layerId as keyof typeof TREE_DATA.layers]?.scope
+      expect(scope === 'tree' || scope === 'life', `${layerId} (${scope}) is in the rebirth closure`).toBe(true)
+    }
+  })
+
+  it('NO soul/world/file layer is reachable by the rebirth cascade (the closure)', () => {
+    // The core D37 guarantee: what the soul knows / the world holds / the file
+    // records is never reset by rebirth. Proven from the data, not asserted.
+    for (const [layerId, entry] of Object.entries(TREE_DATA.layers)) {
+      if (CARRIED_SCOPES.has(entry.scope)) {
+        expect(
+          closureSet.has(layerId),
+          `${layerId} (${entry.scope}) leaked into the reincarnation closure — soul/world/file must be unreachable by rebirth`,
+        ).toBe(false)
+      }
+    }
+  })
+
+  it('the carried set is non-empty (soul + world exist) — the closure is a real exclusion', () => {
+    const carried = Object.entries(TREE_DATA.layers).filter(([, e]) => CARRIED_SCOPES.has(e.scope))
+    expect(carried.length).toBeGreaterThan(0)
+  })
+})
+
+describe('§1 rebirths core clause (slice 10)', () => {
+  it('parses under meets() and reads soul.rebirths as a >= N threshold', () => {
+    const state = syntheticEmptyState()
+    expect(() => meets({ rebirths: 1 }, state)).not.toThrow()
+    // syntheticEmptyState has rebirths 0 (added with the clause).
+    expect(meets({ rebirths: 1 }, state)).toBe(false)
+    expect(meets({ rebirths: 0 }, state)).toBe(true)
+  })
+})
+
+// ---- §2 karma firsts table lint (slice 10 / D36 + D40) ----------------------
+//
+// Boundedness is provable from the data SHAPE — no future row can reintroduce
+// the infinite grind by accident: r < 1, f = 0, per-class allowed axes, the
+// expansion count pinned Gate-D style.
+
+const ALL_KARMA_AXES = new Set<KarmaQualifierAxis>(['rootShape', 'buildMark', 'realmEra', 'worldContext'])
+
+describe('§2 karma firsts table (D36 + D40)', () => {
+  it('KARMA_DECAY_RATIO r < 1 (bounded income) and KARMA_FLOOR f === 0 (D36)', () => {
+    expect(KARMA_DECAY_RATIO).toBeLessThan(1)
+    expect(KARMA_DECAY_RATIO).toBeGreaterThan(0)
+    expect(KARMA_FLOOR).toBe(0)
+    expect(VARIANT_SHARE).toBeGreaterThan(0)
+    expect(VARIANT_SHARE).toBeLessThan(1)
+  })
+
+  it('every row base > 0 (v1 is all positive — no negative placeholders, no zero-base dead data)', () => {
+    for (const row of KARMA_DATA) {
+      expect(row.base, `${row.key} has a non-positive base`).toBeGreaterThan(0)
+    }
+  })
+
+  it('every declared qualifier axis is a member of the typed union', () => {
+    for (const row of KARMA_DATA) {
+      for (const axis of row.qualifiers) {
+        expect(ALL_KARMA_AXES.has(axis), `${row.key} declares unknown axis ${axis}`).toBe(true)
+      }
+    }
+  })
+
+  it('per-class allowed axes are enforced (grade-delta takes NONE)', () => {
+    for (const row of KARMA_DATA) {
+      const allowed = new Set(CLASS_ALLOWED_AXES[row.class])
+      for (const axis of row.qualifiers) {
+        expect(allowed.has(axis), `${row.key} (${row.class}) declares disallowed axis ${axis}`).toBe(true)
+      }
+      if (row.class === 'grade-delta') {
+        expect(row.qualifiers, `${row.key} is a grade-delta row but declares qualifiers`).toEqual([])
+      }
+    }
+  })
+
+  it('NO row uses the RESERVED worldContext axis (zero instances until the almanac)', () => {
+    for (const row of KARMA_DATA) {
+      expect(row.qualifiers, `${row.key} uses the reserved worldContext axis`).not.toContain('worldContext')
+    }
+    // And the reserved axis has an empty vocabulary (size 0).
+    expect(AXIS_VOCAB_SIZE.worldContext).toBe(0)
+  })
+
+  it('EXPANSION COUNT PIN — the firsts table decomposes to the committed number', () => {
+    // Gate-D style: adding an axis to a row, or growing an axis vocabulary
+    // (roots shipping grows rootShape past {rootless}), changes this number.
+    const expansion = karmaExpansion()
+    const PINNED = {
+      rows: 25,
+      headlines: 25,
+      variants: 96,
+      total: 121,
+      variantsByClass: { milestone: 60, 'grade-delta': 0, deed: 18, encounter: 18 },
+    }
+    expect(
+      expansion,
+      'the firsts table grew/shrank — deliberate commit required (re-pin karmaExpansion after Wes signs off)',
+    ).toEqual(PINNED)
   })
 })

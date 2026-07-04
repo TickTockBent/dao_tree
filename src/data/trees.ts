@@ -3,7 +3,11 @@
 // Port of js/data/trees.js. ONE table replaces ~20 scattered per-layer reset
 // guards: tree membership and reset scope are declared as data, compiled by
 // engine/doReset.ts, and the linter proves no tree's reset closure leaks into a
-// life/eternal layer.
+// non-tree layer. Slice 10 / D37 differentiated the old 'eternal' scope into
+// soul | world | file (the death boundary #36 sorted it): the reincarnation
+// cascade (doReset.ts) resets tree + life layers; soul/world/file are
+// topologically unreachable by rebirth (the reincarnation-closure lint proves
+// it from this data, mirroring the tree-leak lint).
 //
 // Every registered system/layer MUST appear in `layers` with a scope; the
 // engine hard-fails (defense in depth ahead of the linter) if it encounters a
@@ -17,9 +21,9 @@ export interface TreeRow {
 }
 
 export interface LayerScopeEntry {
-  /** "tree" | "life" | "eternal". */
+  /** "tree" | "life" | "soul" | "world" | "file" (D37). */
   readonly scope: Scope
-  /** Required iff scope === "tree"; references trees[].id. Forbidden for life/eternal. */
+  /** Required iff scope === "tree"; references trees[].id. Forbidden for non-tree scopes. */
   readonly tree?: TreeId
 }
 
@@ -49,8 +53,13 @@ export const TREE_DATA: TreeData = {
     gate: { scope: 'life' },
     dao: { scope: 'life' },
     sect: { scope: 'life' },
-    journal: { scope: 'eternal' },
-    legacy: { scope: 'eternal' },
+    // Slice 10 / D37: the journal is the soul's accreted memory (the strand
+    // workshop decided this row — revisitation only works if a new life can
+    // visit the spring a past life saw). Entries never re-announce.
+    journal: { scope: 'soul' },
+    // Slice 10 / D37: legacy grades/personal bests are karma's delta inputs,
+    // read by the chronicle, owned by the soul.
+    legacy: { scope: 'soul' },
     // Slice 7: both survive every realm breakthrough (life-scoped, members of no
     // tree). The secret-realm EXPEDITION run-state additionally resets on
     // expedition entry — a LOCAL scope handled inside the store, deliberately
@@ -58,22 +67,29 @@ export const TREE_DATA: TreeData = {
     secret: { scope: 'life' },
     alchemy: { scope: 'life' },
     // Slice 8: corruption + Dao Heart stacks survive realm breakthroughs
-    // (the permanent anti-rush tension, §7.4). Samsara carry is a slice-10
-    // decision — eternal promotion recorded as an open question there.
+    // (the permanent anti-rush tension, §7.4). D36/D37: body-built power dies
+    // at rebirth — DEMONS stays LIFE-scoped; the soul's ENDURANCE record (which
+    // trials the soul has faced) lives on the soul slice, not here.
     demons: { scope: 'life' },
-    // Slice 8.5: Deep Meditation rungs are ETERNAL — QoL is never clawed back,
-    // not by cascade and (design intent) not by reincarnation. The soul
-    // learned to cultivate unattended; a new body does not unlearn it.
-    seclusion: { scope: 'eternal' },
-    // Slice 9: soul-scoped accumulators (ascent counter + severance ritual,
-    // D21/D23/D25). 'eternal' here is the pre-Samsara encoding of the SOUL
-    // accumulator scope (docs/architecture.md) — slice 10's differentiation
-    // audit (open-questions Q6) assigns it explicitly.
-    soul: { scope: 'eternal' },
+    // Slice 8.5 / D37 (Q4 confirmed): Deep Meditation rungs are SOUL-scoped —
+    // QoL is never clawed back, not by cascade and not by reincarnation. The
+    // soul learned to cultivate unattended; a new body does not unlearn it.
+    seclusion: { scope: 'soul' },
+    // Slice 9 / D37: soul-scoped accumulators (ascent counter + severance
+    // ritual, D21/D23/D25) — the soul knows them; they carry across rebirth.
+    soul: { scope: 'soul' },
     // Slice 9: active severances are LIFE-scoped — severed things return next
     // life (D23). The severance HISTORY (three-lives transcendence, D24)
     // lives on the soul slice, not here.
     severing: { scope: 'life' },
+    // Slice 10 / D36+D40: karma balance + the per-life firsts ledger + the
+    // lifetime firsts history live on the SOUL (the heavens pay the soul for
+    // novelty; the record of what was earned carries).
+    karma: { scope: 'soul' },
+    // Slice 10 / D37: the chronicle is the founding WORLD-scope instance — the
+    // world's record of your lives (epitaphs, provenance, what the springs
+    // remember). Persists after death, belongs to no soul.
+    chronicle: { scope: 'world' },
   },
 }
 

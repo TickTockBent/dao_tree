@@ -23,6 +23,8 @@ import { useSeclusionStore } from '@/stores/seclusion'
 import { useAchievementsStore } from '@/stores/achievements'
 import { useSoulStore } from '@/stores/soul'
 import { useSeveringStore } from '@/stores/severing'
+import { useKarmaStore } from '@/stores/karma'
+import { useChronicleStore } from '@/stores/chronicle'
 
 /** Boot a fresh Pinia + register all stores (like main.ts, without Vue/loop). */
 export function bootTestStores(): void {
@@ -49,6 +51,8 @@ export function bootTestStores(): void {
   const achievements = useAchievementsStore()
   const soul = useSoulStore()
   const severing = useSeveringStore()
+  const karma = useKarmaStore()
+  const chronicle = useChronicleStore()
 
   game.registerSliceProvider({ id: 'b', save: body.save, load: body.load, fresh: body.fresh })
   game.registerSliceProvider({ id: 'realms', save: realm.save, load: realm.load, fresh: realm.fresh })
@@ -66,6 +70,8 @@ export function bootTestStores(): void {
   game.registerSliceProvider({ id: 'ach', save: achievements.save, load: achievements.load, fresh: achievements.fresh })
   game.registerSliceProvider({ id: 'soul', save: soul.save, load: soul.load, fresh: soul.fresh })
   game.registerSliceProvider({ id: 'severing', save: severing.save, load: severing.load, fresh: severing.fresh })
+  game.registerSliceProvider({ id: 'karma', save: karma.save, load: karma.load, fresh: karma.fresh })
+  game.registerSliceProvider({ id: 'chronicle', save: chronicle.save, load: chronicle.load, fresh: chronicle.fresh })
 
   game.registerUpdater({ id: 'body', update: body.update })
   game.registerUpdater({ id: 'dao', update: dao.update })

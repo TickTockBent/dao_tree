@@ -18,14 +18,16 @@ export type LayerId =
   | 'gate' // Deeds (story-gate achievements)
   | 'dao' // Dao lattice
   | 'sect' // Sect standing
-  | 'journal' // Narrative journal (eternal)
-  | 'legacy' // Act I Legacy Grade (eternal)
+  | 'journal' // Narrative journal (soul — the soul's accreted memory, D37)
+  | 'legacy' // Act I Legacy Grade (soul — grades/personal bests, karma's delta inputs, D37)
   | 'secret' // Secret Realm expeditions (slice 7; expedition run-state is locally scoped)
   | 'alchemy' // Alchemy profession (slice 7; the Act I profession slot)
   | 'demons' // Heart Demons + Demon Trials (slice 8; the permanent anti-rush tension)
-  | 'seclusion' // Deep Meditation offline-cap rungs (slice 8.5; eternal QoL progression)
-  | 'soul' // Soul-scoped accumulators (slice 9; eternal until Samsara differentiates scopes — D23/D25)
+  | 'seclusion' // Deep Meditation offline-cap rungs (slice 8.5; soul — a new body does not unlearn it, D37/Q4)
+  | 'soul' // Soul-scoped accumulators (slice 9; soul scope, D37 — the soul knows it)
   | 'severing' // Spirit Severing active severances (slice 9; life-scoped — severed things return next life)
+  | 'karma' // Karma balance + per-life firsts ledger (slice 10; soul — D36/D40)
+  | 'chronicle' // The chronicle — the world's record of your lives (slice 10; world — D37, the founding world instance)
 
 /** All ids that carry a numeric prestige row in the tree (the climb spine). */
 export type RealmLayerId = RealmId
@@ -92,7 +94,23 @@ export type LatticeTierKey = 'glimpse' | 'seed' | 'manifestation'
 
 // ---- Persistence scopes ----------------------------------------------------
 
-export type Scope = 'tree' | 'life' | 'eternal'
+/**
+ * Persistence scope across the reset topology (D37 — the death boundary #36
+ * sorts it). Slice 10 differentiates the old pre-Samsara 'eternal' scope into
+ * three by asking "did the body build this, or does the soul know it, or does
+ * it belong to neither?":
+ *   - 'tree'  — a realm/climb layer; reset by its tree's prestige cascade.
+ *   - 'life'  — body-built; dies at rebirth (reset by the reincarnation cascade).
+ *   - 'soul'  — the soul knows it; carries across rebirth (never reset by cascade).
+ *   - 'world' — belongs to neither body nor soul; the world's record (the
+ *     chronicle is the founding instance). Persists after death, belongs to no
+ *     soul.
+ *   - 'file'  — the Steam-account analog (achievements, D9b): persists across
+ *     reincarnations by construction, above the soul.
+ * The 'dao' scope (comprehension/philosophy) is reserved for the post-slice
+ * strand system (#28) — enum seat added when its first citizen ships.
+ */
+export type Scope = 'tree' | 'life' | 'soul' | 'world' | 'file'
 
 /** Tree ids (acts). Act II opens with Spirit Severing (slice 9). */
 export type TreeId = 'act1' | 'act2'

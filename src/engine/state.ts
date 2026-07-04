@@ -30,6 +30,7 @@ import { useAlchemyStore } from '@/stores/alchemy'
 import { useHeartDemonsStore } from '@/stores/heartDemons'
 import { useSeclusionStore } from '@/stores/seclusion'
 import { useTribulationStore } from '@/stores/tribulation'
+import { useSoulStore } from '@/stores/soul'
 
 /** Build the GameState snapshot consumed by meets(). */
 export function buildGameState(): GameState {
@@ -45,6 +46,7 @@ export function buildGameState(): GameState {
   const heartDemons = useHeartDemonsStore()
   const seclusion = useSeclusionStore()
   const tribulation = useTribulationStore()
+  const soul = useSoulStore()
 
   // Realm bests + sub-stage labels + substage thresholds.
   const realmBest = {} as Record<RealmId, Decimal>
@@ -109,6 +111,8 @@ export function buildGameState(): GameState {
     daoHeartStacks: heartDemons.daoHeartStacks,
     seclusionRungs: seclusion.rungsPurchased,
     tribulationPassed: tribulation.tribulationPassed,
+    // Slice 10 / D37: reads soul.rebirths (0 until the step-4 crossing).
+    rebirths: soul.rebirths,
   }
 }
 
