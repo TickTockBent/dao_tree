@@ -59,8 +59,11 @@ gatherer/meridian/lattice/sect/pill/balanced), `realmEra`, `worldContext`
 (reserved, zero instances). **Headline plus echoes:** bare event pays
 full base once ever; each qualified variant pays `variantShare × base`.
 Exploration-vs-loyalty = `variantShare` + the axis vocabulary, both
-explicit knobs. The ledger is **signed integers from day one** (sins ship
-with the demonic axis, schema now).
+explicit knobs. The ledger's value fields are
+**signed by type** — the schema supports negative entries, and ALL v1
+rows are positive: no placeholder negative-income rows, no zero-base dead
+data in the table or in the expansion-count pin. The demonic axis adds
+its rows when it ships content (§8).
 
 **Lint:** typed-union axes; per-class allowed-axes; **expansion count
 pinned** (Gate-D style); every row r < 1, f = 0; grade rows delta-typed
@@ -156,8 +159,13 @@ Dynasty harness extensions (harness shipped `12595f1`):
    lines until then; NEVER the FAIL token):
    - §6.6 no-Samsara run inside the pinned bands (unchanged by
      construction; verified anyway).
-   - Repeat < breadth: N identical lives earn strictly less karma than
-     any breadth sequence of equal length; farm income converges.
+   - Repeat < breadth **at equal competence**: as played by the sim
+     actors (constant competence by construction), N identical lives
+     earn strictly less karma than a breadth sequence of equal length;
+     farm income converges. NOT a universal law — a mastered repeat
+     build setting fresh grade personal-bests can legitimately out-earn
+     incompetent breadth (deltas latch; they don't decay like repeats).
+     The assertion is scoped to what the sim can actually prove.
    - Root dominance sweep **at every purity grade** (dominance emerges at
      Heaven, not Mortal).
    - Wider-not-taller dynasty bound: a maxed save (Heaven purity, full
@@ -177,6 +185,10 @@ Dynasty harness extensions (harness shipped `12595f1`):
 3. **⟸ Gate-D pause: Wes prices against the measurements** (D38's
    measure-first, D40's shape check) — class bases, variantShare,
    fragment curve, purity grid. Rule 0.1: evidence + sign-off.
+   **Steps 4–7 are strictly sequential on this pause:** every later
+   agent builds against the signed-off prices, never against v0
+   measurement weights. No UI is built twice; the receipt and menu
+   display real numbers from their first commit.
 4. **Rebirth mechanics** (agent): cascade wiring, prestige path, receipt
    + menu UI, the crossing.
 5. **Fragments + roots** (agent): data + menu behavior + lattice

@@ -568,7 +568,12 @@ carries; what belongs to neither is probably world-scoped.
 grade rows are delta-typed (boundedness provable from the data shape);
 dynasty-harness assertion (when pinned) — a repeat-sequence of N identical
 lives earns strictly less than any breadth-sequence of equal length; §6.6
-no-Samsara run unchanged.
+no-Samsara run unchanged. *(Tightened at the spec review, same day: the
+repeat<breadth assertion holds **at equal competence** — scoped to the sim
+actors, who play at constant competence by construction. A mastered repeat
+build setting fresh grade personal-bests can legitimately out-earn
+incompetent breadth; deltas latch, they don't decay. slice-10.md §6.4
+carries the provable form.)*
 
 ## D37 — The scope audit: the death boundary sorts it; the chronicle founds the world scope (Q4/Q6 closed, DQ3 folded)
 
