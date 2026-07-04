@@ -92,3 +92,85 @@ v2. Now an expression of the almanac substrate — rivals' events are
 almanac-scheduled, and the loot layer's elder encounter is an ambient-rival
 event landing as loot. Sect reputation influencing which elders appear is
 part of sect's world-ownership.
+
+## Dao strands — the inner loop *(workshop capture 2026-07-04; vocabulary provisional; post-slice-10 arc)*
+
+Wes's raw shape, captured with its binding rules. A **strand of the larger
+Dao taken within you** — a mental framework, a worldview, the compass of the
+soul. NOT a technique, skill, or stat: "how do you see the world," made
+mechanical. The founding citizen of the **dao accumulator scope**
+(architecture.md — the reserved third scope finally gets its instance).
+
+**The loop.** A strand is fragile and responds to you. Let it wither and
+lose nothing; nurture it and gain new paths. Nurture is **mental exercise
+apart from Qi cultivation** — journal reflection, revisitation (below),
+debate, wide reading — routed through the game's existing reflective
+surfaces, never a new daily chore. Years to mature in the best
+circumstances; the specifics depend on the strand itself. Mature strands
+**weave into mental tapestries**; a failed strand **rips, shreds, and blows
+away on the dao wind** — and the wind comes around again (almanac-cycled
+availability: failure is deferral, never destruction).
+
+**Sources.** Transmission, cultivator to cultivator, once fully formed
+(sect lineages — D1's world-between-lives; family inheritance — the
+ancestral-knowledge channel; a dying rogue cultivator's last transmission).
+Fresh ideation only in extraordinary circumstances — loot-register:
+aggregate-certain exposure, specific-rare genesis, the once-in-a-dynasty
+epitaph line.
+
+**The Samsara gate.** No strand ever appears in the first life-cycle —
+only after the first full Samsara reset. A mind that has never died cannot
+perceive a framework as a framework. (Also the onboarding shield: new
+players never see this layer.)
+
+**Journal revisitation (the flagship nurture channel).** The journal — pure
+output since 0.2, already recording stage-at-unlock since 0.3.0 — becomes
+INPUT: memory as terrain. Entries grow a "revisit" affordance while a
+strand is carried ("Visit the spring"); what you find keys to the strand
+you follow (dried up / corrupted / a peaceful echo of the larger dao, the
+world continuing on without you); what you *choose to do* with what you
+find feeds the strand (dao), becomes who you are (soul), and can write
+world state a future life inherits (world — heal the spring and your
+dynasty finds it healed).
+
+**Effects.** Never a flat bonus — a **leaning**. Aligned paths cheaper,
+misaligned paths orders of magnitude harder; true blocks rare and reserved
+for definitionally exclusive identities. Strand-exclusive options exist:
+things only thinkable inside that framework, including (dream tier)
+post-game hidden paths gated on *perception* — content invisible without
+the worldview to see it (D11's deepest expression).
+
+**Binding rules** (the implementer inherits these with the idea):
+- **Ritual, not tax.** Its own loop with its own reward structure;
+  withering costs nothing (secret-realm optionality clause; invariant §6.6
+  — never a ransom). If nurture ever becomes a daily-click chore, delete it.
+- **Leanings never punish the strandless path** (the aspect-trap lesson);
+  no strand is correct for all builds (counter-monopoly test).
+- **Exclusions bind at maturity, not at planting** (the flow/stillness
+  Manifestation precedent). Uprooting an immature strand is possible at
+  cost; full costs legible at choice time, restated at the binding
+  threshold (D32 grammar).
+- **Failure is cyclical, not destructive** — the dao wind returns (almanac
+  substrate; scar grammar).
+- **Perception-gating only for optional horizon content** (D11; the
+  achievements lint precedent — nothing hidden gates the early loop).
+- **Content-matrix discipline:** few locations × few strands, deep
+  outcomes. Three springs with real consequences beat thirty with flavor
+  text.
+
+**What slice 10 reserves (cheap, in-passing):** the `dao` scope enum seat
+(planned anyway, now with a named intended citizen); the rebirth counter as
+a core `meets()` clause (the Samsara gate is then one condition row);
+chronicle per-life fields for strands held / matured / transmitted / torn
+(schema-now-content-later, the D24 insurance pattern).
+
+**Timing:** after Samsara AND the almanac/narrative era — genesis events
+want the almanac's event machinery, nurture wants the ambient texture
+layer, and this is the most narrative mechanic yet proposed. The strand's
+own rule, applied to itself: it needs years and the right soil.
+
+Couplings: journal (stage-at-unlock shipped 0.3.0), spirit garden (the
+visible-maturity decision shape, turned inward), Authorities rhyme (weave
+Laws outwardly : weave strands inwardly), heart demons (speculative: your
+framework shapes which demons come), sect world-ownership (D1), ancestral
+knowledge, the almanac (the dao wind).
