@@ -705,3 +705,35 @@ fragment affordable on a modest life, Heaven purity requiring many lives'
 surplus, the escalation knee at the typical single-life income.
 **Measure-first, price-against-measurement produces numbers you can
 defend.** Price-first produces the tribulation-bank kind of debt.
+
+## D39 — Transcendence pays at full ramp from breath one; rebirth is a voluntary prestige (DQ6/DQ9 ruled)
+
+*2026-07-04, the slice-10 design pass, fourth ruling — "both ship as
+written." DQ1–DQ9 complete.*
+
+**Transcendence (the D24 Steam-gate must-ship):** sever the same
+attachment in ANY three lives (non-consecutive; the soul's severance
+history is the record) → transcended permanently. Every subsequent life
+starts with that piece **already severed at full ramp** — gone, with
+cap × contribution from breath one. No trough: the weakness window was
+lived three times, and that was the price. D23's "severed things return
+next life" gets its one designed exception; the Act III Authorities hook
+attaches later without rework. Ruled with two consequences:
+- **D31 interaction:** transcended pieces leave the severance menu
+  forever — the ≥3-live-severables assertion counts only non-transcended
+  severables; expanding the severable roster is the pressure valve as
+  transcendences accumulate.
+- **D32 moment:** the THIRD cut of the same attachment announces the
+  transcendence — "permanent, across all future lives" — at choice time
+  and again at the armed confirm. Never discovered after the fact.
+
+**Unlock + the rebirth moment:** Samsara unlocks at the first Act I
+capstone (the tribulation crossing, as committed). Rebirth is a
+**voluntary prestige, available whenever the player judges the life
+complete** — nothing ever forces it (almanac-era mortality flavor may
+layer on later; mechanically it stays chosen). **The rebirth screen reads
+the ledger before you cross** (D32 at-choice-time, applied to the biggest
+choice in the game): the karma receipt — firsts earned, what they pay,
+what repeats paid nothing — then the two-item menu. Mid-Act-II rebirth is
+nothing special: the scope topology handles all of it, no special-case
+code path.
