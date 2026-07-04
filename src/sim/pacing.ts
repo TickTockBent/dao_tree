@@ -11,6 +11,7 @@
 // Run via: npm run sim
 
 import { createPinia, setActivePinia } from 'pinia'
+import { pathToFileURL } from 'node:url'
 import Decimal from 'break_eternity.js'
 import { useGameStore } from '@/stores/game'
 import { useBodyStore } from '@/stores/body'
@@ -23,6 +24,7 @@ import type { ActivePill } from '@/stores/alchemy'
 import { useHeartDemonsStore } from '@/stores/heartDemons'
 import { useDaoStore } from '@/stores/dao'
 import { useSectStore } from '@/stores/sect'
+import { useSoulStore } from '@/stores/soul'
 import { findRealm } from '@/data/realms'
 import { SETPIECE_DATA } from '@/data/setpieces'
 import { LATTICE_DATA } from '@/data/lattice'
@@ -39,6 +41,12 @@ import { ACCUMULATOR_DATA } from '@/data/accumulators'
 import { findBodyBuyable } from '@/data/body'
 import type { Condition } from '@/engine/meets'
 import type { PillKey, SectArchetypeKey, SecretRealmSiteKey } from '@/engine/types'
+// The multi-life (dynasty) harness (v1 — soul-side carry). This module imports
+// FROM dynasty.ts (one direction only); dynasty.ts imports nothing at runtime
+// from here, so the two never form a runtime cycle and importing pacing.ts for
+// its single-life adapter (e.g. from a test) is safe.
+import type { SoulBridge, LifeResult, DynastySequenceSpec } from './dynasty'
+import { printDynastySection } from './dynasty'
 
 // ---- Pinned budgets (from the old pacing sim, pass-3 tune) ------------------
 // Pinned budgets from the old pacing sim (reference targets for future parity pins).
@@ -2591,6 +2599,19 @@ interface Act2ActorResult {
   manifestFromScratch: boolean
   manifestAcquireSeconds: number
   /**
+   * DYNASTY harness outputs (soul-side carry). Additive — never read by any Act
+   * II printer, so their presence leaves the existing sim output byte-identical;
+   * consumed only by runLifeToTribulation when the dynasty harness drives a life.
+   * lifeFinalAscents is the pinia soul.ascents AFTER the life (carry-in grown by
+   * this life's n/s cascades); lifeReclimbSeconds/Count summarize the c re-climb
+   * segments (the carry-acceleration probe); severedSeverableKeys is the pieces
+   * this life actually cut (for the severance history).
+   */
+  lifeFinalAscents: number
+  lifeReclimbSeconds: number
+  lifeReclimbCount: number
+  severedSeverableKeys: string[]
+  /**
    * D35 Call-1 SURVIVABILITY measure — present only when this actor severs the
    * Flowing Form. During the trough (qi at 0.35·baseline), can it fill the NEXT
    * offering's qi cost, and how does the first post-cut offering compare to the
@@ -2627,9 +2648,33 @@ interface Act2ActorResult {
  * runs the analytic ramp — quantizing offering waits to the check-in grid for a
  * cadence actor and applying the held-pill discount when the policy holds one.
  */
-function runActIIActor(policy: Act2ActorPolicy): Act2ActorResult {
-  const actState = runProfileQuiet(policy.actIRunner)
+function runActIIActor(policy: Act2ActorPolicy, incomingSoul?: SoulBridge): Act2ActorResult {
+  // DYNASTY carry (soul-side): when a bridge is injected, seed the pinia soul
+  // store with the carried accumulators AFTER bootSim (fresh pinia) but BEFORE
+  // the Act I policy runs its first prestige — so reclimbGainMult starts already
+  // accelerated by the carried ascents (the real shipped gain rule, realm.ts).
+  // With NO bridge the base runner is passed through untouched → byte-identical
+  // to every existing call. A cold-start bridge (all zeros) loads the same fresh
+  // slice bootSim already produced, so a 1-life dynasty matches the base run.
+  const actIRunner: (state: SimState) => void = incomingSoul
+    ? (state: SimState): void => {
+        useSoulStore().load({
+          ascents: incomingSoul.ascents,
+          severanceRituals: incomingSoul.severanceRituals,
+          severanceHistory: [...incomingSoul.severanceHistory],
+        })
+        policy.actIRunner(state)
+      }
+    : policy.actIRunner
+  const actState = runProfileQuiet(actIRunner)
   const actISeconds = actState.simSeconds
+  // Soul-side carry outputs, captured from the live pinia + the Act I state.
+  const lifeFinalAscents = useSoulStore().ascents
+  const lifeReclimbCount = actState.cReclimbSegments.length
+  const lifeReclimbSeconds = actState.cReclimbSegments.reduce(
+    (sumSeconds, segment) => sumSeconds + segment.durationSeconds,
+    0,
+  )
   const pipelines = usePipelinesStore()
   const body = useBodyStore()
   const dao = useDaoStore()
@@ -2838,7 +2883,11 @@ function runActIIActor(policy: Act2ActorPolicy): Act2ActorResult {
   let insightBank = dao.insight
   const qiBankStart = game.points
   const insightBankStart = dao.insight
-  let rituals = 0
+  // DYNASTY carry (soul-side): offerings compound their mastery discount across
+  // lives, so the ritual accumulator starts at the carried count. With no bridge
+  // this is 0 → identical to every existing call. `stepsInto` still measures
+  // steps since THIS sever (a delta), so only the absolute mastery shifts.
+  let rituals = incomingSoul?.severanceRituals ?? 0
   let bindTimeQiSeconds = 0
   let bindTimeInsightSeconds = 0
   const checkin = policy.cadenceCheckinSeconds
@@ -3098,6 +3147,10 @@ function runActIIActor(policy: Act2ActorPolicy): Act2ActorResult {
     missingSeverables,
     manifestFromScratch,
     manifestAcquireSeconds,
+    lifeFinalAscents,
+    lifeReclimbSeconds,
+    lifeReclimbCount,
+    severedSeverableKeys: severOrder.map((piece) => piece.key),
     flowingFormSurvivability,
     conditionalClassPreview,
   }
@@ -3144,7 +3197,7 @@ function runActIIRoster(): Act2ActorResult[] {
       wearsStance: 'breathingTrance',
     },
   ]
-  return policies.map(runActIIActor)
+  return policies.map((policy) => runActIIActor(policy))
 }
 
 /** Print the ACT II ROSTER section + the consolidated tune-pass inputs (pure insertion; observation-only). */
@@ -3364,6 +3417,79 @@ function printActIIRoster(actors: Act2ActorResult[], spine: Act2Result): void {
     '  (ACT II TUNE-PASS INPUTS end — every line answerable from the evidence above; nothing asserted, no error token emitted.)',
   )
 }
+
+// ---- DYNASTY (multi-life) harness bridge ------------------------------------
+// The single-life adapter + the demo roster for the observation-only dynasty
+// section. runLifeToTribulation wraps runActIIActor (a full Act I → First
+// Tribulation → Act II run) and packages exactly the soul-side carry the
+// dynasty harness (src/sim/dynasty.ts) threads between lives. A "life" here is
+// the whole cultivation life: hours-to-tribulation is its Act I headline; its
+// offerings + severed pieces + final ascent count carry forward.
+//
+// CONSERVATIVE MODELING / DESIGN FLAGS (v1, soul-side only):
+//  - The ascent counter is read from the LIVE pinia soul store (it grows via
+//    realm.prestige → soul.recordAscent, exactly the shipped mechanism), so the
+//    carry uses the real reclimbGainMult gain rule — no counterfactual clock.
+//  - The severance-ritual (offering) count is analytic (the Act II model never
+//    calls soul.recordSeveranceRitual), so the harness carries it explicitly.
+//  - Severance history records the Act II piece keys cut (a superset of the
+//    store's SeverableKey — includes manifestation/flowingForm); data only.
+//  - OUT OF SCOPE, not modeled: karma, world/root state, memory fragments, any
+//    rebirth mechanic. Where the correct bridge contents are unruled, this reads
+//    conservatively (carry only what soul.ts already carries) and defers.
+function runLifeToTribulation(policy: Act2ActorPolicy, incoming: SoulBridge): LifeResult {
+  const result = runActIIActor(policy, incoming)
+  const SECONDS_PER_HOUR = 3600
+  return {
+    name: policy.name,
+    hoursToTribulation: result.actISeconds / SECONDS_PER_HOUR,
+    actISeconds: result.actISeconds,
+    actIISeconds: result.actIISeconds,
+    reclimbSeconds: result.lifeReclimbSeconds,
+    reclimbCount: result.lifeReclimbCount,
+    offerings: result.totalOfferings,
+    severedKeys: result.severedSeverableKeys,
+    finalAscents: result.lifeFinalAscents,
+  }
+}
+
+// Demo roster policies (each a real Act I end-state + a severing policy, reused
+// from the Act II roster's grammars). Competent = the balanced spine; Realistic
+// = the experience-target checker; Lattice = the insight specialist.
+const DYNASTY_COMPETENT_POLICY: Act2ActorPolicy = {
+  name: 'Competent',
+  actIRunner: runCompetent,
+  severOrderKeys: ['soulAspect', 'manifestation', 'profession'],
+  holdsPill: false,
+  cadenceCheckinSeconds: null,
+}
+const DYNASTY_REALISTIC_POLICY: Act2ActorPolicy = {
+  name: 'Realistic',
+  actIRunner: runRealistic,
+  severOrderKeys: ['soulAspect', 'manifestation', 'profession'],
+  holdsPill: true,
+  cadenceCheckinSeconds: REALISTIC_CHECKIN_LATE_SECONDS,
+}
+const DYNASTY_LATTICE_POLICY: Act2ActorPolicy = {
+  name: 'Lattice',
+  actIRunner: spineRunner(LATTICE_CONFIG),
+  severOrderKeys: ['soulAspect', 'manifestation', 'flowingForm'],
+  holdsPill: false,
+  cadenceCheckinSeconds: null,
+  wearsStance: 'breathingTrance',
+}
+
+const DYNASTY_ROSTER: DynastySequenceSpec<Act2ActorPolicy>[] = [
+  { label: 'Competent ×3', sequence: [DYNASTY_COMPETENT_POLICY, DYNASTY_COMPETENT_POLICY, DYNASTY_COMPETENT_POLICY] },
+  { label: 'Realistic ×3', sequence: [DYNASTY_REALISTIC_POLICY, DYNASTY_REALISTIC_POLICY, DYNASTY_REALISTIC_POLICY] },
+  {
+    label: 'Mixed (Competent → Realistic → Lattice)',
+    sequence: [DYNASTY_COMPETENT_POLICY, DYNASTY_REALISTIC_POLICY, DYNASTY_LATTICE_POLICY],
+  },
+]
+
+/** Exposed for the dynasty test harness (import-safe: see the main-module guard at EOF). */
+export { runLifeToTribulation, DYNASTY_COMPETENT_POLICY, DYNASTY_REALISTIC_POLICY, DYNASTY_LATTICE_POLICY }
 
 function runProfile(name: string, fn: (state: SimState) => void): SimState {
   bootSim()
@@ -4170,11 +4296,29 @@ export function runPacingSim(): void {
         'and check the tortoise rule — trailing AND owning nothing distinct = under-tuned; ledger #1).',
     )
   }
+
+  // The multi-life (dynasty) harness (v1 — soul-side carry). Observation-only,
+  // appended AFTER every existing section: no pinned band moves, no assertion,
+  // no error token. Dynasty assertions await a Gate-D sign-off.
+  printDynastySection(DYNASTY_ROSTER, runLifeToTribulation)
 }
 
-// Executed via `npm run sim` (tsx src/sim/pacing.ts). Nothing else imports
-// this module, so the top-level call below is the sim's sole entry point —
-// the M7 scaffold exported `runPacingSim` but never wired an invocation,
+// Executed via `npm run sim` (tsx src/sim/pacing.ts) — the sim's sole entry
+// point. The M7 scaffold exported `runPacingSim` but never wired an invocation,
 // leaving `npm run sim` a silent no-op; wiring it here so the harden pass's
 // optionality assertions (and every future addition to this sim) actually run.
-runPacingSim()
+//
+// MAIN-MODULE GUARD: run ONLY when this file is the process entry (tsx/node
+// running it directly), NOT when it is imported. The dynasty test harness
+// imports runLifeToTribulation from here; without this guard that import would
+// re-run the whole sim. Under `npm run sim`, process.argv[1] resolves to this
+// file's path → the URLs match → the sim runs exactly as before (output
+// byte-identical).
+const invokedAsScript =
+  typeof process !== 'undefined' &&
+  Array.isArray(process.argv) &&
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+if (invokedAsScript) {
+  runPacingSim()
+}
