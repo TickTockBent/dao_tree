@@ -779,3 +779,60 @@ than a performance-incentive** (if 80% comes from grade deltas and 10%
 from echoes, variantShare barely matters and "get better" has drowned out
 "explore"). Class-level base rates are tuned to produce the wanted
 distribution. Measure the shape alongside the total, then tune.
+
+## D41 — The pricing ruling: baseline-relative buildMark, 8/8/7/4, variantShare 0.4, the fragment/purity grid (the Gate-D pause, part 1)
+
+*2026-07-04, ruled against the step-2 measurements (commit `419f7b4`:
+breadth/repeat 1.05×, headlines 55–69%, grade deltas 3–4%). "These are
+starting points for the agent to re-run against. The Gate-D sign-off is
+on the measured ratios and distributions after the re-run, not on these
+specific numbers."*
+
+**#4 first — the buildMark norms were measuring the wrong thing.** The
+v0 soft-caps measured ABSOLUTE investment, so "everyone maxes meridians"
+collapsed three of four actors to `balanced` and mislabeled the lattice
+build `meridian`. The rule shape (dominant investment) is correct; the
+fix is **relative investment against the universal baseline**: the mark
+is the axis where the actor most exceeds the median actor's investment
+in that axis. Meridians are the baseline everyone shares; the meridian
+BUILD is the one that goes furthest past the universal meridian level.
+`balanced` becomes a real mark (no axis significantly exceeds the
+median), not a default bucket. **Fixed before the firsts table ships** —
+a mark that misclassifies three of four actors prices echoes against
+noise. (Implementation: baselines pinned as constants derived from the
+measured roster medians; the shipped function stays pure.)
+
+**#5 — grade deltas pay flat per improvement EVENT, ship it.** A 3–4%
+income class doesn't earn step-scaling complexity — and the flat payment
+is more correct anyway: C→B and D→B both improved once; being further
+behind isn't something karma should reward more.
+
+**#1 — reweight toward build-distinct classes + raise the echo.** Class
+bases 10/6/5/4 → **8/8/7/4** (milestones still largest — they're the
+most content — but deeds/encounters at near-parity instead of
+half-weight, targeting build-distinct income at 25–35%). **variantShare
+0.25 → 0.4**: an echo at nearly half a headline is the right register —
+"this was real, and worth noting, but it wasn't your first time."
+**KARMA_DECAY_RATIO stays 0.5** (third repeat at 25% = genuinely
+diminishing; second visit still pays). **Acceptance criterion: the
+re-run's breadth-vs-repeat ratio lands in 1.3–1.5×** — exploration
+visibly rewarded, repetition not punished.
+
+**#3 — the v1 row set ships as drafted** (25 rows, pin 121): severances
+headline-only (the choice is the identity moment; "severed the same
+thing as a different build" isn't a different experience); realm
+milestones carry buildMark (reaching Nascent Soul as a meridian build IS
+a different experience). Expansion count must hold after the norm fix
+(it should — the count is vocabulary-determined, not
+assignment-determined; verify the pin anyway).
+
+**#2 — the rebirth-economy grid (data ships at steps 4–5; verified
+against measured incomes now):** first Seed **~15** karma, growth
+**~2×** per additional (life 1 carries two comfortably, three with a
+stretch; a 28-karma late repeat carries exactly one — the curve
+self-enforces without a cap). Purity: **Mortal free** (the baseline),
+**Earth ~200** (~1.5 first lives — mid-dynasty), **Heaven ~800** (a
+genuine dynasty project, roughly life 15–20 of a well-played dynasty —
+the long-tail retention horizon; the grade-up is a chronicle event).
+Technique fragments: **separate flat track at ~8** — carry a couple
+alongside Seeds without competing at the margin.
