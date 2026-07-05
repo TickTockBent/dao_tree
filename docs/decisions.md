@@ -875,3 +875,36 @@ grid unchanged. Steps 4–7 unblocked against the signed prices.
    the **post-roots re-measurement is a named Gate-D item**; if roots
    don't close it even in projection, the class bases get the harder
    look.
+
+## D43 — The morning five: transcendence pays, purity ratchets, the sweep rules the grid
+
+*2026-07-05, ruled in one batch against the overnight build (steps 4–7
+complete at `3b5da07`).*
+
+1. **The pin moves — transcendence is a headline deed.** `transcended:*`
+   rows (one per severable, deed class, headline-only like severance
+   deeds) enter KARMA_DATA: the single highest-stakes irreversible in
+   the game belongs in the receipt; excluding it would mean the most
+   significant moment in a dynasty earns no karma. Expansion pin
+   121 → the new count in the SAME deliberate commit; lint confirms.
+2. **Purity is a soul-scoped RATCHET, not rent.** Per-life spend made
+   Heaven a recurring 800-karma tax; the intent was always dynasty
+   milestones: buy Earth once (200), buy the Heaven upgrade once (800),
+   the soul carries the grade forever. "Bore a Heaven-grade root" is a
+   permanent fact about the soul, not a rental agreement. Small rework:
+   purity moves to the soul; the rebirth menu offers only grade-UPS;
+   root config (count/identity) stays the per-life choice.
+3. **The discount grid stays ⟨tune⟩ until the sweep rules it.** The
+   shape is right (deep-narrow ≈ 3× wide-shallow, Earth half, Mortal
+   zero) but these are exactly the numbers the step-8 dominance sweep
+   exists to validate — no sign-off before the sweep; if any root
+   configuration dominates at Heaven, these are the numbers that move.
+4. **Levels v1 ships now** (the inline current-substage readout on every
+   realm card + next threshold — substages invisible to the player
+   violates "never veil the now"); the expandable ladder + RealmCard
+   extraction ride the future UI polish pass.
+5. **Step 8 bundles the slice-9 §6 hardening** — same activity, same
+   Gate-D discipline, one assertion session: harden both slices'
+   PREVIEWs, run the root-dominance sweep, golden, tag. A preview that
+   fails under the sweep is a FINDING (the ⟨tune⟩ moves before
+   hardening), not a failure.
