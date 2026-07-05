@@ -23,6 +23,7 @@ import { useSeclusionStore } from '@/stores/seclusion'
 import { useAchievementsStore } from '@/stores/achievements'
 import { useSoulStore } from '@/stores/soul'
 import { useSeveringStore } from '@/stores/severing'
+import { useRootsStore } from '@/stores/roots'
 import { useKarmaStore } from '@/stores/karma'
 import { useChronicleStore } from '@/stores/chronicle'
 
@@ -51,6 +52,7 @@ export function bootTestStores(): void {
   const achievements = useAchievementsStore()
   const soul = useSoulStore()
   const severing = useSeveringStore()
+  const roots = useRootsStore()
   const karma = useKarmaStore()
   const chronicle = useChronicleStore()
 
@@ -70,6 +72,7 @@ export function bootTestStores(): void {
   game.registerSliceProvider({ id: 'ach', save: achievements.save, load: achievements.load, fresh: achievements.fresh })
   game.registerSliceProvider({ id: 'soul', save: soul.save, load: soul.load, fresh: soul.fresh })
   game.registerSliceProvider({ id: 'severing', save: severing.save, load: severing.load, fresh: severing.fresh })
+  game.registerSliceProvider({ id: 'roots', save: roots.save, load: roots.load, fresh: roots.fresh })
   game.registerSliceProvider({ id: 'karma', save: karma.save, load: karma.load, fresh: karma.fresh })
   game.registerSliceProvider({ id: 'chronicle', save: chronicle.save, load: chronicle.load, fresh: chronicle.fresh })
 

@@ -15,6 +15,9 @@ import { ref, computed } from 'vue'
 import { useRebirthStore } from '@/stores/rebirth'
 import { findRealm } from '@/data/realms'
 import { findSeverable } from '@/data/severing'
+import { ROOT_ELEMENTS, PURITY_GRADES, ROOT_PURITY_COST } from '@/data/rebirth'
+import type { Element, LatticeNodeKey } from '@/engine/types'
+import type { PurityGrade } from '@/data/rebirth'
 import { format } from '@/engine/format'
 
 const rebirth = useRebirthStore()
@@ -25,6 +28,34 @@ const armed = ref(false)
 const receipt = computed(() => rebirth.previewReceipt())
 const balance = computed(() => rebirth.carriedBalance)
 const richness = computed(() => rebirth.previewRichnessTier())
+
+// ---- The two-item menu (D38): fragments (Seeds) + roots -------------------
+const seeds = computed(() => rebirth.carryableSeeds())
+const selectedSeeds = computed(() => rebirth.selectedSeedKeys)
+const draftElements = computed(() => rebirth.rootDraftElements)
+const draftPurity = computed(() => rebirth.rootDraftPurity)
+const spendTotal = computed(() => rebirth.spendTotal)
+const seedSpend = computed(() => rebirth.seedSpend)
+const rootSpend = computed(() => rebirth.rootSpend)
+const nextSeedPrice = computed(() => rebirth.nextSeedPrice)
+const affordable = computed(() => rebirth.spendAffordable)
+const balanceAfterSpend = computed(() => rebirth.balanceAfterSpend)
+
+const elements: readonly Element[] = ROOT_ELEMENTS
+const purities: readonly PurityGrade[] = PURITY_GRADES
+
+function seedSelected(key: LatticeNodeKey): boolean {
+  return selectedSeeds.value.includes(key)
+}
+function titleCase(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+function purityCost(grade: PurityGrade): number {
+  return ROOT_PURITY_COST[grade]
+}
+function elementHeld(element: Element): boolean {
+  return draftElements.value.includes(element)
+}
 
 const headlineLines = computed(() => receipt.value.lines.filter((line) => line.kind === 'headline'))
 const echoLines = computed(() => receipt.value.lines.filter((line) => line.kind === 'echo'))
@@ -106,23 +137,65 @@ function confirmCross(): void {
         in the chronicle.</p>
     </section>
 
-    <!-- THE MENU FRAME — the next life's choices (step 5 populates them). -->
+    <!-- THE MENU — the next life's choices (D38: memory fragments + roots). -->
     <section class="menu">
       <h5>What you carry into the next life</h5>
       <p class="carries">
         Karma balance carried: <strong>{{ format(balance) }}</strong>
         <span class="dim">(+{{ format(receipt.total) }} once you cross)</span>
       </p>
-      <ul class="slots">
-        <li class="slot locked">
+
+      <div class="slots">
+        <!-- Memory fragments — Seeds carry on an escalating curve. -->
+        <div class="slot">
           <span class="slot-name">Memory Fragments</span>
-          <span class="slot-state">the next life's choices — coming soon</span>
-        </li>
-        <li class="slot locked">
-          <span class="slot-name">Roots</span>
-          <span class="slot-state">the next life's body — coming soon</span>
-        </li>
-      </ul>
+          <p class="slot-help dim">
+            Glimpses carry free. Pay to carry a Seed — each one dearer than the last
+            ({{ format(nextSeedPrice) }} for the next).
+          </p>
+          <ul v-if="seeds.length > 0" class="seed-list">
+            <li v-for="seed in seeds" :key="seed.key">
+              <label>
+                <input type="checkbox" :checked="seedSelected(seed.key)" @change="rebirth.toggleSeed(seed.key)" />
+                {{ seed.name }}
+              </label>
+            </li>
+          </ul>
+          <p v-else class="dim slot-empty">No Seeds this life — only Glimpses, and those carry free.</p>
+          <p class="slot-cost">Fragments: <strong>{{ format(seedSpend) }}</strong> karma</p>
+        </div>
+
+        <!-- Roots — count + identity (config) and purity (the sink). -->
+        <div class="slot">
+          <span class="slot-name">Spiritual Roots</span>
+          <p class="slot-help dim">Choose the body you build. Rootless is the default — no cost, no speed.</p>
+          <div class="element-chips">
+            <button
+              v-for="element in elements"
+              :key="element"
+              class="chip"
+              :class="{ on: elementHeld(element) }"
+              @click="rebirth.toggleRootElement(element)"
+            >{{ titleCase(element) }}</button>
+          </div>
+          <div v-if="draftElements.length > 0" class="purity-row">
+            <span class="dim">Purity:</span>
+            <button
+              v-for="grade in purities"
+              :key="grade"
+              class="chip"
+              :class="{ on: draftPurity === grade }"
+              @click="rebirth.setRootPurity(grade)"
+            >{{ titleCase(grade) }}<span class="chip-cost">{{ purityCost(grade) === 0 ? 'free' : format(purityCost(grade)) }}</span></button>
+          </div>
+          <p class="slot-cost">Roots: <strong>{{ format(rootSpend) }}</strong> karma</p>
+        </div>
+      </div>
+
+      <p class="spend-total" :class="{ over: !affordable }">
+        Total spend: <strong>{{ format(spendTotal) }}</strong> karma
+        <span v-if="!affordable" class="over-warn">— more than you'll have</span>
+      </p>
     </section>
 
     <!-- THE ARMED CONFIRM — restate what dies, what carries (D32). -->
@@ -134,11 +207,22 @@ function confirmCross(): void {
         <span class="dies">What dies:</span> this body — every realm climbed, every grade forged,
         every severance made, the qi and insight you banked. All of it.
         <br />
-        <span class="carries-word">What carries:</span> the soul — its karma
-        (<strong>{{ format(balance + receipt.total) }}</strong> after this), its ascents and seclusion,
-        its journal and chronicle, the record of every trial it has faced.
+        <span class="carries-word">What carries:</span> the soul — its karma, its ascents and
+        seclusion, its journal and chronicle, the record of every trial it has faced;
+        and, free, every Dao truth you have Glimpsed.
+        <br />
+        <span class="spend-word">What you buy for the next life:</span>
+        <template v-if="spendTotal > 0">
+          {{ selectedSeeds.length }} carried
+          {{ selectedSeeds.length === 1 ? 'Seed' : 'Seeds' }}<template v-if="draftElements.length > 0">, a
+          {{ titleCase(draftPurity) }}-purity root of
+          {{ draftElements.map(titleCase).join(' / ') }}</template> — <strong>{{ format(spendTotal) }}</strong> karma.
+        </template>
+        <template v-else>nothing — a rootless life, no fragments carried (the baseline).</template>
+        <br />
+        <span class="dim">Karma remaining after crossing: <strong>{{ format(balanceAfterSpend) }}</strong>.</span>
       </p>
-      <button class="danger" @click="confirmCross()">Cross into the next life</button>
+      <button class="danger" :disabled="!affordable" @click="confirmCross()">Cross into the next life</button>
       <button @click="cancel()">Not yet</button>
     </div>
     <button v-else class="arm-btn" @click="arm()">Let this life go</button>
@@ -283,6 +367,89 @@ function confirmCross(): void {
   color: #8a7f95;
   font-size: 0.75rem;
   margin-top: 0.2rem;
+}
+.slot-help {
+  font-size: 0.75rem;
+  margin: 0.25rem 0 0.4rem;
+  line-height: 1.35;
+}
+.slot-empty {
+  font-size: 0.78rem;
+  font-style: italic;
+  margin: 0.3rem 0;
+}
+.seed-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.25rem 0;
+}
+.seed-list li {
+  font-size: 0.8rem;
+  color: #c8bcd8;
+  padding: 0.1rem 0;
+}
+.seed-list label {
+  cursor: pointer;
+}
+.seed-list input {
+  margin-right: 0.35rem;
+}
+.slot-cost {
+  font-size: 0.78rem;
+  color: #a89ab0;
+  margin: 0.4rem 0 0;
+}
+.slot-cost strong {
+  color: #f0d060;
+}
+.element-chips,
+.purity-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+  margin: 0.3rem 0;
+}
+.chip {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  margin: 0;
+  border: 1px solid #4a3a6a;
+  border-radius: 999px;
+  background: #1c1626;
+  color: #b0a0c8;
+}
+.chip.on {
+  background: #3a2c56;
+  color: #e6d4ff;
+  border-color: #8a6fd8;
+}
+.chip-cost {
+  margin-left: 0.3rem;
+  font-size: 0.68rem;
+  color: #9a8fb0;
+}
+.spend-total {
+  font-size: 0.85rem;
+  color: #d8cfe0;
+  margin: 0.5rem 0 0;
+}
+.spend-total strong {
+  color: #f0d060;
+}
+.spend-total.over strong {
+  color: #e0a08f;
+}
+.over-warn {
+  color: #e0a08f;
+  font-size: 0.78rem;
+}
+.spend-word {
+  color: #c9a6f0;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .confirm {
   padding: 0.5rem 0.6rem;

@@ -19,6 +19,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { RealmId, SeverableKey, TribGradeKey } from '@/engine/types'
+import type { RootConfig } from '@/data/rebirth'
 
 /**
  * Per-entry richness tier (D37). Driven by the karma receipt at write time:
@@ -56,8 +57,8 @@ export interface ChronicleEntry {
   readonly realmReached: RealmId | null
   readonly grades: ChronicleGrades
   readonly tribulationOutcome: TribGradeKey | null
-  /** Root configuration — null pre-roots (roots ship in step 5). */
-  readonly rootConfig: null
+  /** Root configuration for this life — null when rootless (D38 baseline). */
+  readonly rootConfig: RootConfig | null
   readonly severances: readonly SeverableKey[]
   /** Per demon-trial-key endured counts this life. */
   readonly trialsEndured: Readonly<Record<string, number>>

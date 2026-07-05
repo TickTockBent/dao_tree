@@ -202,7 +202,7 @@ describe('GATE_DATA', () => {
 })
 
 describe('TREE_DATA', () => {
-  it('has 6 tree-scoped realms across 2 acts + 10 life + 5 soul + 1 world (D37 scope audit)', () => {
+  it('has 6 tree-scoped realms across 2 acts + 11 life + 5 soul + 1 world (D37 scope audit)', () => {
     expect(TREE_DATA.trees.map((t) => t.id)).toEqual(['act1', 'act2'])
     const scopes = Object.entries(TREE_DATA.layers).map(([id, e]) => `${id}:${e.scope}`)
     expect(scopes).toEqual([
@@ -233,6 +233,9 @@ describe('TREE_DATA', () => {
       // life-scoped (severed things return next life).
       'soul:soul',
       'severing:life',
+      // Slice 10 / D37+D38: spiritual roots are LIFE-scoped configuration chosen
+      // at rebirth (dies at death; the crossing re-applies the purchased config).
+      'roots:life',
       // Slice 10 / D36+D40: karma balance + firsts ledger are SOUL-scoped.
       'karma:soul',
       // Slice 10 / D37: the chronicle is the founding WORLD-scope instance.

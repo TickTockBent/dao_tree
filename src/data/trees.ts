@@ -92,6 +92,12 @@ export const TREE_DATA: TreeData = {
     // life (D23). The severance HISTORY (three-lives transcendence, D24)
     // lives on the soul slice, not here.
     severing: { scope: 'life' },
+    // Slice 10 / D37+D38: spiritual roots are LIFE-scoped configuration chosen at
+    // the rebirth menu and applied to the NEXT life — they die at that life's
+    // death and are re-chosen (or not) at the next crossing. Rootless is the
+    // default; the reincarnation cascade resets this by construction (life scope),
+    // then the crossing re-applies the purchased config to the fresh life.
+    roots: { scope: 'life' },
     // Slice 10 / D36+D40: karma balance + the per-life firsts ledger + the
     // lifetime firsts history live on the SOUL (the heavens pay the soul for
     // novelty; the record of what was earned carries).

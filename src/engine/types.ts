@@ -28,6 +28,7 @@ export type LayerId =
   | 'seclusion' // Deep Meditation offline-cap rungs (slice 8.5; soul — a new body does not unlearn it, D37/Q4)
   | 'soul' // Soul-scoped accumulators (slice 9; soul scope, D37 — the soul knows it)
   | 'severing' // Spirit Severing active severances (slice 9; life-scoped — severed things return next life)
+  | 'roots' // Spiritual roots (slice 10; life-scoped configuration chosen at rebirth, dies at death, D37/D38)
   | 'karma' // Karma balance + per-life firsts ledger (slice 10; soul — D36/D40)
   | 'chronicle' // The chronicle — the world's record of your lives (slice 10; world — D37, the founding world instance)
 

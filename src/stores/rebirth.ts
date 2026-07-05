@@ -20,7 +20,7 @@
 // read before the crossing) and restated at the armed confirm in the panel.
 
 import { defineStore } from 'pinia'
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useKarmaStore, type KarmaReceipt } from '@/stores/karma'
 import { useChronicleStore, type ChronicleEntry, type RichnessTier } from '@/stores/chronicle'
 import { useSoulStore } from '@/stores/soul'
@@ -29,11 +29,22 @@ import { useRealmStore } from '@/stores/realm'
 import { useBodyStore } from '@/stores/body'
 import { useLegacyStore } from '@/stores/legacy'
 import { useSeveringStore } from '@/stores/severing'
+import { useDaoStore } from '@/stores/dao'
+import { useRootsStore } from '@/stores/roots'
 import { useGameStore } from '@/stores/game'
 import { LEGACY_DATA } from '@/data/legacy'
 import { findRealm } from '@/data/realms'
 import { SETPIECE_DATA } from '@/data/setpieces'
-import type { RealmId } from '@/engine/types'
+import { LATTICE_DATA } from '@/data/lattice'
+import {
+  seedFragmentCost,
+  seedFragmentTotal,
+  ROOT_CONFIG_COST,
+  ROOT_PURITY_COST,
+  type PurityGrade,
+  type RootConfig,
+} from '@/data/rebirth'
+import type { Element, LatticeNodeKey, RealmId } from '@/engine/types'
 
 /** Climb realms low → high, for resolving the highest reached. */
 const REALM_CLIMB_ORDER: readonly RealmId[] = ['q', 'f', 'c', 'n', 's', 'x']
@@ -149,6 +160,7 @@ export const useRebirthStore = defineStore('rebirth', () => {
     receipt: KarmaReceipt,
     trialsEndured: Record<string, number>,
     richnessTier: RichnessTier,
+    rootConfig: RootConfig | null,
   ): ChronicleEntry {
     const body = useBodyStore()
     const legacy = useLegacyStore()
@@ -163,7 +175,7 @@ export const useRebirthStore = defineStore('rebirth', () => {
         tribulation: tribLabel(trib.tribGrade),
       },
       tribulationOutcome: tribKey(trib.tribGrade),
-      rootConfig: null, // pre-roots (step 5)
+      rootConfig, // this life's root config (null when rootless) — D38
       severances: severing.severances.map((record) => record.severable),
       trialsEndured,
       firstsReceipt: {
@@ -181,32 +193,138 @@ export const useRebirthStore = defineStore('rebirth', () => {
     }
   }
 
+  // ---- The two-item menu (D38): what you carry + what body you build --------
+  //
+  // Draft selections for the NEXT life, held here (the rebirth store is not a save
+  // slice provider, so these are transient — they never persist, and the crossing
+  // consumes then clears them). Choices are made BEFORE the crossing (spec §3
+  // order: receipt → menu → crossing) and applied to the fresh life at step 6.
+
+  /** Lattice tier ordinals (positional over LATTICE_DATA.tiers). */
+  const GLIMPSE_TIER = 1
+  const SEED_TIER = 2
+
+  /** Ordered Seed selections (price escalates by selection order — 1st=15, 2nd=30…). */
+  const selectedSeedKeys = ref<LatticeNodeKey[]>([])
+  /** Draft root identity (the elements this root holds) + purity for the next life. */
+  const rootDraftElements = ref<Element[]>([])
+  const rootDraftPurity = ref<PurityGrade>('mortal')
+
+  /** The dying life's carryable Seeds — nodes currently owned at Seed tier or above. */
+  function carryableSeeds(): { key: LatticeNodeKey; name: string }[] {
+    const dao = useDaoStore()
+    return LATTICE_DATA.nodes
+      .filter((node) => dao.nodeTierOwned(node.key) >= SEED_TIER)
+      .map((node) => ({ key: node.key, name: node.name }))
+  }
+
+  /** Selected Seeds that are genuinely owned at Seed tier this life (defensive filter). */
+  function validSelectedSeedKeys(): LatticeNodeKey[] {
+    const dao = useDaoStore()
+    return selectedSeedKeys.value.filter((key) => dao.nodeTierOwned(key) >= SEED_TIER)
+  }
+
+  /** Toggle a Seed in the carry selection (append preserves the escalation order). */
+  function toggleSeed(key: LatticeNodeKey): void {
+    selectedSeedKeys.value = selectedSeedKeys.value.includes(key)
+      ? selectedSeedKeys.value.filter((existing) => existing !== key)
+      : [...selectedSeedKeys.value, key]
+  }
+
+  /** Toggle whether the drafted root holds `element`. */
+  function toggleRootElement(element: Element): void {
+    rootDraftElements.value = rootDraftElements.value.includes(element)
+      ? rootDraftElements.value.filter((existing) => existing !== element)
+      : [...rootDraftElements.value, element]
+  }
+
+  /** Set the drafted root purity grade. */
+  function setRootPurity(grade: PurityGrade): void {
+    rootDraftPurity.value = grade
+  }
+
+  /** Clear all draft selections (rootless, no carry — the default). */
+  function resetDraft(): void {
+    selectedSeedKeys.value = []
+    rootDraftElements.value = []
+    rootDraftPurity.value = 'mortal'
+  }
+
+  /** The karma the NEXT selected Seed would cost (escalating; for the menu display). */
+  const nextSeedPrice = computed(() => seedFragmentCost(selectedSeedKeys.value.length))
+  /** Total karma for the carried Seeds. */
+  const seedSpend = computed(() => seedFragmentTotal(selectedSeedKeys.value.length))
+  /** Total karma for the drafted root: nominal config cost + purity sink (0 when rootless). */
+  const rootSpend = computed(() =>
+    rootDraftElements.value.length === 0
+      ? 0
+      : ROOT_CONFIG_COST + ROOT_PURITY_COST[rootDraftPurity.value],
+  )
+  /** The whole menu spend. */
+  const spendTotal = computed(() => seedSpend.value + rootSpend.value)
+
+  /** The karma balance AFTER the receipt settles at the crossing (what the spend draws on). */
+  const balanceAfterCross = computed(() => useKarmaStore().balance + previewReceipt().total)
+  /** True if the drafted spend fits the post-crossing balance (loot-never-gate: NEXT life only). */
+  const spendAffordable = computed(() => spendTotal.value <= balanceAfterCross.value)
+  /** The karma balance that would remain after crossing + spending (the confirm restate). */
+  const balanceAfterSpend = computed(() => balanceAfterCross.value - spendTotal.value)
+
   /**
    * Cross Samsara. Returns the paid receipt (for the panel's post-cross echo), or
-   * null if rebirth is not unlocked (guarded — never crosses when locked). The
-   * five-step sequence is D39's crossing, in order.
+   * null if rebirth is not unlocked (guarded — never crosses when locked). D39's
+   * crossing, in order, now with the menu applied to the fresh life (step 6).
    */
   function cross(): KarmaReceipt | null {
     if (!rebirthUnlocked.value) return null
     const karma = useKarmaStore()
     const chronicle = useChronicleStore()
     const game = useGameStore()
+    const dao = useDaoStore()
+    const roots = useRootsStore()
 
     // Read this-life state the cascade will erase (BEFORE steps 1 & 4).
     const trialsEndured = trialsEnduredThisLife()
     const lifeNumber = soul.rebirths + 1
     const priorLives = [...chronicle.lives]
+    const dyingRootConfig = roots.config // this life's config, for the chronicle
+
+    // The graded lattice carry (D37), computed pre-cascade: every owned node's
+    // GLIMPSE carries FREE; a selected+paid Seed carries at Seed tier; a
+    // Manifestation dies (re-walk is the future walked-path accumulator).
+    const carriedTiers: Record<string, number> = {}
+    for (const node of LATTICE_DATA.nodes) {
+      if (dao.nodeTierOwned(node.key) >= GLIMPSE_TIER) carriedTiers[node.key] = GLIMPSE_TIER
+    }
+    const paidSeedKeys = validSelectedSeedKeys()
 
     // 1) Pay the receipt; fold the ledger into the lifetime firsts history.
     const receipt = karma.settleLife()
     // 2) Write the life's entry (live state still intact — cascade is step 4).
     const richnessTier = richnessTierFor(receipt.total, priorLives)
-    chronicle.writeLife(buildChronicleEntry(lifeNumber, receipt, trialsEndured, richnessTier))
+    chronicle.writeLife(
+      buildChronicleEntry(lifeNumber, receipt, trialsEndured, richnessTier, dyingRootConfig),
+    )
     // 3) Latch the rebirth (soul-scoped, only ever rises).
     soul.recordRebirth()
+
+    // The menu purchase: affordable against the JUST-SETTLED balance (the UI
+    // guards this; defense in depth here). Free glimpse carry is unconditional;
+    // paid Seeds + the root config apply only when the spend clears.
+    const purchaseApplies = spendTotal.value <= karma.balance
+    if (purchaseApplies) {
+      karma.spendKarma(spendTotal.value)
+      for (const key of paidSeedKeys) carriedTiers[key] = SEED_TIER
+    }
+
     // 4) The cascade — every life/tree layer resets; soul/world/file carry.
     game.reincarnate()
-    // 5) The new life has begun.
+    // 5 & 6) The new life begins; apply the carried comprehension + root config.
+    dao.applyCarriedTiers(carriedTiers)
+    if (purchaseApplies && rootDraftElements.value.length > 0) {
+      roots.configure(rootDraftElements.value, rootDraftPurity.value)
+    }
+    resetDraft()
     return receipt
   }
 
@@ -217,5 +335,21 @@ export const useRebirthStore = defineStore('rebirth', () => {
     previewRichnessTier,
     cross,
     richnessTierFor,
+    // menu state + actions
+    selectedSeedKeys,
+    rootDraftElements,
+    rootDraftPurity,
+    carryableSeeds,
+    toggleSeed,
+    toggleRootElement,
+    setRootPurity,
+    resetDraft,
+    nextSeedPrice,
+    seedSpend,
+    rootSpend,
+    spendTotal,
+    balanceAfterCross,
+    spendAffordable,
+    balanceAfterSpend,
   }
 })

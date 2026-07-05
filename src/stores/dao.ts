@@ -33,6 +33,11 @@ import { STANCE_DATA, findStance } from '@/data/stances'
 import { findSectArchetype } from '@/data/sect'
 import { usePipelinesStore } from './pipelines'
 import { useSectStore } from './sect'
+// Slice 10 step 5 (D38): the single lattice cost path applies the held root's
+// element discount here. roots never imports dao (it needs only element keys +
+// data constants), so this direct read closes no cycle. Rootless → multiplier 1
+// → dao costs byte-identical (the baseline invariant; no sim actor ever roots).
+import { useRootsStore } from './roots'
 // D35 — dao READS severing's lockedStance record for the Flowing Form lock.
 // Deferred lookup (called only inside functions/computeds, never at setup) to
 // avoid the dao↔severing import cycle — the same pattern realm.ts uses for
@@ -57,6 +62,7 @@ export function freshDaoSlice(): DaoSlice {
 export const useDaoStore = defineStore('dao', () => {
   const sect = useSectStore()
   const pipelines = usePipelinesStore()
+  const roots = useRootsStore()
 
   const insight = ref(decimalZero())
   const activeStance = ref<StanceKey | ''>('')
@@ -102,7 +108,14 @@ export const useDaoStore = defineStore('dao', () => {
     const nextTierIndex = nodeTierOwned(key)
     if (nextTierIndex >= node.costs.length) return decimalZero()
     const baseCost = new Decimal(node.costs[nextTierIndex]!)
-    return baseCost.times(sectLatticeDiscount(node.element)).floor().max(decimalOne())
+    // Discounts stack multiplicatively: sect archetype (§4.3) × spiritual root
+    // (D38 read #3). Both are SPEED, NEVER ACCESS — cost only, no gate. Rootless
+    // returns exactly 1, so the floored result is unchanged from pre-roots.
+    return baseCost
+      .times(sectLatticeDiscount(node.element))
+      .times(roots.latticeDiscountMultiplier(node.element))
+      .floor()
+      .max(decimalOne())
   }
 
   // ---- Node purchase ------------------------------------------------------
@@ -226,6 +239,19 @@ export const useDaoStore = defineStore('dao', () => {
     if (nodeTierOwned(key) > 0) return false
     nodeTiers.value = { ...nodeTiers.value, [key]: 1 }
     return true
+  }
+
+  /**
+   * Re-apply carried lattice comprehension AFTER a rebirth cascade (slice 10
+   * step 5 / D37 graded rule). `tiers` maps node key → the tier the soul keeps:
+   * 1 = a Glimpse carried FREE, 2 = a Seed carried via a paid memory fragment
+   * (Manifestations never carry — the crossing never puts a 3 here). Sets the
+   * fresh life's tiers directly, bypassing cost + prereq edges: this is
+   * already-earned comprehension the soul retains, not a fresh purchase. Called
+   * ONLY by the rebirth crossing, on the just-reset dao slice.
+   */
+  function applyCarriedTiers(tiers: Readonly<Record<string, number>>): void {
+    nodeTiers.value = { ...tiers }
   }
 
   /** Deposit an Insight surge (secret-realm completion reward, §7.3 epiphany source). */
@@ -372,6 +398,7 @@ export const useDaoStore = defineStore('dao', () => {
     nodeBuyBlockReason,
     buyNodeTier,
     grantGlimpse,
+    applyCarriedTiers,
     addInsight,
     activeStanceRow,
     lockedStance,

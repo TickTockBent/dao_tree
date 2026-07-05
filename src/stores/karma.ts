@@ -223,6 +223,21 @@ export const useKarmaStore = defineStore('karma', () => {
     return receipt
   }
 
+  /**
+   * Spend karma from the (soul-scoped) balance — the rebirth menu purchase
+   * (slice 10 step 5: memory fragments + root config/purity). Returns false
+   * WITHOUT spending if the balance can't cover `amount` (the crossing guards
+   * affordability against the post-settle balance; this is defense in depth). A
+   * zero/negative amount is a no-op. The balance is loot for the NEXT life, never
+   * a gate on the current one (D38 loot-never-gate).
+   */
+  function spendKarma(amount: number): boolean {
+    if (amount <= 0) return true
+    if (balance.value < amount) return false
+    balance.value -= amount
+    return true
+  }
+
   // ---- Save slice (id 'karma') --------------------------------------------
   function save(): Record<string, unknown> {
     return {
@@ -266,6 +281,7 @@ export const useKarmaStore = defineStore('karma', () => {
     recordGradeDelta,
     previewReceipt,
     settleLife,
+    spendKarma,
     save,
     load,
     fresh,

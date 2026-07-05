@@ -29,6 +29,7 @@ import { useSeclusionStore } from '@/stores/seclusion'
 import { useAchievementsStore } from '@/stores/achievements'
 import { useSoulStore } from '@/stores/soul'
 import { useSeveringStore } from '@/stores/severing'
+import { useRootsStore } from '@/stores/roots'
 import { useKarmaStore } from '@/stores/karma'
 import { useChronicleStore } from '@/stores/chronicle'
 
@@ -58,6 +59,7 @@ const seclusion = useSeclusionStore()
 const achievements = useAchievementsStore()
 const soul = useSoulStore()
 const severing = useSeveringStore()
+const roots = useRootsStore()
 const karma = useKarmaStore()
 const chronicle = useChronicleStore()
 const nav = useNavStore()
@@ -79,6 +81,9 @@ game.registerSliceProvider({ id: 'seclusion', save: seclusion.save, load: seclus
 game.registerSliceProvider({ id: 'ach', save: achievements.save, load: achievements.load, fresh: achievements.fresh })
 game.registerSliceProvider({ id: 'soul', save: soul.save, load: soul.load, fresh: soul.fresh })
 game.registerSliceProvider({ id: 'severing', save: severing.save, load: severing.load, fresh: severing.fresh })
+// Slice 10 (D37/D38): spiritual roots (life-scoped) — chosen at rebirth, reset
+// by the reincarnation cascade, re-applied to the fresh life by the crossing.
+game.registerSliceProvider({ id: 'roots', save: roots.save, load: roots.load, fresh: roots.fresh })
 // Slice 10 (D36/D37): karma (soul-scoped) + the chronicle (world-scoped). Both
 // are inert skeletons — no updater; the crossing wires them in later chunks.
 game.registerSliceProvider({ id: 'karma', save: karma.save, load: karma.load, fresh: karma.fresh })
