@@ -837,6 +837,21 @@ the long-tail retention horizon; the grade-up is a chronicle event).
 Technique fragments: **separate flat track at ~8** — carry a couple
 alongside Seeds without competing at the margin.
 
+**Sign-off (same day, part 2 — the pause completes):** 8/8/7/4 +
+variantShare 0.4 ship as FINAL. **Ratio 1.14× accepted** as the honest
+structural ceiling for a 3-life build-breadth comparison (direction
+holds; half the table is build-invariant by design). The buildMark
+two-regime implementation (universal-spine subtraction for meridians,
+fraction-of-specialist for elective axes) is blessed — the literal
+median-subtraction collapsed specialists because the roster invests
+homogeneously at specialist level. The roots projection came back
+NEGATIVE for build-breadth (echoes pay per-TUPLE, so a second axis adds
+nothing to an already-varied arm) → **the post-roots re-measurement is a
+NAMED Gate-D item with the per-axis echo model (a D40 amendment) as its
+centerpiece** — noting per-axis also bounds expansion growth linearly
+(8+6 vs 8×6 per row) as axes arrive. Affordability validated the D41 #2
+grid unchanged. Steps 4–7 unblocked against the signed prices.
+
 **Addendum (same day, on the orchestrator's two surfaced reservations —
 "surface reservations like this as we go"):**
 1. **buildMark baselines: flag, don't fix.** Roster-median derivation is
