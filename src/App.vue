@@ -47,6 +47,20 @@ const currentTab = ref<TabId>('realms')
 
 const visibleRealms = computed(() => REALM_DATA.filter((r) => realm.isUnlocked(r.id) || realm.isRevealed(r.id)))
 
+// Each realm's prestige button names the act it performs — the level is
+// CONDENSED, the foundation ESTABLISHED, the core REFINED, the soul DEEPENED
+// then FORMED. "Break through" was the old one-size verb and lied about all of
+// them. Realm x is the Offering (D28) — SeveringPanel owns its button, so this
+// entry is never rendered here; it is kept honest for type completeness.
+const prestigeActionLabels: Record<RealmId, string> = {
+  q: 'Condense the Qi',
+  f: 'Establish the Foundation',
+  c: 'Refine the Core',
+  n: 'Deepen the Soul',
+  s: 'Form the Soul',
+  x: 'Make the Offering',
+}
+
 function onPrestige(id: RealmId) {
   realm.prestige(id)
 }
@@ -93,12 +107,12 @@ const alchemyTabAvailable = computed(() => alchemy.isRevealed())
         <section v-for="r in visibleRealms" :key="r.id" class="panel">
           <h3 :style="{ color: r.color }">{{ r.name }}</h3>
           <!-- D28: realm x is the Offering, not a qi climb — the generic
-               Best/Gain/Break-through block hides; SeveringPanel owns its UI. -->
+               Best/Gain/prestige-action block hides; SeveringPanel owns its UI. -->
           <template v-if="r.id !== 'x'">
             <p>Best: {{ format(realm.realmBest(r.id)) }}</p>
             <p v-if="realm.canReset(r.id)">Gain: +{{ format(realm.resetGain(r.id)) }}</p>
             <button :disabled="!realm.canReset(r.id)" @click="onPrestige(r.id)">
-              {{ realm.canReset(r.id) ? `Break through (+${format(realm.resetGain(r.id))})` : `Need ${format(realm.nextAt(r.id))} Qi` }}
+              {{ realm.canReset(r.id) ? `${prestigeActionLabels[r.id]} (+${format(realm.resetGain(r.id))})` : `Need ${format(realm.nextAt(r.id))} Qi` }}
             </button>
           </template>
           <ForgePanel v-if="r.id === 'c'" />
