@@ -3,11 +3,12 @@
      NEVER staged by scripts/build-site.sh and NEVER injected by the itch release workflow,
      so it cannot reach the stable itch.io build or a future private runtime.
 
-     Keys 1-5 set production to 10^(n-1): 1 = x1 (normal), 2 = x10, 3 = x100, 4 = x1000,
-     5 = x10000. The multiplier is applied to Qi (getPointGen), sect Contribution
-     (contributionPerSecond), and Dao Insight (insightPerSecond) — the three per-second
-     pipelines — by wrapping each global at runtime, so there is ZERO debug footprint in the
-     shipped game source. -->
+     Keys 1-5 set the production exponent to n-1: 1 = x1 (normal), 2 = x10, 3 = x100,
+     4 = x1000, 5 = x10000. The multiplier is applied inside the game bundle (Qi, sect
+     Contribution, Dao Insight — the three per-second pipelines) via window.__daoDebug,
+     which the bundle exposes ONLY when built with VITE_DAO_DEBUG=1 (the Pages build does;
+     CI and the itch release never do — see src/debug.ts). If that hook is absent, the badge
+     reports "Debug: unavailable" rather than pretending to work. -->
 <style>
   #dao-debug-badge {
     position: fixed; top: 6px; left: 6px; z-index: 2147483646;
@@ -17,53 +18,61 @@
     pointer-events: none; opacity: 0.55;
   }
 </style>
-<div id="dao-debug-badge">Debug: keys 1-5 (&times;1)</div>
+<div id="dao-debug-badge">Debug: connecting&hellip;</div>
 <script>
 (function () {
-  // 10^debugExponent is the production multiplier. Key n sets it to 10^(n-1).
+  // The production exponent. Key n sets it to n-1, so 10^exponent is the multiplier.
   var debugExponent = 0;
+  var hookInstalled = false;
   function multiplierLabel() { return "×" + Math.pow(10, debugExponent); }
+  function debugApi() {
+    return (window.__daoDebug && typeof window.__daoDebug.setProductionExponent === "function")
+      ? window.__daoDebug
+      : null;
+  }
   function refreshBadge() {
     var badge = document.getElementById("dao-debug-badge");
     if (!badge) return;
+    if (!hookInstalled) {
+      badge.textContent = "Debug: unavailable";
+      badge.style.opacity = "0.55";
+      badge.style.color = "#e08a8a";
+      return;
+    }
     badge.textContent = "Debug: keys 1-5 (" + multiplierLabel() + ")";
     badge.style.opacity = debugExponent === 0 ? "0.55" : "1";
     badge.style.color = debugExponent === 0 ? "#9fe0a0" : "#ffd24d";
   }
-  // Wrap one global per-second function so its result is multiplied by the debug factor.
-  // Each is read live each tick by the engine / layer update()s, so the wrap takes effect at once.
-  function wrapPerSecond(globalName) {
-    var original = window[globalName];
-    window[globalName] = function () {
-      var base = original.apply(this, arguments);
-      if (debugExponent === 0) return base;
-      return base.times(Decimal.pow(10, debugExponent));
-    };
-  }
-  // Install once all three pipelines (and Decimal) are defined — they load with the engine.
-  function installHook() {
-    if (typeof Decimal === "undefined"
-        || typeof window.getPointGen !== "function"
-        || typeof window.contributionPerSecond !== "function"
-        || typeof window.insightPerSecond !== "function") {
-      setTimeout(installHook, 200);
+  // Poll for the in-bundle hook (it lands once the app boots). If it never shows
+  // up after a reasonable window, the badge reads "unavailable" instead of lying.
+  var pollAttempts = 0;
+  var MAX_POLL_ATTEMPTS = 50; // ~10s at 200ms
+  function pollForHook() {
+    if (debugApi()) {
+      hookInstalled = true;
+      refreshBadge();
       return;
     }
-    if (window.__daoDebugHooked) return;
-    window.__daoDebugHooked = true;
-    wrapPerSecond("getPointGen");          // Qi production
-    wrapPerSecond("contributionPerSecond"); // sect Contribution
-    wrapPerSecond("insightPerSecond");      // Dao Insight
-    console.log("[dao-debug] debug keys ready (1-5 scale Qi / Contribution / Insight by x1..x10000)");
+    if (++pollAttempts >= MAX_POLL_ATTEMPTS) {
+      hookInstalled = false;
+      refreshBadge();
+      return;
+    }
+    setTimeout(pollForHook, 200);
   }
-  installHook();
+  refreshBadge();
+  pollForHook();
   window.addEventListener("keydown", function (keyEvent) {
     var targetTag = keyEvent.target && keyEvent.target.tagName;
     if (targetTag === "INPUT" || targetTag === "TEXTAREA" || targetTag === "SELECT") return;
     if (keyEvent.ctrlKey || keyEvent.metaKey || keyEvent.altKey) return;
     var pressedDigit = parseInt(keyEvent.key, 10);
     if (pressedDigit >= 1 && pressedDigit <= 5) {
+      var api = debugApi();
+      if (!api) { hookInstalled = false; refreshBadge(); return; }
+      hookInstalled = true;
       debugExponent = pressedDigit - 1;
+      api.setProductionExponent(debugExponent);
       refreshBadge();
       console.log("[dao-debug] production " + multiplierLabel() + " (Qi / Contribution / Insight)");
     }

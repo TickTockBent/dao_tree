@@ -31,6 +31,20 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Belt-and-braces: CI builds unflagged (no VITE_DAO_DEBUG), so the debug
+      # production accelerator (window.__daoDebug, src/debug.ts) must be fully
+      # dead-code-eliminated from dist/. Fail if the symbol survives — proof the
+      # gating holds on every push, not just at release time.
+      - name: Assert no debug symbol in build
+        run: |
+          set -euo pipefail
+          if grep -rq '__daoDebug' dist/; then
+            echo "::error::Debug symbol __daoDebug found in dist/ — it must be dead-code-eliminated from unflagged builds."
+            grep -rl '__daoDebug' dist/ || true
+            exit 1
+          fi
+          echo "OK: no __daoDebug symbol in dist/."
+
       # The pacing sim prints PASS/FAIL lines (incl. the Gate-D pinned bands)
       # but always exits 0 — enforce the FAIL lines here.
       - name: Pacing sim (pinned bands)

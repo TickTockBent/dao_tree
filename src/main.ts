@@ -32,6 +32,7 @@ import { useSeveringStore } from '@/stores/severing'
 import { useRootsStore } from '@/stores/roots'
 import { useKarmaStore } from '@/stores/karma'
 import { useChronicleStore } from '@/stores/chronicle'
+import { installDaoDebug } from '@/debug'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -139,5 +140,9 @@ game.startLoop()
 
 // Browser resize → nav store (split-screen detection).
 window.addEventListener('resize', () => nav.setWindowWidth(window.innerWidth))
+
+// Debug production accelerator — installs window.__daoDebug ONLY in the Pages
+// build (VITE_DAO_DEBUG=1); a no-op, dead-code-eliminated call otherwise.
+installDaoDebug()
 
 app.mount('#app')

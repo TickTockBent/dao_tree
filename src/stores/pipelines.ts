@@ -33,6 +33,7 @@ import { useLegacyStore } from './legacy'
 import { useAlchemyStore } from './alchemy'
 import { useHeartDemonsStore } from './heartDemons'
 import { useSeveringStore } from './severing'
+import { debugProductionMultiplier } from '@/debug'
 
 export const usePipelinesStore = defineStore('pipelines', () => {
   const body = useBodyStore()
@@ -164,8 +165,8 @@ export const usePipelinesStore = defineStore('pipelines', () => {
   const legacyQiMult = computed<Decimal>(() => legacy.legacyQiMult)
 
   // ---- The full Qi/sec pipeline ----
-  const qiPerSecond = computed<Decimal>(() =>
-    body.qiBaseRate
+  const qiPerSecond = computed<Decimal>(() => {
+    let qiRate = body.qiBaseRate
       .times(body.meridianMult)
       .times(body.temperMult)
       .times(realm.realmMult)
@@ -184,19 +185,30 @@ export const usePipelinesStore = defineStore('pipelines', () => {
       .times(heartDemons.daoHeartQiMult)
       // Slice 9: the severing transcendent multiplier (identity until a
       // severance exists — D23/D25; ramp math in stores/severing.ts).
-      .times(severing.transcendentQiMult),
-  )
+      .times(severing.transcendentQiMult)
+    // DEBUG-ONLY (Pages build): the whole branch dead-code-eliminates unless
+    // VITE_DAO_DEBUG is set — see src/debug.ts for the guard-shape rationale.
+    if (typeof import.meta.env !== 'undefined' && import.meta.env.VITE_DAO_DEBUG) {
+      qiRate = qiRate.times(debugProductionMultiplier())
+    }
+    return qiRate
+  })
 
   // ---- Insight/sec pipeline (M4 wires the dao trickle; stances/techniques compound it) ----
   const insightPerSecond = computed<Decimal>(() => {
     if (!dao.revealed) return decimalOne().times(0)
     const base = new Decimal(LATTICE_DATA.insight.baseRate)
-    return base
+    let insightRate = base
       .times(daoNodeInsightMult.value)
       .times(stanceInsightMult.value)
       .times(soulAspectInsightMult.value)
       .times(techniqueInsightMult.value)
       .times(severing.transcendentInsightMult) // slice 9 (identity until severed)
+    // DEBUG-ONLY (Pages build): dead-code-eliminated unless VITE_DAO_DEBUG is set.
+    if (typeof import.meta.env !== 'undefined' && import.meta.env.VITE_DAO_DEBUG) {
+      insightRate = insightRate.times(debugProductionMultiplier())
+    }
+    return insightRate
   })
 
   return { qiPerSecond, insightPerSecond }

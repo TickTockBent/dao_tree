@@ -37,6 +37,20 @@ jobs:
       - name: Build site
         run: ./scripts/build-site.sh _site
 
+      # Belt-and-braces: the debug production accelerator (window.__daoDebug,
+      # src/debug.ts) is gated behind VITE_DAO_DEBUG, which this workflow never
+      # sets — so the built bundle must NOT contain the debug symbol. Fail the
+      # release if it does, rather than trusting that the flag stayed unset.
+      - name: Assert no debug symbol in release build
+        run: |
+          set -euo pipefail
+          if grep -rq '__daoDebug' _site/; then
+            echo "::error::Debug symbol __daoDebug found in release build (_site/) — VITE_DAO_DEBUG must never be set for itch releases."
+            grep -rl '__daoDebug' _site/ || true
+            exit 1
+          fi
+          echo "OK: no __daoDebug symbol in _site/."
+
       - name: Resolve version label
         id: version
         run: |

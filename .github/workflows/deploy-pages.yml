@@ -39,6 +39,11 @@ jobs:
         uses: actions/configure-pages@v6
 
       - name: Build site
+        # VITE_DAO_DEBUG activates the debug throttle hook (src/debug.ts) in THIS
+        # build only — ci.yml and release-itch.yml never set it, and both carry a
+        # grep guard that FAILS if the __daoDebug symbol ever reaches their bundles.
+        env:
+          VITE_DAO_DEBUG: 1
         run: ./scripts/build-site.sh _site
 
       # Pages tracks the bleeding edge, so warn players this is the experimental build
