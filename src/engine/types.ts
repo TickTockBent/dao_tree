@@ -255,6 +255,7 @@ export type JournalEntryKey =
   | 'actTwoOpens' // slice 9: Act II arrival (tribulationPassed — core meets() grammar)
   | 'firstManifestation' // slice 9: first Dao lattice node reaches Manifestation tier (anyDaoNode: 3)
   | 'firstRebirth' // slice 10: the first Samsara crossing (rebirths: 1 — reveal on first rebirth, D11)
+  | 'firstTranscendence' // slice 10 / D39: the first attachment transcended (transcendences: 1 — reveal on the deed, D11)
 
 // ---- Set-pieces ------------------------------------------------------------
 

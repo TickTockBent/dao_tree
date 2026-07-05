@@ -24,9 +24,30 @@ import type { RealmId, SeverableKey } from '@/engine/types'
 
 export interface SeveranceHistoryRow {
   severable: SeverableKey
-  /** Life number at sever time. Pre-Samsara there is only life 1. */
+  /** Life number at sever time (soul.rebirths + 1 at the cut). */
   life: number
 }
+
+/**
+ * A transcended attachment (D39). Once the same severable is cut in
+ * {@link TRANSCEND_LIVES} DISTINCT lives it transcends PERMANENTLY: every
+ * subsequent life starts with it already severed at FULL RAMP. The captured
+ * contribution (the m at the transcending third cut) rides along so the fresh
+ * life can pre-apply the transcendent multiplier at cap × m — future lives
+ * never rebuild the piece, so its contribution must be preserved here (the same
+ * m a normal sever captures at cut time, kept on the soul because it outlives
+ * the flesh that produced it).
+ */
+export interface TranscendenceRecord {
+  severable: SeverableKey
+  /** Live qi-axis contribution captured at the transcending cut (Decimal string). */
+  severedQiMult: string
+  /** Live insight-axis contribution captured at the transcending cut (Decimal string). */
+  severedInsightMult: string
+}
+
+/** Distinct lives that must sever the same attachment before it transcends (D39). */
+export const TRANSCEND_LIVES = 3
 
 export interface SoulSlice {
   /** k — completed c re-climb cycles forced by n/s cascades (D2/D21). */
@@ -35,6 +56,13 @@ export interface SoulSlice {
   severanceRituals: number
   /** Per-attachment severance record (D24; three-lives transcendence data). */
   severanceHistory: SeveranceHistoryRow[]
+  /**
+   * Slice 10 / D39: attachments that have TRANSCENDED — cut in three distinct
+   * lives, now gone permanently at full ramp in every subsequent life. Each
+   * carries the contribution captured at its transcending cut. Latched forever
+   * (never removed); the rebirth crossing pre-applies these to the fresh life.
+   */
+  transcended: TranscendenceRecord[]
   /**
    * Slice 10 / D37: the rebirth counter. Latched forever (only ever rises);
    * doubles as the strand gate clause (post-slice) and the `rebirths` core
@@ -62,6 +90,7 @@ export function freshSoulSlice(): SoulSlice {
     ascents: 0,
     severanceRituals: 0,
     severanceHistory: [],
+    transcended: [],
     rebirths: 0,
     trialsEndured: {},
     walkedManifestations: 0,
@@ -76,6 +105,7 @@ export const useSoulStore = defineStore('soul', () => {
   const severanceHistory = computed<readonly SeveranceHistoryRow[]>(
     () => slice.value.severanceHistory,
   )
+  const transcended = computed<readonly TranscendenceRecord[]>(() => slice.value.transcended)
   const rebirths = computed(() => slice.value.rebirths)
   const trialsEndured = computed<Readonly<Record<string, number>>>(
     () => slice.value.trialsEndured,
@@ -97,6 +127,43 @@ export const useSoulStore = defineStore('soul', () => {
     slice.value = {
       ...slice.value,
       severanceHistory: [...slice.value.severanceHistory, { severable, life }],
+    }
+  }
+
+  /**
+   * How many DISTINCT lives have severed this attachment (D39). The transcendence
+   * clock: three distinct lives (non-consecutive fine) transcends. Because a piece
+   * can be cut at most once per life (a cut removes it from that life's menu), the
+   * history holds at most one row per (severable, life) — but we count distinct
+   * life numbers explicitly so the rule is "three lives," never "three rows."
+   */
+  function distinctLivesSevered(severable: SeverableKey): number {
+    const lives = new Set<number>()
+    for (const row of slice.value.severanceHistory) {
+      if (row.severable === severable) lives.add(row.life)
+    }
+    return lives.size
+  }
+
+  /** True once this attachment has transcended (D39) — permanent, all future lives. */
+  function isTranscended(severable: SeverableKey): boolean {
+    return slice.value.transcended.some((record) => record.severable === severable)
+  }
+
+  /**
+   * Mark an attachment TRANSCENDED (D39), carrying the contribution captured at
+   * the transcending cut. Idempotent — the third cut fires this once; the piece
+   * then leaves the menu forever, so it can never be cut (or re-recorded) again.
+   */
+  function recordTranscendence(
+    severable: SeverableKey,
+    severedQiMult: string,
+    severedInsightMult: string,
+  ): void {
+    if (isTranscended(severable)) return
+    slice.value = {
+      ...slice.value,
+      transcended: [...slice.value.transcended, { severable, severedQiMult, severedInsightMult }],
     }
   }
 
@@ -167,6 +234,7 @@ export const useSoulStore = defineStore('soul', () => {
         ? [...loaded.severanceHistory]
         : [],
       // Slice 10 fields default cleanly for older saves (backward-compatible).
+      transcended: Array.isArray(loaded.transcended) ? [...loaded.transcended] : [],
       rebirths: typeof loaded.rebirths === 'number' ? loaded.rebirths : 0,
       trialsEndured:
         loaded.trialsEndured && typeof loaded.trialsEndured === 'object'
@@ -185,12 +253,16 @@ export const useSoulStore = defineStore('soul', () => {
     ascents,
     severanceRituals,
     severanceHistory,
+    transcended,
     rebirths,
     trialsEndured,
     walkedManifestations,
     recordAscent,
     recordSeveranceRitual,
     recordSeverance,
+    distinctLivesSevered,
+    isTranscended,
+    recordTranscendence,
     recordTrialEndured,
     recordRebirth,
     recordWalkedManifestations,

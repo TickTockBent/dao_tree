@@ -60,6 +60,12 @@ export interface ChronicleEntry {
   /** Root configuration for this life — null when rootless (D38 baseline). */
   readonly rootConfig: RootConfig | null
   readonly severances: readonly SeverableKey[]
+  /**
+   * Severables TRANSCENDED this life (D39) — cut for the third distinct life and
+   * gone permanently thereafter. Defaults empty; the soul's most dramatic deed
+   * when non-empty. Schema-additive and golden-safe (older entries default []).
+   */
+  readonly transcendences: readonly SeverableKey[]
   /** Per demon-trial-key endured counts this life. */
   readonly trialsEndured: Readonly<Record<string, number>>
   readonly firstsReceipt: FirstsReceiptSummary
@@ -100,7 +106,11 @@ export const useChronicleStore = defineStore('chronicle', () => {
   }
   function load(slice: unknown): void {
     const s = (slice ?? freshChronicleSlice()) as Partial<ChronicleSlice>
-    entries.value = Array.isArray(s.entries) ? [...s.entries] : []
+    // D39: default the transcendences field for entries written before it shipped
+    // (golden-safe — the field is additive; nothing else in the entry changes).
+    entries.value = Array.isArray(s.entries)
+      ? s.entries.map((entry) => ({ ...entry, transcendences: entry.transcendences ?? [] }))
+      : []
   }
   function fresh(): Record<string, unknown> {
     return freshChronicleSlice() as unknown as Record<string, unknown>

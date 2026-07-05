@@ -429,15 +429,21 @@ describe('TECHNIQUE_DATA', () => {
 })
 
 describe('JOURNAL_DATA', () => {
-  it('has 24 entries with firstBreath first and firstRebirth last (slice 10 added the crossing)', () => {
-    expect(JOURNAL_DATA.entries).toHaveLength(24)
+  it('has 25 entries with firstBreath first and firstTranscendence last (slice 10 / D39)', () => {
+    expect(JOURNAL_DATA.entries).toHaveLength(25)
     expect(JOURNAL_DATA.entries[0]?.key).toBe('firstBreath')
     expect(JOURNAL_DATA.entries[23]?.key).toBe('firstRebirth')
+    expect(JOURNAL_DATA.entries[24]?.key).toBe('firstTranscendence')
   })
 
   it('the first-rebirth entry latches on the first Samsara crossing (rebirths >= 1)', () => {
     const firstRebirth = JOURNAL_DATA.entries.find((e) => e.key === 'firstRebirth')
     expect(firstRebirth?.when).toEqual({ rebirths: 1 })
+  })
+
+  it('the first-transcendence entry latches on the first transcendence (transcendences >= 1, D39)', () => {
+    const firstTranscendence = JOURNAL_DATA.entries.find((e) => e.key === 'firstTranscendence')
+    expect(firstTranscendence?.when).toEqual({ transcendences: 1 })
   })
 
   it('slice 9 entries latch on the passed tribulation and the first Manifestation', () => {

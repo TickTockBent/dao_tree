@@ -113,6 +113,8 @@ export function buildGameState(): GameState {
     tribulationPassed: tribulation.tribulationPassed,
     // Slice 10 / D37: reads soul.rebirths (0 until the step-4 crossing).
     rebirths: soul.rebirths,
+    // Slice 10 / D39: reads soul.transcended.length (0 until the third-life cut).
+    transcendences: soul.transcended.length,
   }
 }
 

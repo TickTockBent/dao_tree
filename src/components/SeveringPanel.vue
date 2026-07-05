@@ -192,10 +192,26 @@ function recoverySummary(recovery: RecoveryProjectionLike): string {
                 <p class="recovery" :title="recoveryDetail(cand.recovery)">
                   {{ recoverySummary(cand.recovery) }}
                 </p>
+                <!-- D39/D32: three-lives legibility — show how many past lives
+                     already cut this piece, and announce the third cut BEFORE the
+                     knife (never discovered after the fact). -->
+                <p v-if="severing.pastLivesSevered(key) > 0" class="lives-severed">
+                  Severed in {{ severing.pastLivesSevered(key) }} past
+                  {{ severing.pastLivesSevered(key) === 1 ? 'life' : 'lives' }}.
+                </p>
+                <p v-if="severing.severWouldTranscend(key)" class="transcend-warn">
+                  This severance will <strong>transcend</strong>: permanent, across all future lives.
+                  The piece will be gone at full ramp from your next breath onward — no weakness
+                  window ever again.
+                </p>
 
                 <div v-if="armedSeverable === key" class="confirm">
                   <span class="confirm-q">Sever this? The weakness window opens immediately.</span>
                   <p class="confirm-recovery">{{ recoverySummary(cand.recovery) }}</p>
+                  <p v-if="severing.severWouldTranscend(key)" class="confirm-transcend">
+                    This is your third cut of {{ findSeverable(key).name }} across three lives — it
+                    will <strong>transcend</strong>: permanent, across all future lives.
+                  </p>
                   <button class="danger" @click="confirmSever(key)">Sever</button>
                   <button @click="cancelSever()">Keep</button>
                 </div>
@@ -360,6 +376,30 @@ function recoverySummary(recovery: RecoveryProjectionLike): string {
   color: #9ab0d8;
   font-size: 0.8rem;
   margin: 0;
+}
+.lives-severed {
+  color: #c9a6f0;
+  font-size: 0.8rem;
+  margin: 0.25rem 0;
+}
+.transcend-warn {
+  color: #e8c860;
+  font-size: 0.82rem;
+  margin: 0.3rem 0;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid #6a5a2a;
+  border-radius: 4px;
+  background: #241f14;
+}
+.transcend-warn strong,
+.confirm-transcend strong {
+  color: #f0d060;
+}
+.confirm-transcend {
+  flex-basis: 100%;
+  color: #e8c860;
+  font-size: 0.82rem;
+  margin: 0.2rem 0 0;
 }
 .readout {
   margin-top: 0.4rem;

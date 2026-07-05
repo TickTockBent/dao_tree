@@ -21,6 +21,9 @@ import { useRealmStore } from '@/stores/realm'
 import { useGameStore } from '@/stores/game'
 import { useSeveringStore } from '@/stores/severing'
 import { KARMA_DATA, KARMA_DECAY_RATIO, VARIANT_SHARE } from '@/data/karma'
+import { SETPIECE_DATA } from '@/data/setpieces'
+
+const CAP_RATIO = SETPIECE_DATA.severance.capRatio
 
 const PASSING_TRIB_GRADE = 3 // 'flawless' (SP.firstTribulation.grades[3].passes)
 const MILESTONE_BASE = KARMA_DATA.find((r) => r.key === 'reachRealm:f')!.base
@@ -168,6 +171,46 @@ describe('rebirth: the crossing sequence (D39)', () => {
     karma.recordGradeDelta('foundationGradeDelta', 3)
     expect(karma.ledger).toHaveLength(1)
     expect(karma.gradeBests['foundationGradeDelta']).toBe(3)
+  })
+})
+
+describe('rebirth: transcendence at the crossing (D39)', () => {
+  beforeEach(() => bootTestStores())
+
+  it('the chronicle records severables transcended THIS life', () => {
+    seedLife() // cuts soulAspect this life
+    const soul = useSoulStore()
+    const chronicle = useChronicleStore()
+    const rebirth = useRebirthStore()
+    // The aspect reached its third distinct life this life → transcended.
+    soul.recordTranscendence('soulAspect', '1.2', '1.2')
+
+    rebirth.cross()
+
+    const entry = chronicle.lives[0]!
+    expect(entry.severances).toEqual(['soulAspect'])
+    expect(entry.transcendences).toEqual(['soulAspect'])
+  })
+
+  it('a transcended attachment is pre-applied at FULL RAMP in the next life (no trough)', () => {
+    const rebirth = useRebirthStore()
+    const soul = useSoulStore()
+    const severing = useSeveringStore()
+    useTribulationStore().tribGrade = PASSING_TRIB_GRADE
+    // A prior life transcended the aspect (contribution captured then).
+    soul.recordTranscendence('soulAspect', '1.2', '1.2')
+
+    rebirth.cross()
+
+    // The fresh life starts with the aspect already severed at cap — nullified,
+    // cap × contribution from breath one, and OUTSIDE the corpse ceremony.
+    expect(severing.isSevered('soulAspect')).toBe(true)
+    expect(severing.severances).toEqual([]) // the ceremony is untouched
+    expect(severing.nextCorpse).toBe('past')
+    expect(severing.transcendentQiMult.toNumber()).toBeCloseTo(CAP_RATIO * 1.2, 6)
+    expect(severing.transcendentInsightMult.toNumber()).toBeCloseTo(CAP_RATIO * 1.2, 6)
+    // …and the soul's transcended set carried across the crossing (soul-scoped).
+    expect(soul.isTranscended('soulAspect')).toBe(true)
   })
 })
 

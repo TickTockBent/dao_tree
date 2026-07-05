@@ -28,6 +28,8 @@ const armed = ref(false)
 const receipt = computed(() => rebirth.previewReceipt())
 const balance = computed(() => rebirth.carriedBalance)
 const richness = computed(() => rebirth.previewRichnessTier())
+// D39: the soul's most dramatic carry — attachments transcended across three lives.
+const transcended = computed(() => rebirth.transcendedCarry)
 
 // ---- The two-item menu (D38): fragments (Seeds) + roots -------------------
 const seeds = computed(() => rebirth.carryableSeeds())
@@ -144,6 +146,10 @@ function confirmCross(): void {
         Karma balance carried: <strong>{{ format(balance) }}</strong>
         <span class="dim">(+{{ format(receipt.total) }} once you cross)</span>
       </p>
+      <p v-if="transcended.length > 0" class="transcended-carry">
+        Transcended attachments, gone at full ramp in every life to come:
+        <strong>{{ transcended.join(', ') }}</strong>.
+      </p>
 
       <div class="slots">
         <!-- Memory fragments — Seeds carry on an escalating curve. -->
@@ -211,6 +217,11 @@ function confirmCross(): void {
         seclusion, its journal and chronicle, the record of every trial it has faced;
         and, free, every Dao truth you have Glimpsed.
         <br />
+        <template v-if="transcended.length > 0">
+          <span class="transcend-word">What transcends:</span> {{ transcended.join(', ') }} — cut across
+          three lives, gone forever at full ramp from your next breath.
+          <br />
+        </template>
         <span class="spend-word">What you buy for the next life:</span>
         <template v-if="spendTotal > 0">
           {{ selectedSeeds.length }} carried
@@ -473,6 +484,17 @@ button:disabled {
 }
 .carries-word {
   color: #9fd0a0;
+}
+.transcend-word {
+  color: #f0d060;
+}
+.transcended-carry {
+  font-size: 0.82rem;
+  color: #e8c860;
+  margin: 0.35rem 0 0;
+}
+.transcended-carry strong {
+  color: #f0d060;
 }
 .arm-btn {
   border-color: #6a4a9a;

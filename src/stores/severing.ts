@@ -35,7 +35,7 @@ import { useAlchemyStore } from './alchemy'
 import { useDaoStore } from './dao'
 import { useGameStore } from './game'
 import { useRealmStore } from './realm'
-import { useSoulStore } from './soul'
+import { useSoulStore, TRANSCEND_LIVES } from './soul'
 // Slice 10 (D36): a severance is a deed first (headline-only per KARMA_DATA).
 // Readerless karma write, deferred lookup keeps it cycle-free.
 import { recordSeveranceDeed } from '@/engine/karmaEvents'
@@ -61,6 +61,16 @@ export interface SeveranceRecord {
 
 export interface SeveringSlice {
   severances: SeveranceRecord[]
+  /**
+   * D39 — TRANSCENDED attachments pre-applied at FULL RAMP from breath one. A
+   * PARALLEL lane to `severances`: these records nullify their piece and feed
+   * the transcendent multiplier at cap, but they sit OUTSIDE the three-corpse
+   * ceremony (they never advance nextCorpse, offeringCorpse, or the sequential
+   * lived-with gate — those read `severances` alone). Rebuilt from the soul's
+   * transcended set by {@link useSeveringStore.applyTranscendences} at the
+   * crossing; life-scoped like the store, so the cascade clears it first.
+   */
+  transcendences: SeveranceRecord[]
 }
 
 /** Per-severance ramp state the panel renders (all derived, never stored). */
@@ -113,7 +123,7 @@ export interface RecoveryProjection {
 }
 
 export function freshSeveringSlice(): SeveringSlice {
-  return { severances: [] }
+  return { severances: [], transcendences: [] }
 }
 
 // ---- Ramp constants (D25 — read from data, never hardcode) ----------------
@@ -138,8 +148,6 @@ const CAP_STEP_DISPLAY = RAMP_STEPS
 const GATHERING_PILL_KEY: PillKey = 'gatheringPill'
 /** MANIFESTATION-tier effects live at tier index 2 (owned requires tier >= 3). */
 const MANIFESTATION_TIER_INDEX = 2
-/** Life number stamped on every cut until Samsara numbers lives for real (D24). */
-const PRE_SAMSARA_LIFE_NUMBER = 1
 
 /** The ramp ratio at a given raw step count. */
 function ratioAtStep(steps: number): number {
@@ -172,10 +180,19 @@ export const useSeveringStore = defineStore('severing', () => {
   const slice = ref<SeveringSlice>(freshSeveringSlice())
 
   const severances = computed<readonly SeveranceRecord[]>(() => slice.value.severances)
+  /** The pre-applied transcendence records (D39) — nullified + at-cap from breath one. */
+  const transcendences = computed<readonly SeveranceRecord[]>(() => slice.value.transcendences)
 
-  /** True if this piece is severed THIS LIFE (its effect is nullified). */
+  /**
+   * True if this piece is severed THIS LIFE (its effect is nullified) — whether
+   * by a cut made this life OR by a transcendence pre-applied at the crossing
+   * (D39: a transcended piece is gone from breath one).
+   */
   function isSevered(key: SeverableKey): boolean {
-    return slice.value.severances.some((s) => s.severable === key)
+    return (
+      slice.value.severances.some((s) => s.severable === key) ||
+      slice.value.transcendences.some((s) => s.severable === key)
+    )
   }
 
   /** The next corpse to sever, or null when all three are cut. */
@@ -261,12 +278,21 @@ export const useSeveringStore = defineStore('severing', () => {
     return LATTICE_DATA.nodes.some((n) => dao.nodeTierOwned(n.key) >= MANIFESTATION_TIER_INDEX + 1)
   }
 
-  /** Severables the player can cut RIGHT NOW (acquired + not already severed). */
-  const liveSeverables = computed<readonly SeverableKey[]>(() =>
-    SEVERING_DATA.severables
+  /**
+   * Severables the player can cut RIGHT NOW: acquired, not already severed this
+   * life, and NOT transcended (D39/D31). Transcended pieces leave the menu
+   * forever — they are no longer attachments, so they are neither acquirable nor
+   * severable. This is the D31 runtime counting basis: the ≥3-live-severables
+   * availability is measured over NON-transcended severables (the data-shape
+   * lint over SEVERING_DATA is unchanged; runtime availability shrinks as
+   * transcendences accumulate, and expanding the roster is the pressure valve).
+   */
+  const liveSeverables = computed<readonly SeverableKey[]>(() => {
+    const soul = useSoulStore()
+    return SEVERING_DATA.severables
       .map((s) => s.key)
-      .filter((key) => !isSevered(key) && isAcquired(key)),
-  )
+      .filter((key) => !isSevered(key) && !soul.isTranscended(key) && isAcquired(key))
+  })
 
   /** Raw ritual completions since a cut (0 at sever). */
   function stepsSince(record: SeveranceRecord): number {
@@ -350,10 +376,62 @@ export const useSeveringStore = defineStore('severing', () => {
       if (worn) record.lockedStance = worn
       dao.lockActiveStance()
     }
-    slice.value = { severances: [...slice.value.severances, record] }
-    soul.recordSeverance(severable, PRE_SAMSARA_LIFE_NUMBER)
+    slice.value = { ...slice.value, severances: [...slice.value.severances, record] }
+    // D39: stamp the cut with the soul's current life index (rebirths + 1) so
+    // the history distinguishes DISTINCT lives — the transcendence clock.
+    const lifeIndex = soul.rebirths + 1
+    soul.recordSeverance(severable, lifeIndex)
     recordSeveranceDeed(severable) // slice 10 (D36): the cut is a deed first
+    // D39: the THIRD distinct-life cut of the same attachment transcends it
+    // permanently. Carry the contribution captured at THIS cut (the m) so future
+    // lives can pre-apply the transcendent multiplier at cap × m.
+    if (soul.distinctLivesSevered(severable) >= TRANSCEND_LIVES) {
+      soul.recordTranscendence(severable, record.severedQiMult, record.severedInsightMult)
+    }
     return true
+  }
+
+  /**
+   * D39/D32 legibility — how many DISTINCT PAST lives have already severed this
+   * attachment (0, 1, or 2 before the current life's cut). The panel shows this
+   * as "severed in N past lives" so the player sees a cut coming to a head.
+   */
+  function pastLivesSevered(severable: SeverableKey): number {
+    return useSoulStore().distinctLivesSevered(severable)
+  }
+
+  /**
+   * D39/D32 — true when severing this piece RIGHT NOW would be its THIRD
+   * distinct-life cut and therefore TRANSCEND it permanently. The menu and the
+   * armed confirm announce this before the knife (never discovered after).
+   */
+  function severWouldTranscend(severable: SeverableKey): boolean {
+    return pastLivesSevered(severable) >= TRANSCEND_LIVES - 1
+  }
+
+  /**
+   * D39 — pre-apply the soul's transcended attachments to the FRESH life at the
+   * rebirth crossing (called by rebirth.cross() AFTER the cascade + carried-tier
+   * application, on the just-reset severing slice). Each transcended piece exists
+   * pre-completed: nullified (via isSevered) and its transcendent multiplier at
+   * cap from breath one, NO trough — the window was lived three times. Reuses the
+   * SAME ramp machinery: a SeveranceRecord whose ritualStepsAtSever is set
+   * RAMP_STEPS behind the soul's ritual clock, so stepsSince ≥ RAMP_STEPS and the
+   * ramp ratio is pinned at capRatio (and stays there — the clock only rises).
+   */
+  function applyTranscendences(): void {
+    const soul = useSoulStore()
+    const atCapStepsAtSever = soul.severanceRituals - RAMP_STEPS
+    const records: SeveranceRecord[] = soul.transcended.map((record) => ({
+      // A nominal corpse: transcendences sit outside the three-corpse ceremony,
+      // so this is never read for sequencing — only the ramp fields matter.
+      corpse: SEVERING_DATA.corpses[0]!.key,
+      severable: record.severable,
+      ritualStepsAtSever: atCapStepsAtSever,
+      severedQiMult: record.severedQiMult,
+      severedInsightMult: record.severedInsightMult,
+    }))
+    slice.value = { ...slice.value, transcendences: records }
   }
 
   /**
@@ -533,17 +611,25 @@ export const useSeveringStore = defineStore('severing', () => {
     }
   }
 
-  /** Transcendent multiplier over the qi axis (identity when no severances). */
+  /**
+   * Transcendent multiplier over the qi axis (identity when nothing is severed).
+   * Products over BOTH lanes: this life's cuts AND the pre-applied transcendences
+   * (D39 — the latter contribute at cap from breath one).
+   */
   const transcendentQiMult = computed<Decimal>(() => {
     let product = decimalOne()
     for (const record of slice.value.severances) product = product.times(axisMultFor(record).qi)
+    for (const record of slice.value.transcendences) product = product.times(axisMultFor(record).qi)
     return product
   })
 
-  /** Transcendent multiplier over the insight axis (identity when no severances). */
+  /** Transcendent multiplier over the insight axis (both lanes; identity when none). */
   const transcendentInsightMult = computed<Decimal>(() => {
     let product = decimalOne()
     for (const record of slice.value.severances) {
+      product = product.times(axisMultFor(record).insight)
+    }
+    for (const record of slice.value.transcendences) {
       product = product.times(axisMultFor(record).insight)
     }
     return product
@@ -562,6 +648,8 @@ export const useSeveringStore = defineStore('severing', () => {
     const loaded = (s ?? freshSeveringSlice()) as Partial<SeveringSlice>
     slice.value = {
       severances: Array.isArray(loaded.severances) ? [...loaded.severances] : [],
+      // D39: transcendences default cleanly for pre-slice-10 saves.
+      transcendences: Array.isArray(loaded.transcendences) ? [...loaded.transcendences] : [],
     }
   }
   function fresh(): Record<string, unknown> {
@@ -571,10 +659,14 @@ export const useSeveringStore = defineStore('severing', () => {
   return {
     slice,
     severances,
+    transcendences,
     isSevered,
     nextCorpse,
     contributionOf,
     liveSeverables,
+    pastLivesSevered,
+    severWouldTranscend,
+    applyTranscendences,
     lockedStance,
     flowingFormBlockReason,
     wornStanceName,

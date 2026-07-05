@@ -104,6 +104,7 @@ function syntheticEmptyState(): GameState {
     seclusionRungs: 0,
     tribulationPassed: false,
     rebirths: 0,
+    transcendences: 0,
   }
 }
 
@@ -666,6 +667,7 @@ const SAMPLE_ALL_CLAUSES = {
   seclusionRungs: 0,
   tribulationPassed: true,
   rebirths: 0,
+  transcendences: 0,
 } satisfies ConditionClauses
 
 const ALL_CONDITION_CLAUSE_KEYS: readonly string[] = Object.keys(SAMPLE_ALL_CLAUSES)

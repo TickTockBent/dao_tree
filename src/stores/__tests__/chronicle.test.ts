@@ -18,6 +18,7 @@ function sampleEntry(overrides: Partial<ChronicleEntry> = {}): ChronicleEntry {
     tribulationOutcome: 'scarred',
     rootConfig: null,
     severances: ['soulAspect'],
+    transcendences: [],
     trialsEndured: { whisperingDoubt: 1 },
     firstsReceipt: {
       total: 42,

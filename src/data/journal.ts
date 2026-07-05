@@ -193,6 +193,15 @@ export const JOURNAL_DATA: JournalData = {
       title: 'The Wheel Turns',
       text: 'The body you built lets go, and you do not end. What the flesh knew is ash; what the soul knew remains, and the heavens have weighed your firsts and paid. A new life opens beneath you, unwritten. You have done the one thing cultivators are told is impossible: you have died, and gone on.',
     },
+    {
+      // Slice 10 / D39 (D11 — reveal on the deed): latches the first time an
+      // attachment transcends (transcendences >= 1) — cut in three distinct
+      // lives, now gone permanently at full ramp in every life to come.
+      key: 'firstTranscendence',
+      when: { transcendences: 1 },
+      title: 'What Three Lives Undid',
+      text: 'Three times across three lives you took the same knife to the same part of yourself, and this third cut does not close. The weakness window that opened twice before will not open again — the thing is simply gone, and what it cost you is repaid in full from your very next breath. Some severances are for a life. This one was forever.',
+    },
   ],
 }
 

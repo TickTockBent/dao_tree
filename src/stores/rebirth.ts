@@ -34,6 +34,7 @@ import { useRootsStore } from '@/stores/roots'
 import { useGameStore } from '@/stores/game'
 import { LEGACY_DATA } from '@/data/legacy'
 import { findRealm } from '@/data/realms'
+import { findSeverable } from '@/data/severing'
 import { SETPIECE_DATA } from '@/data/setpieces'
 import { LATTICE_DATA } from '@/data/lattice'
 import {
@@ -119,6 +120,15 @@ export const useRebirthStore = defineStore('rebirth', () => {
   /** The karma balance that will carry into the next life. */
   const carriedBalance = computed(() => useKarmaStore().balance)
 
+  /**
+   * D39 — the attachments this soul has TRANSCENDED, by display name. The soul's
+   * most dramatic carry: gone at full ramp in every life to come. The rebirth
+   * screen restates these in "what carries."
+   */
+  const transcendedCarry = computed<string[]>(() =>
+    soul.transcended.map((record) => findSeverable(record.severable).name),
+  )
+
   /** The richness tier this life WOULD earn if crossed now (panel preview). */
   function previewRichnessTier(): RichnessTier {
     return richnessTierFor(previewReceipt().total, useChronicleStore().lives)
@@ -177,6 +187,12 @@ export const useRebirthStore = defineStore('rebirth', () => {
       tribulationOutcome: tribKey(trib.tribGrade),
       rootConfig, // this life's root config (null when rootless) — D38
       severances: severing.severances.map((record) => record.severable),
+      // D39: severables TRANSCENDED this life — cut this life AND now transcended
+      // (the third distinct-life cut lands during the life it completes, so a
+      // this-life cut that is now transcended is one transcended THIS life).
+      transcendences: severing.severances
+        .map((record) => record.severable)
+        .filter((severable) => soul.isTranscended(severable)),
       trialsEndured,
       firstsReceipt: {
         total: receipt.total,
@@ -321,6 +337,10 @@ export const useRebirthStore = defineStore('rebirth', () => {
     game.reincarnate()
     // 5 & 6) The new life begins; apply the carried comprehension + root config.
     dao.applyCarriedTiers(carriedTiers)
+    // D39: pre-apply transcended attachments to the fresh (just-reset) severing
+    // slice — each gone at full ramp from breath one, no trough. Reuses the
+    // severance ramp machinery (see severing.applyTranscendences).
+    useSeveringStore().applyTranscendences()
     if (purchaseApplies && rootDraftElements.value.length > 0) {
       roots.configure(rootDraftElements.value, rootDraftPurity.value)
     }
@@ -331,6 +351,7 @@ export const useRebirthStore = defineStore('rebirth', () => {
   return {
     rebirthUnlocked,
     carriedBalance,
+    transcendedCarry,
     previewReceipt,
     previewRichnessTier,
     cross,

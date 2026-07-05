@@ -89,6 +89,12 @@ export interface ConditionClauses {
    * ships, its first consumer (the strand gate) lands post-slice.
    */
   rebirths: number
+  /**
+   * Transcendences latched >= N (slice 10 / D39). Reads soul.transcended.length
+   * — attachments cut in three distinct lives, now gone permanently. First
+   * consumer: the first-transcendence journal entry (revealed on the deed, D11).
+   */
+  transcendences: number
 }
 
 /** A condition object: any subset of clauses, AND-combined. Empty = always true. */
@@ -181,6 +187,8 @@ export interface GameState {
   tribulationPassed: boolean
   /** Rebirths latched (slice 10; reads soul.rebirths — 0 until the crossing). */
   rebirths: number
+  /** Transcendences latched (slice 10 / D39; reads soul.transcended.length). */
+  transcendences: number
 }
 
 // ---- Evaluation ------------------------------------------------------------
@@ -267,6 +275,8 @@ function clauseHolds<K extends keyof ConditionClauses>(
       return state.tribulationPassed
     case 'rebirths':
       return state.rebirths >= (value as number)
+    case 'transcendences':
+      return state.transcendences >= (value as number)
     default:
       // Exhaustiveness check — unknown keys should never reach here because
       // the type system rejects them at the call site. This default is

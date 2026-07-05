@@ -66,6 +66,7 @@ describe('meets', () => {
     seclusionRungs: 0,
     tribulationPassed: false,
     rebirths: 0,
+    transcendences: 0,
   }
 
   it('empty condition is always true', () => {

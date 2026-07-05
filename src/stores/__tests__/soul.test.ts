@@ -30,7 +30,8 @@ describe('soul store: fresh slice shape', () => {
       ascents: 0,
       severanceRituals: 0,
       severanceHistory: [],
-      // Slice 10 / D36+D37 soul-side additions.
+      // Slice 10 / D36+D37+D39 soul-side additions.
+      transcended: [],
       rebirths: 0,
       trialsEndured: {},
       walkedManifestations: 0,
@@ -133,6 +134,62 @@ describe('soul store: recorders', () => {
       { severable: 'soulAspect', life: 1 },
       { severable: 'profession', life: 1 },
     ])
+  })
+})
+
+describe('soul store: three-lives transcendence (D39)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('distinctLivesSevered counts DISTINCT lives, not rows (three cuts in one life = one life)', () => {
+    const soul = useSoulStore()
+    // Three rows for the SAME life — a physical impossibility via sever(), but
+    // the count must key on distinct life numbers, never row count (D39: three
+    // LIVES, not three cuts).
+    soul.recordSeverance('soulAspect', 1)
+    soul.recordSeverance('soulAspect', 1)
+    soul.recordSeverance('soulAspect', 1)
+    expect(soul.distinctLivesSevered('soulAspect')).toBe(1)
+
+    // Distinct lives accumulate.
+    soul.recordSeverance('soulAspect', 2)
+    soul.recordSeverance('soulAspect', 5) // non-consecutive is fine
+    expect(soul.distinctLivesSevered('soulAspect')).toBe(3)
+    // A different severable is counted independently.
+    expect(soul.distinctLivesSevered('profession')).toBe(0)
+  })
+
+  it('recordTranscendence latches the transcended set (idempotent) and carries the contribution', () => {
+    const soul = useSoulStore()
+    expect(soul.isTranscended('soulAspect')).toBe(false)
+    soul.recordTranscendence('soulAspect', '1.2', '1.4')
+    soul.recordTranscendence('soulAspect', '9', '9') // idempotent — no duplicate, keeps the first
+    expect(soul.isTranscended('soulAspect')).toBe(true)
+    expect(soul.transcended).toEqual([
+      { severable: 'soulAspect', severedQiMult: '1.2', severedInsightMult: '1.4' },
+    ])
+  })
+
+  it('round-trips the transcended set through save/load', () => {
+    const soul = useSoulStore()
+    soul.recordTranscendence('extraordinaryMeridians', '5', '1')
+    const saved = soul.save()
+
+    setActivePinia(createPinia())
+    const reloaded = useSoulStore()
+    reloaded.load(saved)
+    expect(reloaded.isTranscended('extraordinaryMeridians')).toBe(true)
+    expect(reloaded.transcended).toEqual([
+      { severable: 'extraordinaryMeridians', severedQiMult: '5', severedInsightMult: '1' },
+    ])
+  })
+
+  it('load(undefined) and pre-D39 saves default the transcended set to empty', () => {
+    const soul = useSoulStore()
+    soul.load({ ascents: 1, severanceRituals: 0, severanceHistory: [] })
+    expect(soul.transcended).toEqual([])
+    expect(soul.isTranscended('soulAspect')).toBe(false)
   })
 })
 

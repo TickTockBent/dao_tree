@@ -295,6 +295,96 @@ describe('severing store (Spirit Severing goes real)', () => {
   })
 })
 
+// ---- D39: three-lives transcendence ----------------------------------------
+
+describe('transcendence (D39 — the D24 Steam gate)', () => {
+  beforeEach(() => {
+    bootTestStores()
+  })
+
+  /** Simulate a rebirth boundary: the life-scoped severing slice resets, the soul latches a rebirth. */
+  function crossLifeBoundary(): void {
+    const severing = useSeveringStore()
+    severing.load(severing.fresh())
+    useSoulStore().recordRebirth()
+  }
+
+  it('cutting the same attachment in three DISTINCT lives transcends it permanently', () => {
+    const severing = useSeveringStore()
+    const soul = useSoulStore()
+    unlockRealmX()
+    chooseAspect()
+
+    // Life 1 (rebirths 0 → life index 1): a first cut, no announcement yet.
+    expect(severing.pastLivesSevered('soulAspect')).toBe(0)
+    expect(severing.severWouldTranscend('soulAspect')).toBe(false)
+    expect(severing.sever('soulAspect')).toBe(true)
+    expect(soul.isTranscended('soulAspect')).toBe(false)
+    expect(soul.severanceHistory.at(-1)).toMatchObject({ severable: 'soulAspect', life: 1 })
+
+    // Life 2 (rebirths 1 → life index 2): the second cut, still no transcendence.
+    crossLifeBoundary()
+    expect(severing.pastLivesSevered('soulAspect')).toBe(1)
+    expect(severing.severWouldTranscend('soulAspect')).toBe(false)
+    expect(severing.sever('soulAspect')).toBe(true)
+    expect(soul.isTranscended('soulAspect')).toBe(false)
+    expect(soul.severanceHistory.at(-1)).toMatchObject({ severable: 'soulAspect', life: 2 })
+
+    // Life 3 (rebirths 2 → life index 3): the THIRD cut announces and transcends.
+    crossLifeBoundary()
+    expect(severing.pastLivesSevered('soulAspect')).toBe(2)
+    expect(severing.severWouldTranscend('soulAspect')).toBe(true) // D32: announced BEFORE arming
+    expect(severing.liveSeverables).toContain('soulAspect') // still severable up to the knife
+    expect(severing.sever('soulAspect')).toBe(true)
+    expect(soul.isTranscended('soulAspect')).toBe(true)
+    expect(soul.distinctLivesSevered('soulAspect')).toBe(3)
+  })
+
+  it('a transcended attachment leaves the severance menu forever (D31 runtime counting basis)', () => {
+    const severing = useSeveringStore()
+    const soul = useSoulStore()
+    unlockRealmX()
+    chooseAspect()
+    // A fresh life whose soul has already transcended the aspect.
+    soul.recordTranscendence('soulAspect', '1.2', '1.2')
+    // Even though the aspect is acquired (chosen), it is no longer an attachment.
+    expect(severing.liveSeverables).not.toContain('soulAspect')
+    expect(severing.sever('soulAspect')).toBe(false) // the knife refuses it
+  })
+
+  it('applyTranscendences pre-applies nullification + the at-cap multiplier (no trough)', () => {
+    const severing = useSeveringStore()
+    const soul = useSoulStore()
+    // A transcendence carried on the soul (contribution captured at the third cut).
+    soul.recordTranscendence('soulAspect', '1.2', '1.2')
+
+    severing.applyTranscendences()
+
+    // Nullified from breath one, and OUTSIDE the three-corpse ceremony.
+    expect(severing.isSevered('soulAspect')).toBe(true)
+    expect(severing.transcendences).toHaveLength(1)
+    expect(severing.severances).toEqual([])
+    expect(severing.nextCorpse).toBe('past') // the ceremony is untouched
+
+    // At CAP from breath one — cap × contribution, no weakness window regardless
+    // of the ritual clock (soul.severanceRituals is 0 here).
+    expect(severing.transcendentQiMult.toNumber()).toBeCloseTo(CFG.capRatio * 1.2, 6)
+    expect(severing.transcendentInsightMult.toNumber()).toBeCloseTo(CFG.capRatio * 1.2, 6)
+  })
+
+  it('the at-cap multiplier holds even after many rituals accrue (the clock only rises)', () => {
+    const severing = useSeveringStore()
+    const soul = useSoulStore()
+    soul.recordTranscendence('extraordinaryMeridians', '5', '1')
+    for (let step = 0; step < 30; step++) soul.recordSeveranceRitual()
+    severing.applyTranscendences()
+    // Both axes ride the SAME cap ramp: qi = cap × 5; the unoccupied insight axis
+    // (m = 1) = cap × 1 (the floor rule only matters below breakeven, never at cap).
+    expect(severing.transcendentQiMult.toNumber()).toBeCloseTo(CFG.capRatio * 5, 6)
+    expect(severing.transcendentInsightMult.toNumber()).toBeCloseTo(CFG.capRatio * 1, 6)
+  })
+})
+
 // ---- D28: The Offering (prestige('x') is a sacrifice) ----------------------
 
 describe('the offering (D28)', () => {
