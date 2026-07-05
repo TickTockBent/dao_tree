@@ -180,6 +180,30 @@ compound the surplus). Probe flag: `counterfactualSeverEffect` (⊘), in
 `assertProbeFlagsExclusive`; base-profile output verified pure-insertion vs
 pre-change capture; sim wall-time 50.3 → ~65s (+28%).
 
+## Step-8 pins (Gate-D, signed 2026-07-05 — D43 #5 / `23608e4`)
+
+Both slices' PREVIEW lines hardened into FAIL-able assertions (FAIL to
+stdout; CI's grep made stderr-aware the same day — Finding A).
+
+**Slice-9 §6:** lifetime-net ≥ 1 (min 1.097, spine + roster) · breakeven
+≤ 12 ramp steps (measured 7) · ≥ 3 live severables at first corpse (per
+actor + cross-actor) · Flowing Form conditional-class cap·m > 1 both
+axes (qi 1.400 / insight 4.000), baseline-1 qi breakeven step 10 ≤ 12 ·
+D35 survivability SURVIVABLE, 16.8s ≤ 7198s budget.
+
+**Slice-10 dynasty:** breadth > repeat at equal competence — SIGN ONLY
+(+27.60; the 1.14× ratio deliberately unpinned, D41 signed it as a
+structural ceiling) · farm-income convergence (per-life non-increasing;
+cumulative 192.80 ≤ geometric ceiling 227.20 at r = 0.5) · root
+non-dominance (22-run sweep: Heaven argmins differ by build — Lattice
+count 2 @ −0.41%, Competent count 3 @ −0.66%; no config dominates) ·
+wider-not-taller: max rooted speedup ≤ 2.0× (measured 1.0067×).
+
+**Sweep observation carried to task #27:** Heaven-grade purity buys
+0.41–0.66% — non-dominant but possibly vestigial, and the measurement is
+a FLOOR (Seed-carry stacking not modeled in the v1 harness). First
+question of the post-roots probe.
+
 ## Post-itch re-derivation list (constants that encode sim assumptions)
 
 Values shipped from sim-derived measurements that should be re-derived

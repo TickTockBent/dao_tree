@@ -1,0 +1,376 @@
+{
+  "version": "0.6.0",
+  "note": "Mid/late Act I: Heaven-grade Foundation, perfect core (Steady forge + refined), Core Tempered, azureSword sect, Metal Seed + Sword Glimpse, one Verdant Hollow clear, a crafted gathering pill, two seclusion rungs, corruption touched by a rushed Flawed breakthrough.",
+  "save": {
+    "saveVersion": 1,
+    "versionType": "dao-tree",
+    "time": 1783259475374,
+    "timePlayed": 24168.05995707239,
+    "points": "0",
+    "keepGoing": false,
+    "hasNaN": false,
+    "devSpeed": null,
+    "offTime": null,
+    "tab": null,
+    "navTab": null,
+    "subtabs": {},
+    "lastSafeTab": null,
+    "b": {
+      "primaryMeridians": 12,
+      "extraordinaryMeridians": 0,
+      "temperLevel": 20,
+      "foundationGrade": 3,
+      "coreGrade": 4,
+      "soulAspect": "",
+      "scarDepth": 0,
+      "scarHealProgress": 0,
+      "scarHealedDepth": 0,
+      "milestones": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    "realms": {
+      "q": {
+        "points": "90",
+        "best": "90",
+        "total": "90",
+        "unlocked": true,
+        "resetTime": 7.242094324707644,
+        "milestones": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      "f": {
+        "points": "45",
+        "best": "45",
+        "total": "45",
+        "unlocked": true,
+        "resetTime": 15.597727663059787,
+        "milestones": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ]
+      },
+      "c": {
+        "points": "3",
+        "best": "3",
+        "total": "3",
+        "unlocked": true,
+        "resetTime": 75.89294644466855,
+        "milestones": [
+          0,
+          1,
+          2
+        ]
+      },
+      "n": {
+        "points": "0",
+        "best": "0",
+        "total": "0",
+        "unlocked": false,
+        "resetTime": 0,
+        "milestones": []
+      },
+      "s": {
+        "points": "0",
+        "best": "0",
+        "total": "0",
+        "unlocked": false,
+        "resetTime": 0,
+        "milestones": []
+      },
+      "x": {
+        "points": "0",
+        "best": "0",
+        "total": "0",
+        "unlocked": false,
+        "resetTime": 0,
+        "milestones": []
+      }
+    },
+    "dao": {
+      "insight": "6561.83767850346",
+      "activeStance": "",
+      "revealed": true,
+      "nodeTiers": {
+        "metal": 2,
+        "sword": 1
+      }
+    },
+    "sect": {
+      "archetype": "azureSword",
+      "contribution": "44226.73172245127",
+      "best": "44226.73172245127",
+      "revealed": true,
+      "techniques": [],
+      "milestones": [
+        0,
+        1,
+        2
+      ]
+    },
+    "gate": {
+      "unlocked": true,
+      "achievements": [
+        11,
+        12
+      ]
+    },
+    "forge": {
+      "refinementProgress": "0",
+      "warming": true,
+      "lastForgeCracked": false
+    },
+    "trib": {
+      "tribActive": false,
+      "tribElapsed": 0,
+      "tribPool": "0",
+      "tribPoolMax": "0",
+      "tribWaveIndex": 0,
+      "tribGrade": -1,
+      "tribCooldownUntil": 0
+    },
+    "legacy": {
+      "actOneGrade": -1,
+      "actTwoEntryGrade": -1
+    },
+    "journal": {
+      "latched": [
+        "firstBreath",
+        "firstMeridian",
+        "firstGlimpse",
+        "sectJoined",
+        "foundationReached",
+        "corruptionTouched",
+        "allMeridians",
+        "outerDisciple",
+        "professionChosen",
+        "firstExpedition",
+        "coreForged",
+        "deepMeditation"
+      ],
+      "reflected": [],
+      "stage": "Nascent Soul"
+    },
+    "secret": {
+      "expedition": {
+        "active": false,
+        "siteKey": null,
+        "elapsed": 0,
+        "essence": 0
+      },
+      "clears": {
+        "verdantHollow": 1
+      },
+      "cooldownUntil": {
+        "verdantHollow": 23198.356952692266
+      }
+    },
+    "alchemy": {
+      "profession": "alchemy",
+      "materials": {
+        "spiritHerb": 667.6334967858279
+      },
+      "pills": {
+        "gatheringPill": 1
+      },
+      "activePill": null
+    },
+    "demons": {
+      "corruption": 0,
+      "banked": 0,
+      "thresholdsCrossed": 0,
+      "daoHeartStacks": 0,
+      "activeTrial": null,
+      "trialElapsed": 0,
+      "trialQiGathered": 0,
+      "trialPrestiges": 0,
+      "touched": true
+    },
+    "seclusion": {
+      "purchased": [
+        "q",
+        "f"
+      ]
+    },
+    "ach": {
+      "earned": [
+        "CORE_FORGED",
+        "CORE_TEMPERED",
+        "FIRST_BREATH",
+        "FIRST_DELVE",
+        "FIRST_MERIDIAN",
+        "FOUNDATION_LAID",
+        "SECOND_DISCIPLINE",
+        "SECT_JOINED",
+        "SECT_STANDING",
+        "SEED_OF_THE_DAO",
+        "SIXTH_LEVEL",
+        "TEMPERED_FLESH",
+        "TEMPERED_MARROW",
+        "TWELVE_RIVERS"
+      ]
+    },
+    "soul": {
+      "ascents": 0,
+      "severanceRituals": 0,
+      "severanceHistory": [],
+      "transcended": [],
+      "rebirths": 0,
+      "trialsEndured": {},
+      "walkedManifestations": 0,
+      "purityGrade": "mortal"
+    },
+    "severing": {
+      "severances": [],
+      "transcendences": []
+    },
+    "roots": {
+      "elements": []
+    },
+    "karma": {
+      "balance": 0,
+      "lifeLedger": [
+        {
+          "eventKey": "reachRealm:q",
+          "class": "milestone",
+          "resolvedQualifiers": {
+            "rootShape": "rootless",
+            "buildMark": "gatherer"
+          }
+        },
+        {
+          "eventKey": "joinSect",
+          "class": "milestone",
+          "resolvedQualifiers": {
+            "rootShape": "rootless",
+            "buildMark": "gatherer"
+          }
+        },
+        {
+          "eventKey": "foundationGradeDelta",
+          "class": "grade-delta",
+          "resolvedQualifiers": {}
+        },
+        {
+          "eventKey": "reachRealm:f",
+          "class": "milestone",
+          "resolvedQualifiers": {
+            "rootShape": "rootless",
+            "buildMark": "gatherer"
+          }
+        },
+        {
+          "eventKey": "coreGradeDelta",
+          "class": "grade-delta",
+          "resolvedQualifiers": {}
+        },
+        {
+          "eventKey": "chooseProfession",
+          "class": "milestone",
+          "resolvedQualifiers": {
+            "rootShape": "rootless",
+            "buildMark": "sect"
+          }
+        },
+        {
+          "eventKey": "clearedSite:verdantHollow",
+          "class": "encounter",
+          "resolvedQualifiers": {
+            "realmEra": "c"
+          }
+        },
+        {
+          "eventKey": "reachRealm:c",
+          "class": "milestone",
+          "resolvedQualifiers": {
+            "rootShape": "rootless",
+            "buildMark": "sect"
+          }
+        }
+      ],
+      "firstsHistory": {},
+      "gradeBests": {
+        "foundationGradeDelta": 3,
+        "coreGradeDelta": 4
+      }
+    },
+    "chronicle": {
+      "entries": []
+    }
+  },
+  "expect": [
+    {
+      "path": "realms.q.best",
+      "gte": 90
+    },
+    {
+      "path": "realms.f.best",
+      "gte": 45
+    },
+    {
+      "path": "realms.c.best",
+      "gte": 3
+    },
+    {
+      "path": "b.primaryMeridians",
+      "equals": 12
+    },
+    {
+      "path": "b.temperLevel",
+      "equals": 20
+    },
+    {
+      "path": "b.coreGrade",
+      "equals": 4
+    },
+    {
+      "path": "sect.archetype",
+      "equals": "azureSword"
+    },
+    {
+      "path": "sect.best",
+      "gte": 250
+    },
+    {
+      "path": "dao.nodeTiers.metal",
+      "equals": 2
+    },
+    {
+      "path": "secret.clears.verdantHollow",
+      "gte": 1
+    },
+    {
+      "path": "alchemy.profession",
+      "equals": "alchemy"
+    },
+    {
+      "path": "alchemy.pills.gatheringPill",
+      "gte": 1
+    },
+    {
+      "path": "seclusion.purchased.0",
+      "equals": "q"
+    },
+    {
+      "path": "demons.touched",
+      "equals": true
+    },
+    {
+      "path": "ach.earned.length",
+      "gte": 3
+    }
+  ]
+}

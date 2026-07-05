@@ -3,9 +3,43 @@
 All notable changes to **Dao Tree**. Versions track the itch.io releases;
 **0.2** was the first public release, so earlier development is folded into it.
 
-## Unreleased
+## 0.6.0 — 2026-07-05 — the wheel turns
 
 ### Added
+- **Samsara. The wheel turns.** Pass the First Tribulation and the greatest
+  choice in the game unlocks: end this life and begin the next. Rebirth is
+  voluntary, forever — nothing forces the crossing. Before you cross, the
+  ledger is read to you: every first this life achieved and what the heavens
+  paid for it. What the body built dies — realms, meridians, standing, the
+  core itself. What the soul knows carries — the journal, the legacy, the
+  disciplines of seclusion, and everything below.
+- **Karma — the heavens pay for firsts.** Each life earns karma for what no
+  prior life did: the first time a realm is reached, a trial endured, a
+  severance made — with smaller echoes for familiar milestones reached in
+  new circumstances, as a different kind of cultivator. Repeating a life is
+  never punished; it simply isn't novel. The tenth identical life pays
+  almost nothing, and that is the design.
+- **The rebirth menu: what do you carry, and what body do you build?** Spend
+  karma on memory fragments — carry chosen Dao Seeds into the next life,
+  each additional one costlier — and on spiritual roots: choose your
+  elements (one deep and narrow, five wide and slow) and raise your root
+  purity. Purity is a dynasty project: buy Earth grade once, buy Heaven
+  once, and the soul bears that grade forever. Glimpses of the lattice
+  always carry free — you never forget what you have glimpsed.
+- **Three-lives transcendence.** Sever the same attachment in three
+  lifetimes and it transcends: gone from every life to come, its
+  transcendent power yours from breath one, the weakness window never
+  suffered again. The third cut announces itself before you make it —
+  permanent, across all future lives, exactly as weighty as it sounds.
+- **The Chronicle.** The world remembers your lives. Every completed life
+  writes its page — realm reached, grades, what was severed, what was
+  endured, what the crossing paid — and the book curates itself: founding
+  lives get chapters, unremarkable late lives a single line, and only the
+  exceptional earn full treatment again. A hundred-life save reads like a
+  dynasty history.
+- **Your level, visible.** Every realm now shows the sub-stage you have
+  reached and the next one coming ("6th Level — 7th Level at 170") — the
+  ladder the achievements always referenced, finally drawn.
 - **Sever the Flowing Form.** A fifth severance: wear a stance and the knife
   can make it flesh — permanent, involuntary, its costs and gifts ramping
   from a deep weakness (×0.35 Qi at the cut) through recovery to surplus
@@ -26,6 +60,15 @@ All notable changes to **Dao Tree**. Versions track the itch.io releases;
 - **Act II's insight economy breathes.** Manifestation-tier lattice costs
   halved; offering insight bases rebalanced so a rite feels like burning
   incense, not buying a house.
+- **Every prestige button names the act it performs.** Condense the Qi,
+  Establish the Foundation, Refine the Core, Deepen the Soul, Form the
+  Soul — "break through" was one verb lying about five different actions.
+
+### Notes
+- The bleeding-edge (GitHub Pages) build's debug throttle keys work again —
+  they had been silently dead since the engine port. Debug code is
+  dead-code-eliminated from release builds, and the release pipeline now
+  fails hard if it ever finds any.
 
 ## 0.5.0 — 2026-07-03 — the second road
 

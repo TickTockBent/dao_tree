@@ -908,3 +908,18 @@ complete at `3b5da07`).*
    PREVIEWs, run the root-dominance sweep, golden, tag. A preview that
    fails under the sweep is a FINDING (the ⟨tune⟩ moves before
    hardening), not a failure.
+
+**Sign-off (same day — step 8 closes, `23608e4`):** the full pin list
+signed (both slices' PREVIEWs → FAIL-able; the exact values live in
+[calibration.md](calibration.md)). **Sweep verdict: no dominance** —
+Heaven argmins differ by build (Lattice count 2, Competent count 3; the
+deep-narrow/wide-shallow trade is real); the ⟨tune⟩ grid holds. Signed
+with eyes open: max Heaven speedup is **0.41–0.67%** — non-dominant but
+possibly VESTIGIAL (D38's other failure mode); "is the purity carrot
+felt?" is now task #27's FIRST question (the measurement was also a
+floor — Seed-carry stacking wasn't modeled). Wider-not-taller pinned at
+≤ 2.0× (measured 1.0067×). **Finding A fixed** ("good catch"): CI's
+FAIL grep was stderr-blind — the Act I pinned bands were never actually
+CI-fatal until 2026-07-05; sim now tees 2>&1, all assertions emit FAIL
+to stdout. Full sweep grid kept (sim 83s → 130s). Golden 0.6.0 cut;
+**tagged itch-0.6.0 — "the wheel turns."**

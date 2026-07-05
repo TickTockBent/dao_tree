@@ -1,6 +1,11 @@
 # Slice 10 — Samsara: the outer loop
 
-**Status: DESIGN SIGNED OFF 2026-07-04 (D36–D40). Build not started.**
+**Status: COMPLETE 2026-07-05 (D36–D43). Designed 2026-07-04, built
+overnight, hardened and shipped as 0.6.0 ("the wheel turns") the next
+morning — all eight §7 steps done, all pins signed (calibration.md), the
+D24 Steam gate closed. Post-slice follow-ups live in the task list:
+post-roots re-measurement + per-axis echo + the vestigial-purity
+question (#27), UI polish pass (#30), cleanup + demo prep (#25/#26).**
 This spec compiles the five rulings into an operational plan; the full
 rationale for every call lives in [decisions.md](decisions.md) D36–D40,
 with D37's audit table as the topology and D24 as the Steam gate this
