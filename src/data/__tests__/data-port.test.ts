@@ -42,7 +42,10 @@ import {
   KARMA_FLOOR,
   VARIANT_SHARE,
   karmaExpansion,
+  deriveBuildMark,
+  BUILD_MARK_BASELINES,
 } from '@/data/karma'
+import type { BuildInvestment } from '@/data/karma'
 
 describe('FACTORY_NUMERICS', () => {
   it('matches the 0.2.x values', () => {
@@ -652,10 +655,10 @@ describe('KARMA_DATA (slice 10 / D36+D40)', () => {
     ])
   })
 
-  it('the v0 tuning knobs match the measurement-only placeholders', () => {
-    // ⟨tune⟩ — NOT priced. Wes prices against the dynasty-harness measurements.
-    expect(KARMA_DECAY_RATIO).toBe(0.5)
-    expect(VARIANT_SHARE).toBe(0.25)
+  it('the tuning knobs match the D41-ruled starting points', () => {
+    // ⟨tune⟩ — D41 #1-ruled; pending the Gate-D re-run sign-off.
+    expect(KARMA_DECAY_RATIO).toBe(0.5) // D41 kept it (third repeat at 25%).
+    expect(VARIANT_SHARE).toBe(0.4) // D41 raised 0.25 → 0.4 (echo ≈ half a headline).
     // f = 0 IS THE DESIGN (D36), not a tuning value.
     expect(KARMA_FLOOR).toBe(0)
   })
@@ -671,5 +674,52 @@ describe('KARMA_DATA (slice 10 / D36+D40)', () => {
       total: 121,
       variantsByClass: { milestone: 60, 'grade-delta': 0, deed: 18, encounter: 18 },
     })
+  })
+})
+
+describe('deriveBuildMark (D41 #4 — baseline-relative)', () => {
+  // The measured 2026-07-04 roster investments (life-end BuildInvestment per
+  // actor). D41 #4 acceptance: distinct builds must NOT collapse — the lattice
+  // build marks `lattice`, the sect build `sect`; Competent/Realistic land where
+  // the rule honestly puts them (balanced / pill).
+  const COMPETENT: BuildInvestment = { meridians: 12, latticeNodes: 15, sectMilestones: 3, pillsBrewed: 0 }
+  const REALISTIC: BuildInvestment = { meridians: 12, latticeNodes: 15, sectMilestones: 3, pillsBrewed: 5333 }
+  const LATTICE: BuildInvestment = { meridians: 12, latticeNodes: 15, sectMilestones: 0, pillsBrewed: 0 }
+  const SECT: BuildInvestment = { meridians: 12, latticeNodes: 0, sectMilestones: 3, pillsBrewed: 0 }
+
+  it('the baselines are the pinned roster medians (⟨provisional⟩)', () => {
+    expect(BUILD_MARK_BASELINES).toEqual({
+      meridians: 12,
+      latticeNodes: 15,
+      sectMilestones: 3,
+      pillsBrewed: 10, // roster median is 0 (only Realistic brews); v0 cap retained as the scale.
+    })
+  })
+
+  it('the lattice build marks `lattice` (must not collapse)', () => {
+    expect(deriveBuildMark(LATTICE)).toBe('lattice')
+  })
+
+  it('the sect build marks `sect` (must not collapse)', () => {
+    expect(deriveBuildMark(SECT)).toBe('sect')
+  })
+
+  it('the Competent superset (lattice AND sect, neither dominant) is `balanced`', () => {
+    expect(deriveBuildMark(COMPETENT)).toBe('balanced')
+  })
+
+  it('the Realistic (pills past every baseline) marks `pill`', () => {
+    expect(deriveBuildMark(REALISTIC)).toBe('pill')
+  })
+
+  it('an extraordinary-meridian build (past the universal spine) marks `meridian`', () => {
+    // Only investment BEYOND the shared 12-primary spine scores the meridian axis.
+    expect(deriveBuildMark({ meridians: 20, latticeNodes: 0, sectMilestones: 0, pillsBrewed: 0 })).toBe('meridian')
+  })
+
+  it('below the specialist baseline on every axis → `gatherer`', () => {
+    // Opens the spine (12) but dabbles below the specialist level everywhere.
+    expect(deriveBuildMark({ meridians: 12, latticeNodes: 4, sectMilestones: 0, pillsBrewed: 0 })).toBe('gatherer')
+    expect(deriveBuildMark({ meridians: 12, latticeNodes: 0, sectMilestones: 0, pillsBrewed: 0 })).toBe('gatherer')
   })
 })

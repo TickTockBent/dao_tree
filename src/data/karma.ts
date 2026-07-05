@@ -8,13 +8,13 @@
 // each qualified variant pays `VARIANT_SHARE × base` (an echo, a smaller bell).
 //
 // STATUS (skeleton): the TABLE SHAPE, the axis vocabularies, and the
-// expansion-count pin ship here. All bases are v0 RELATIVE CLASS WEIGHTS for
-// MEASUREMENT ONLY (spec §2 / §7 measure-first order) — NOT priced. Wes prices
-// class bases / VARIANT_SHARE / KARMA_DECAY_RATIO against the dynasty-harness
-// measurements at the Gate-D pricing pause. Nothing consumes this table yet.
+// expansion-count pin ship here. Class bases / VARIANT_SHARE / KARMA_DECAY_RATIO
+// are now D41-RULED starting points (8/8/7/4, 0.4, 0.5), ⟨tune⟩ pending the Gate-D
+// re-run sign-off — no longer measurement-only placeholders. Nothing consumes
+// this table yet.
 //
-// ⚠️ DESIGN-REVIEWABLE: the v1 row set below is drafted conservatively from
-// EXISTING game events and is FLAGGED for Wes's review at the pricing pause.
+// ⚠️ DESIGN-REVIEWABLE: the v1 row set below was drafted conservatively from
+// EXISTING game events and ships as reviewed at D41 #3 (25 rows, pin 121).
 
 import type {
   RealmId,
@@ -61,7 +61,7 @@ export interface KarmaEventRow {
   readonly key: string
   /** Income class. */
   readonly class: KarmaClass
-  /** v0 relative class weight — MEASUREMENT ONLY, not a priced value. */
+  /** Class base (D41 #1-ruled starting point; ⟨tune⟩ pending the re-run sign-off). */
   readonly base: number
   /** Declared qualifier axes (per-row opt-in; closed to the typed union). */
   readonly qualifiers: readonly KarmaQualifierAxis[]
@@ -71,8 +71,9 @@ export interface KarmaEventRow {
 
 /**
  * r — the per-repeat decay ratio (`base × rⁿ`). MUST be < 1 (bounded income
- * provable from the data shape). v0 PLACEHOLDER 0.5, MEASUREMENT ONLY ⟨tune⟩ —
- * priced against the dynasty harness at the Gate-D pause.
+ * provable from the data shape). D41 #1 kept it at 0.5 — a third repeat at 25%
+ * is genuinely diminishing while a second visit still pays. ⟨tune⟩ pending the
+ * re-run sign-off.
  */
 export const KARMA_DECAY_RATIO = 0.5
 
@@ -86,10 +87,11 @@ export const KARMA_FLOOR = 0
 /**
  * variantShare — each qualified variant (echo) pays `VARIANT_SHARE × base`; the
  * bare headline pays full base. The exploration-vs-loyalty lever is TWO explicit
- * knobs: this share and the axis vocabulary (D40). v0 0.25, MEASUREMENT ONLY
- * ⟨tune⟩.
+ * knobs: this share and the axis vocabulary (D40). D41 #1 ruled 0.25 → 0.4 — an
+ * echo at nearly half a headline is the right register ("this was real, and worth
+ * noting, but it wasn't your first time"). ⟨tune⟩ pending the re-run sign-off.
  */
-export const VARIANT_SHARE = 0.25
+export const VARIANT_SHARE = 0.4
 
 // ---- Axis vocabularies (closed; drive the expansion-count pin) --------------
 //
@@ -140,16 +142,20 @@ export const CLASS_ALLOWED_AXES: Readonly<Record<KarmaClass, readonly KarmaQuali
   encounter: ['realmEra'],
 }
 
-// ---- v0 relative class weights (MEASUREMENT ONLY) --------------------------
+// ---- Class bases (D41 #1 — ruled starting points) --------------------------
 //
-// Not priced. These give the harness relative income to MEASURE and decompose;
-// Wes tunes real class bases against the measurements (D38 measure-first).
+// D41 #1 reweighted the v0 measurement placeholders (10/6/5/4) toward the
+// build-distinct classes: milestones still largest (they're the most content),
+// but deeds/encounters at near-parity instead of half-weight, targeting
+// build-distinct (deed+encounter) income at 25–35%. Deed/encounter never exceed
+// the milestone base — reaching Nascent Soul is a bigger moment than completing
+// an expedition (D41 mid-flight). ⟨tune⟩ pending the re-run sign-off.
 
 const CLASS_BASE_V0: Readonly<Record<KarmaClass, number>> = {
-  milestone: 10,
+  milestone: 8,
   'grade-delta': 4,
-  deed: 6,
-  encounter: 5,
+  deed: 8,
+  encounter: 7,
 }
 
 // ---- The v1 firsts table (DESIGN-REVIEWABLE — flagged for Wes) --------------
@@ -299,13 +305,35 @@ export function karmaExpansion(): KarmaExpansion {
   }
 }
 
-// ---- buildMark derivation (ONE fixed rule — DESIGN-REVIEWABLE) --------------
+// ---- buildMark derivation (ONE fixed rule — D41 #4: baseline-relative) -------
 //
-// ⚠️ FLAGGED for Wes's review. A pure function of the build investment at event
-// time. Each investment axis is normalized to ~[0,1] by a soft cap; the
-// dominant axis wins if it clears the dominance ratio over the runner-up; if no
-// axis shows meaningful investment the mark is 'gatherer' (the baseline
-// playstyle); otherwise 'balanced'. All norms/thresholds are v0 ⟨tune⟩.
+// ⚠️ DESIGN-REVIEWABLE (flagged for Wes). A pure function of the build investment
+// at event time. D41 #4 ruling: the v0 soft-caps measured ABSOLUTE investment,
+// so "everyone maxes meridians" collapsed three of four actors to `balanced` and
+// mislabeled the lattice build `meridian`. The rule SHAPE (dominant axis) is
+// correct; the fix is to score each axis by how far the actor exceeds the
+// UNIVERSAL BASELINE — the mark is the axis where investment most exceeds the
+// baseline everyone shares.
+//
+// TWO REGIMES (D41's own language — "meridians are the baseline everyone shares"):
+//   - meridians is the UNIVERSAL SPINE. Every build opens all 12 primaries, so a
+//     meridian MARK requires going PAST the universal level (extraordinary
+//     meridians): score = max(0, (meridians − baseline) / baseline). At exactly
+//     12 the score is 0 — opening the spine is not a build identity.
+//   - latticeNodes / sectMilestones / pillsBrewed are ELECTIVE specialties. A
+//     gatherer builds none; a specialist reaches the roster-median specialist
+//     level. Score = investment / baseline — a full specialist scores ~1.0.
+//
+// WHY NOT plain (investment − median): the dynasty roster's competent builds
+// invest HOMOGENEOUSLY on the elective axes (Competent/Realistic/Lattice all own
+// 15 lattice nodes; Competent/Realistic/Sect all reach 3 sect milestones), so the
+// roster median EQUALS the specialist level. Subtracting it would zero out the
+// specialists' own axis and re-collapse the lattice/sect builds to balanced —
+// exactly the failure D41 #4 exists to fix. Fraction-of-baseline keeps the
+// specialist axis at ~1.0 while a superset build (both lattice AND sect, neither
+// dominant) reads `balanced`. FLAGGED for Wes: the honest baseline for these
+// axes is the specialist level (=roster median here), used as a scale, not a
+// subtracted floor.
 
 /** Investment snapshot read at the moment a first is recorded. */
 export interface BuildInvestment {
@@ -319,34 +347,67 @@ export interface BuildInvestment {
   readonly pillsBrewed: number
 }
 
-/** Soft caps that normalize each axis to ~[0,1] (v0 ⟨tune⟩). */
-const BUILD_MARK_NORMS = {
-  meridians: 12, // primary-meridian cap
-  latticeNodes: 25, // medium-lattice node count (D22)
-  sectMilestones: 3, // stipend / library / arsenal
-  pillsBrewed: 10, // a soft "invested in alchemy" cap
+/**
+ * BUILD_MARK_BASELINES — the median dynasty-roster actor's life-end investment
+ * per axis (D41 #4: "the median actor's investment in that axis"). MEASURED from
+ * the roster (Competent / Realistic / Lattice / Sect) on 2026-07-04:
+ *   medians = meridians 12, latticeNodes 15, sectMilestones 3, pillsBrewed 0.
+ *
+ * ⟨provisional⟩ — roster-median derived; the sim medians are the best v1 method,
+ * to be RE-DERIVED from real player saves post-itch (Wes, D41 mid-flight). The
+ * shipped function stays PURE — re-derive these deliberately when the roster (or
+ * real save data) changes.
+ *
+ * Two values are NOT the raw measured median, documented here:
+ *   - meridians 12 = the UNIVERSAL spine (all four actors open exactly 12); used
+ *     as the subtracted baseline (only extraordinary meridians score).
+ *   - pillsBrewed: the raw roster median is 0 (only Realistic brews, so the
+ *     median across four actors is 0 — useless as a scale). The v0 alchemy cap 10
+ *     is retained as the pill SCALE. FLAGGED: the pillsBrewed input is a coarse
+ *     proxy (life-end held-pill count, not lifetime brews), so any positive pill
+ *     investment reads as a strong pill signal — adequate for v1.
+ */
+export const BUILD_MARK_BASELINES = {
+  meridians: 12,
+  latticeNodes: 15,
+  sectMilestones: 3,
+  pillsBrewed: 10,
 } as const
 
-/** Below this normalized score on every axis → no real investment → 'gatherer'. */
-const BUILD_MARK_ACTIVITY_FLOOR = 0.15
+/**
+ * An elective axis must reach this fraction of the specialist baseline to signal
+ * a build (below it on every axis → 'gatherer', no real investment past the
+ * universal). v0 ⟨tune⟩.
+ */
+const BUILD_MARK_ACTIVITY_FLOOR = 0.5
 /** The dominant axis must exceed this multiple of the runner-up to claim the mark. */
 const BUILD_MARK_DOMINANCE_RATIO = 1.5
 
 /**
  * Derive the buildMark from an investment snapshot. Pure, deterministic, one
- * fixed rule. Returns one of gatherer/meridian/lattice/sect/pill/balanced.
+ * fixed rule (D41 #4 baseline-relative). Returns one of
+ * gatherer/meridian/lattice/sect/pill/balanced.
  */
 export function deriveBuildMark(investment: BuildInvestment): BuildMark {
+  // meridians: excess PAST the universal spine (only extraordinary meridians score).
+  const meridianExcess = Math.max(
+    0,
+    (investment.meridians - BUILD_MARK_BASELINES.meridians) / BUILD_MARK_BASELINES.meridians,
+  )
   const scores: { readonly mark: BuildMark; readonly score: number }[] = [
-    { mark: 'meridian', score: investment.meridians / BUILD_MARK_NORMS.meridians },
-    { mark: 'lattice', score: investment.latticeNodes / BUILD_MARK_NORMS.latticeNodes },
-    { mark: 'sect', score: investment.sectMilestones / BUILD_MARK_NORMS.sectMilestones },
-    { mark: 'pill', score: investment.pillsBrewed / BUILD_MARK_NORMS.pillsBrewed },
+    { mark: 'meridian', score: meridianExcess },
+    { mark: 'lattice', score: investment.latticeNodes / BUILD_MARK_BASELINES.latticeNodes },
+    { mark: 'sect', score: investment.sectMilestones / BUILD_MARK_BASELINES.sectMilestones },
+    { mark: 'pill', score: investment.pillsBrewed / BUILD_MARK_BASELINES.pillsBrewed },
   ]
   const sorted = [...scores].sort((a, b) => b.score - a.score)
   const top = sorted[0]!
   const runnerUp = sorted[1]!
+  // No axis reaches specialist significance → no real investment past the
+  // universal baseline → gatherer.
   if (top.score < BUILD_MARK_ACTIVITY_FLOOR) return 'gatherer'
+  // A single axis clearly dominates → that build; otherwise (multiple axes at
+  // the baseline, none dominant) → balanced is a REAL mark, not a default bucket.
   if (top.score >= runnerUp.score * BUILD_MARK_DOMINANCE_RATIO) return top.mark
   return 'balanced'
 }

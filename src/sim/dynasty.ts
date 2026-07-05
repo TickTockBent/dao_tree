@@ -263,9 +263,9 @@ export function printDynastySection<Policy>(
 //
 // PREVIEW discipline (slice-9): observation ONLY, no assertion, and the error
 // token is NEVER emitted. Pure insertion — printed AFTER every existing section.
-// The income here uses v0 RELATIVE CLASS WEIGHTS (src/data/karma.ts) for
-// MEASUREMENT ONLY; Wes prices real class bases against these numbers at the
-// Gate-D pause.
+// The income here uses the D41 #1-ruled class bases (src/data/karma.ts:
+// milestone 8 / deed 8 / encounter 7 / grade-delta 4, variantShare 0.4, decay
+// 0.5) — the Gate-D re-run; ⟨tune⟩ pending the re-run sign-off.
 
 /** Per-class dynasty totals (the shape summary's accumulator). */
 interface KarmaShapeTotals {
@@ -319,7 +319,7 @@ export function printDynastyKarmaSection<Policy>(
   comparison: { readonly repeatLabel: string; readonly breadthLabel: string },
 ): void {
   console.log(
-    '\n=== DYNASTY KARMA (measurement; v0 relative class weights — NOT priced; PREVIEW, no assertion) ===',
+    '\n=== DYNASTY KARMA (measurement; D41-ruled bases 8/8/7/4, variantShare 0.4 — ⟨tune⟩; PREVIEW, no assertion) ===',
   )
   console.log(
     '  Per-actor karma income across the dynasty sequences, decomposed by the four D40 classes (milestone',
@@ -331,9 +331,9 @@ export function printDynastyKarmaSection<Policy>(
     '  through the REAL karma store (recordFirst/settleLife, seeded per-life from the soul-scoped karma carry),',
   )
   console.log(
-    '  so the measured math IS the shipped math. Bases are v0 relative weights for MEASUREMENT ONLY (Wes prices',
+    '  so the measured math IS the shipped math. Bases are the D41 #1 starting points (milestone 8 / deed 8 /',
   )
-  console.log('  class bases / VARIANT_SHARE / KARMA_DECAY_RATIO against these numbers at the Gate-D pause).')
+  console.log('  encounter 7 / grade-delta 4, variantShare 0.4, decay 0.5) — ⟨tune⟩ pending the Gate-D re-run sign-off.')
 
   const shapeByLabel = new Map<string, KarmaShapeTotals>()
   for (const spec of specs) {
@@ -389,7 +389,7 @@ export function printDynastyKarmaSection<Policy>(
   }
 
   console.log(
-    '\n  (DYNASTY KARMA section end — observation-only; v0 weights; no band moved, nothing asserted, no error token.)',
+    '\n  (DYNASTY KARMA section end — observation-only; D41-ruled bases; the Gate-D re-run, nothing asserted, no error token.)',
   )
 }
 
