@@ -32,6 +32,9 @@ import type { HeartDemonTrialKey } from '@/data/heart-demons'
 import { findRealm } from '@/data/realms'
 import { usePipelinesStore } from './pipelines'
 import { useSoulStore } from './soul'
+// Slice 10 (D36): enduring a trial is a deed first (realmEra-qualified). The
+// soul-record (identity) and the karma deed (novelty income) ring together.
+import { recordTrialDeed } from '@/engine/karmaEvents'
 import type { ForgePushKey, TribGradeKey, FoundationBandTier } from '@/engine/types'
 
 export interface DemonsSlice {
@@ -181,7 +184,10 @@ export const useHeartDemonsStore = defineStore('heartDemons', () => {
     // across rebirth). This one write is the only behavioral touch in the
     // slice-10 skeleton; the counter it writes has no reader yet.
     const clearedTrial = activeTrial.value
-    if (clearedTrial !== null) useSoulStore().recordTrialEndured(clearedTrial)
+    if (clearedTrial !== null) {
+      useSoulStore().recordTrialEndured(clearedTrial)
+      recordTrialDeed(clearedTrial) // slice 10 (D36): the karma deed row
+    }
     daoHeartStacks.value += 1
     activeTrial.value = null
     corruption.value += banked.value

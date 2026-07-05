@@ -27,6 +27,9 @@ import { useGameStore } from './game'
 import { usePipelinesStore } from './pipelines'
 import { useDaoStore } from './dao'
 import { useAlchemyStore } from './alchemy'
+// Slice 10 (D36): first-clearing a site is an encounter first (realmEra-
+// qualified). Readerless karma write, deferred lookup keeps it cycle-free.
+import { recordSiteEncounter } from '@/engine/karmaEvents'
 import type { SecretRealmSiteKey } from '@/engine/types'
 import type { SecretRealmSite } from '@/data/secret-realm'
 
@@ -183,8 +186,10 @@ export const useSecretRealmStore = defineStore('secretRealm', () => {
     // Insight surge → the Dao lattice currency.
     dao.addInsight(new Decimal(essence * rewards.insightPerEssence))
     // First clear (0 → 1) may grant a free Glimpse of the vault's buried node.
-    if (clearsOf(site.key) === 0 && rewards.firstClearGlimpseNode) {
-      dao.grantGlimpse(rewards.firstClearGlimpseNode)
+    if (clearsOf(site.key) === 0) {
+      // Slice 10 (D36): the site's first clear rings its encounter karma first.
+      recordSiteEncounter(site.key)
+      if (rewards.firstClearGlimpseNode) dao.grantGlimpse(rewards.firstClearGlimpseNode)
     }
 
     clears.value = { ...clears.value, [site.key]: clearsOf(site.key) + 1 }

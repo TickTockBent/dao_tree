@@ -22,6 +22,9 @@ import { useLegacyStore } from '@/stores/legacy'
 import { useAlchemyStore } from '@/stores/alchemy'
 import { useHeartDemonsStore } from '@/stores/heartDemons'
 import { TECHNIQUE_DATA } from '@/data/techniques'
+// Slice 10 (D36/D40): the crossing is the biggest milestone + a grade-delta
+// source. Readerless karma writes (deferred lookups keep this cycle-free).
+import { recordMilestoneFirst, recordGradeDelta } from '@/engine/karmaEvents'
 
 export interface TribulationSlice {
   tribActive: boolean
@@ -195,6 +198,10 @@ export const useTribulationStore = defineStore('tribulation', () => {
     if (gradeRow.passes) {
       // Latch the passing grade; NEVER downgrade a higher grade.
       if (gradeIndex > tribGrade.value) tribGrade.value = gradeIndex
+      // Slice 10 (D36/D40): the Act I capstone milestone (also the rebirth
+      // unlock) + the tribulation grade-delta (pays on a strict personal best).
+      recordMilestoneFirst('passFirstTribulation')
+      recordGradeDelta('tribulationGradeDelta', tribGrade.value)
       // Compute the Act I Legacy Grade ONCE on first pass (eternal, monotone).
       legacy.computeAndStoreActOneLegacy()
       // A Scarred pass still marks the soul.

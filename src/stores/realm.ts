@@ -34,6 +34,11 @@ import { useTribulationStore } from './tribulation'
 // inside functions, never hoisted into setup()) — severing.ts already imports
 // useRealmStore, so a top-level instantiation here would close the cycle.
 import { useSeveringStore } from './severing'
+// Slice 10 (D36/D40): the LIVE karma recording seam. recordMilestoneFirst reads
+// only non-karma stores + writes the karma store (readerless — the sim stays
+// byte-identical). Deferred lookups inside karmaEvents keep this import
+// cycle-free.
+import { recordMilestoneFirst, recordGradeDelta } from '@/engine/karmaEvents'
 import type { RealmId } from '@/engine/types'
 
 // ---- State shape ----------------------------------------------------------
@@ -112,6 +117,9 @@ function computeAndStoreFoundationGrade(body: ReturnType<typeof useBodyStore>): 
   const score = foundationGradeScore(body)
   const bandIndex = foundationBandIndexForScore(score)
   if (bandIndex > body.foundationGrade) body.foundationGrade = bandIndex
+  // Slice 10 (D40): the Foundation grade just landed — pay a grade-delta karma
+  // first on a strict personal best (the store gates against the carried best).
+  recordGradeDelta('foundationGradeDelta', body.foundationGrade)
   return body.foundationGrade
 }
 
@@ -134,6 +142,13 @@ export const useRealmStore = defineStore('realm', () => {
   const soul = useSoulStore()
 
   const slice = ref<RealmSlice>(freshRealmSlice())
+
+  // Slice 10 (D36): the life-scoped reachRealm karma latch — which realms have
+  // already rung their reachRealm milestone THIS life. Ephemeral (not saved);
+  // the karma ledger itself is the durable dedup, so a mid-life save/load that
+  // clears this set re-fires recordFirst harmlessly (the ledger no-ops it). Reset
+  // on rebirth via load(fresh()).
+  const reachRecorded = ref<Set<RealmId>>(new Set())
 
   // ---- Per-realm state access --------------------------------------------
   function stateOf(id: RealmId): RealmState {
@@ -420,6 +435,22 @@ export const useRealmStore = defineStore('realm', () => {
     for (const id of ALL_REALM_IDS) {
       if (stateOf(id).unlocked) latchMilestones(id)
     }
+    // Slice 10 (D36): ring the reachRealm milestone the first tick each realm is
+    // unlocked (q from birth; f/c/n/s/x when their `unlocked` latch flips true).
+    // The `unlocked` latch never un-sets (resetRealm preserves it), so each
+    // realm fires exactly once per life; the reachRecorded set keeps this to at
+    // most one recordFirst per realm rather than a per-tick call.
+    latchRealmReached()
+  }
+
+  /** Fire reachRealm:<id> once for each newly-unlocked realm this life (D36). */
+  function latchRealmReached(): void {
+    for (const id of ALL_REALM_IDS) {
+      if (reachRecorded.value.has(id)) continue
+      if (!stateOf(id).unlocked) continue
+      recordMilestoneFirst(`reachRealm:${id}`)
+      reachRecorded.value.add(id)
+    }
   }
 
   // ---- Save slice --------------------------------------------------------
@@ -427,6 +458,9 @@ export const useRealmStore = defineStore('realm', () => {
     return slice.value as unknown as Record<string, unknown>
   }
   function load(s: unknown): void {
+    // Reset the ephemeral reachRealm latch — a fresh life (rebirth cascade calls
+    // load(fresh())) re-earns each realm; the karma ledger dedups re-fires.
+    reachRecorded.value = new Set()
     const loaded = (s ?? freshRealmSlice()) as Partial<RealmSlice>
     slice.value = {
       q: { ...freshRealmState(true), ...loaded.q },

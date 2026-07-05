@@ -26,6 +26,7 @@ import {
   writeSave,
 } from '@/engine/save'
 import { decimalZero } from '@/engine/decimal'
+import { reincarnationResetLayers } from '@/engine/doReset'
 
 /** A system updater registered by a store. Called once per tick in order. */
 export interface SystemUpdater {
@@ -266,6 +267,27 @@ export const useGameStore = defineStore('game', () => {
     return writeSave(buildSave())
   }
 
+  // ---- Reincarnation cascade (slice 10 / D37 §1 — the rebirth reset tier) --
+  //
+  // Reset every LIFE- and TREE-scoped slice provider (the compiled closure over
+  // TREE_DATA's differentiated scope enum, engine/doReset.reincarnationResetLayers)
+  // to its fresh slice, and wipe banked Qi. Soul/world/file providers (journal,
+  // legacy, seclusion, soul, karma, chronicle, achievements) are UNTOUCHED BY
+  // CONSTRUCTION — they are simply never in the closure. Never a hand-written
+  // reset list (#32): the closure is the authority; the only provider whose id is
+  // not itself a layer id is 'realms' (the one store spanning the six tree-scoped
+  // climb layers q..x, all of which are in the closure — so it always resets).
+  // Called by the rebirth store's crossing AFTER the receipt is paid, the
+  // chronicle written, and the rebirth latched.
+  function reincarnate(): void {
+    const closure = new Set<string>(reincarnationResetLayers())
+    for (const provider of sliceProviders) {
+      const resets = provider.id === 'realms' || closure.has(provider.id)
+      if (resets) provider.load(provider.fresh())
+    }
+    points.value = decimalZero()
+  }
+
   function hardReset(): void {
     stopLoop()
     writeSave(buildFreshSave(), true)
@@ -306,6 +328,7 @@ export const useGameStore = defineStore('game', () => {
     stopLoop,
     load,
     saveNow,
+    reincarnate,
     hardReset,
     attachBrowserHooks,
     buildSave,

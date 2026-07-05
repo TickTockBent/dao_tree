@@ -15,6 +15,8 @@ import { findRealm } from '@/data/realms'
 import { useBodyStore } from '@/stores/body'
 import { useRealmStore } from '@/stores/realm'
 import { useHeartDemonsStore } from '@/stores/heartDemons'
+// Slice 10 (D40): the core grade-delta karma source (readerless, deferred).
+import { recordGradeDelta } from '@/engine/karmaEvents'
 import type { ForgePushKey } from '@/engine/types'
 
 export interface ForgeSlice {
@@ -138,6 +140,9 @@ export const useForgeStore = defineStore('forge', () => {
 
     body.coreGrade = producedIndex
     lastForgeCracked.value = cracked
+    // Slice 10 (D40): the core grade just landed — pay a grade-delta karma first
+    // on a strict personal best across lives (the store gates it).
+    recordGradeDelta('coreGradeDelta', body.coreGrade)
     return producedIndex
   }
 
@@ -166,12 +171,17 @@ export const useForgeStore = defineStore('forge', () => {
     const gained = new Decimal(cfg.ratePerSecond).times(diff)
     let progress = refinementProgress.value.add(gained)
 
+    let raisedThisTick = false
     while (progress.gte(goal) && refinementCanProgress.value) {
       progress = progress.sub(goal)
       const raised = body.coreGrade + cfg.tierStep
       const ceiling = coreCeilingGradeIndex.value
       body.coreGrade = raised > ceiling ? ceiling : raised
+      raisedThisTick = true
     }
+    // Slice 10 (D40): refinement raised the core grade — re-check the grade-delta
+    // karma first (pays only on a strict personal best; the store gates it).
+    if (raisedThisTick) recordGradeDelta('coreGradeDelta', body.coreGrade)
     // At the ceiling, drain leftover so the bar reads full-and-done.
     if (!refinementCanProgress.value) progress = decimalZero()
     refinementProgress.value = progress

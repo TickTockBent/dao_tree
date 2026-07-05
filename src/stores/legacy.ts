@@ -14,6 +14,8 @@ import { useBodyStore } from '@/stores/body'
 import { useTribulationStore } from '@/stores/tribulation'
 import { useDaoStore } from '@/stores/dao'
 import { useGateStore } from '@/stores/gate'
+// Slice 10 (D40): the legacy grade-delta karma source (readerless, deferred).
+import { recordGradeDelta } from '@/engine/karmaEvents'
 import { realmWithSoulAspect } from '@/data/realms'
 
 export interface LegacySlice {
@@ -125,6 +127,9 @@ export const useLegacyStore = defineStore('legacy', () => {
     const score = actOneLegacyScore()
     const bandIndex = actOneLegacyBandForScore(score)
     if (bandIndex > actOneGrade.value) actOneGrade.value = bandIndex
+    // Slice 10 (D40): the legacy grade just landed — pay a grade-delta karma
+    // first on a strict personal best across lives (the store gates it).
+    recordGradeDelta('legacyGradeDelta', actOneGrade.value)
   }
 
   /**

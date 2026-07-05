@@ -202,7 +202,7 @@ describe('GATE_DATA', () => {
 })
 
 describe('TREE_DATA', () => {
-  it('has 6 tree-scoped realms across 2 acts + 8 life + 5 soul + 1 world (D37 scope audit)', () => {
+  it('has 6 tree-scoped realms across 2 acts + 10 life + 5 soul + 1 world (D37 scope audit)', () => {
     expect(TREE_DATA.trees.map((t) => t.id)).toEqual(['act1', 'act2'])
     const scopes = Object.entries(TREE_DATA.layers).map(([id, e]) => `${id}:${e.scope}`)
     expect(scopes).toEqual([
@@ -211,7 +211,12 @@ describe('TREE_DATA', () => {
       // cascade can never cross the act boundary (cross-tree keeps are
       // topological).
       'x:tree',
-      'b:life', 'gate:life', 'dao:life', 'sect:life',
+      // Slice 10 / D37 registry completion: the forge run-state + the First
+      // Tribulation run/grade are LIFE-scoped set-pieces (body-built, die at
+      // rebirth). Registered so the reincarnation cascade resets them by
+      // construction — tribGrade in particular MUST reset (it drives the Act II
+      // gate; a new life re-earns the crossing).
+      'b:life', 'forge:life', 'trib:life', 'gate:life', 'dao:life', 'sect:life',
       // Slice 10 / D37: the old 'eternal' scope differentiated into soul |
       // world | file. The journal (the soul's accreted memory) and legacy
       // grades (karma's delta inputs) are SOUL-scoped.
@@ -421,10 +426,15 @@ describe('TECHNIQUE_DATA', () => {
 })
 
 describe('JOURNAL_DATA', () => {
-  it('has 23 entries with firstBreath first and firstManifestation last (slice 9 added 2)', () => {
-    expect(JOURNAL_DATA.entries).toHaveLength(23)
+  it('has 24 entries with firstBreath first and firstRebirth last (slice 10 added the crossing)', () => {
+    expect(JOURNAL_DATA.entries).toHaveLength(24)
     expect(JOURNAL_DATA.entries[0]?.key).toBe('firstBreath')
-    expect(JOURNAL_DATA.entries[22]?.key).toBe('firstManifestation')
+    expect(JOURNAL_DATA.entries[23]?.key).toBe('firstRebirth')
+  })
+
+  it('the first-rebirth entry latches on the first Samsara crossing (rebirths >= 1)', () => {
+    const firstRebirth = JOURNAL_DATA.entries.find((e) => e.key === 'firstRebirth')
+    expect(firstRebirth?.when).toEqual({ rebirths: 1 })
   })
 
   it('slice 9 entries latch on the passed tribulation and the first Manifestation', () => {

@@ -25,7 +25,48 @@ describe('karma store: fresh slice', () => {
     const karma = useKarmaStore()
     expect(karma.balance).toBe(0)
     expect(karma.ledger).toEqual([])
-    expect(freshKarmaSlice()).toEqual({ balance: 0, lifeLedger: [], firstsHistory: {} })
+    expect(freshKarmaSlice()).toEqual({ balance: 0, lifeLedger: [], firstsHistory: {}, gradeBests: {} })
+  })
+})
+
+describe('karma store: recordGradeDelta (personal-best latch, D40)', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('records a grade first only on a STRICT improvement over the carried best', () => {
+    const karma = useKarmaStore()
+    // First landing at grade index 2 → improves over the empty best (-1).
+    karma.recordGradeDelta('foundationGradeDelta', 2)
+    expect(karma.ledger).toHaveLength(1)
+    expect(karma.gradeBests['foundationGradeDelta']).toBe(2)
+    // Re-landing at the SAME grade this life pays nothing (ledger dedup) and does
+    // not move the best.
+    karma.recordGradeDelta('foundationGradeDelta', 2)
+    expect(karma.ledger).toHaveLength(1)
+    // A strict improvement later this life re-latches the best but records no
+    // SECOND payment (one grade-delta payment per row per life — matches the sim).
+    karma.recordGradeDelta('foundationGradeDelta', 3)
+    expect(karma.gradeBests['foundationGradeDelta']).toBe(3)
+    expect(karma.ledger).toHaveLength(1)
+  })
+
+  it('a negative grade index (never reached) records nothing', () => {
+    const karma = useKarmaStore()
+    karma.recordGradeDelta('coreGradeDelta', -1)
+    expect(karma.ledger).toEqual([])
+    expect(karma.gradeBests['coreGradeDelta']).toBeUndefined()
+  })
+
+  it('gradeBests is soul-scoped: a settled best gates the NEXT life to strict improvement', () => {
+    const karma = useKarmaStore()
+    karma.recordGradeDelta('coreGradeDelta', 2)
+    karma.settleLife() // best 2 carries (gradeBests is not cleared by settle)
+    expect(karma.gradeBests['coreGradeDelta']).toBe(2)
+    // Next life re-lands at grade 2 → not an improvement → pays nothing.
+    karma.recordGradeDelta('coreGradeDelta', 2)
+    expect(karma.ledger).toEqual([])
+    // …but grade 3 is a fresh personal best → records (and decays by prior earns).
+    karma.recordGradeDelta('coreGradeDelta', 3)
+    expect(karma.ledger).toHaveLength(1)
   })
 })
 

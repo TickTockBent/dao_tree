@@ -50,6 +50,16 @@ export const TREE_DATA: TreeData = {
     s: { scope: 'tree', tree: 'act1' },
     x: { scope: 'tree', tree: 'act2' },
     b: { scope: 'life' },
+    // Slice 7 set-pieces, LIFE-scoped (slice 10 / D37 registry completion): the
+    // forge run-state and the First Tribulation run + its latched grade are
+    // body-built and die at rebirth. The tribulation grade in particular MUST
+    // reset — it drives `tribulationPassed`, the Act II gate; a new life re-earns
+    // the crossing. Registering them here lets the compiled reincarnation cascade
+    // (doReset.ts reincarnationResetLayers) reset them by construction rather than
+    // by a hand-written list (#32). They are members of no tree, so the tree
+    // cascade (treeResetKeepKeys) already skips them exactly as before.
+    forge: { scope: 'life' },
+    trib: { scope: 'life' },
     gate: { scope: 'life' },
     dao: { scope: 'life' },
     sect: { scope: 'life' },

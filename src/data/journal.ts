@@ -184,6 +184,15 @@ export const JOURNAL_DATA: JournalData = {
       title: 'A Truth Made Real',
       text: 'The lattice yields something it has never given before: not a Glimpse, not a Seed, but a Manifestation, a Dao truth wearing flesh. You did not know comprehension could go this deep. Now you do, and it can be severed.',
     },
+    {
+      // Slice 10 (D11 — reveal on the deed, not before): latches on the first
+      // Samsara crossing (soul.rebirths >= 1), the only entry that outlives the
+      // body entirely — the soul carries it into every life after.
+      key: 'firstRebirth',
+      when: { rebirths: 1 },
+      title: 'The Wheel Turns',
+      text: 'The body you built lets go, and you do not end. What the flesh knew is ash; what the soul knew remains, and the heavens have weighed your firsts and paid. A new life opens beneath you, unwritten. You have done the one thing cultivators are told is impossible: you have died, and gone on.',
+    },
   ],
 }
 

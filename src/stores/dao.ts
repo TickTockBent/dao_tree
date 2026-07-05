@@ -38,6 +38,9 @@ import { useSectStore } from './sect'
 // avoid the dao↔severing import cycle — the same pattern realm.ts uses for
 // useSeveringStore(). severing already imports dao; this closes the loop safely.
 import { useSeveringStore } from './severing'
+// Slice 10 (D36/D40): the Manifestation milestone karma source (readerless,
+// deferred lookups keep it cycle-free).
+import { recordMilestoneFirst } from '@/engine/karmaEvents'
 import type { Element, LatticeNodeKey, StanceKey } from '@/engine/types'
 
 export interface DaoSlice {
@@ -204,7 +207,11 @@ export const useDaoStore = defineStore('dao', () => {
     if (!canAffordNode(key)) return false
     const cost = nodeCost(key)
     insight.value = insight.value.sub(cost).max(0)
-    nodeTiers.value = { ...nodeTiers.value, [key]: nodeTierOwned(key) + 1 }
+    const newTier = nodeTierOwned(key) + 1
+    nodeTiers.value = { ...nodeTiers.value, [key]: newTier }
+    // Slice 10 (D36): reaching Manifestation (tier 3) is a milestone first. The
+    // karma ledger dedups, so only the FIRST node to reach tier 3 this life pays.
+    if (newTier === MANIFESTATION_TIER_INDEX + 1) recordMilestoneFirst('latticeManifestation')
     return true
   }
 

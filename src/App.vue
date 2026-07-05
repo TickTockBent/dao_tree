@@ -24,8 +24,10 @@ import SecretRealmTab from '@/components/SecretRealmTab.vue'
 import AlchemyTab from '@/components/AlchemyTab.vue'
 import AchievementsPanel from '@/components/AchievementsPanel.vue'
 import SeveringPanel from '@/components/SeveringPanel.vue'
+import RebirthPanel from '@/components/RebirthPanel.vue'
 import { useSecretRealmStore } from '@/stores/secretRealm'
 import { useAlchemyStore } from '@/stores/alchemy'
+import { useRebirthStore } from '@/stores/rebirth'
 
 type TabId = 'realms' | 'body' | 'dao' | 'sect' | 'secret' | 'alchemy' | 'journal' | 'save'
 
@@ -36,6 +38,7 @@ const sect = useSectStore()
 const secretRealm = useSecretRealmStore()
 const alchemy = useAlchemyStore()
 const pipelines = usePipelinesStore()
+const rebirth = useRebirthStore()
 
 const { points } = storeToRefs(game)
 const qiPerSec = computed(() => pipelines.qiPerSecond)
@@ -103,6 +106,13 @@ const alchemyTabAvailable = computed(() => alchemy.isRevealed())
           <TribulationPanel v-if="r.id === 's'" />
           <LegacyDisplay v-if="r.id === 's'" />
           <SeveringPanel v-if="r.id === 'x'" />
+        </section>
+        <!-- Slice 10 (D39): the Samsara crossing — voluntary, unlocked at the
+             first tribulation, available forever after. Its own section on the
+             realm surface, below the climb. -->
+        <section v-if="rebirth.rebirthUnlocked" class="panel">
+          <h3 :style="{ color: '#c9a6f0' }">Samsara</h3>
+          <RebirthPanel />
         </section>
       </div>
 

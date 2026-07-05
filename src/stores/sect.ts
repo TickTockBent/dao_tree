@@ -14,6 +14,8 @@ import { buildGameState } from '@/engine/state'
 import { SECT_DATA, findSectArchetype } from '@/data/sect'
 import { TECHNIQUE_DATA } from '@/data/techniques'
 import { usePipelinesStore } from './pipelines'
+// Slice 10 (D36): joining a sect is a milestone first (readerless, deferred).
+import { recordMilestoneFirst } from '@/engine/karmaEvents'
 import type { SectArchetypeKey } from '@/engine/types'
 
 export interface SectSlice {
@@ -56,6 +58,7 @@ export const useSectStore = defineStore('sect', () => {
   function joinSect(key: SectArchetypeKey): void {
     if (joined.value) return
     archetype.value = key
+    recordMilestoneFirst('joinSect') // slice 10 (D36): a build-defining pick
   }
 
   // ---- Contribution accrual -----------------------------------------------

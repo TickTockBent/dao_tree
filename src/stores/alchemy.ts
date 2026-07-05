@@ -31,6 +31,9 @@ import { meets } from '@/engine/meets'
 import { buildGameState } from '@/engine/state'
 import { ALCHEMY_DATA, findRecipe } from '@/data/alchemy'
 import { useSeveringStore } from './severing'
+// Slice 10 (D36): picking the profession slot is a milestone first (readerless,
+// deferred lookup keeps it cycle-free).
+import { recordMilestoneFirst } from '@/engine/karmaEvents'
 import type { MaterialKey, PillKey, ProfessionKey, RealmId } from '@/engine/types'
 
 export interface ActivePill {
@@ -150,6 +153,7 @@ export const useAlchemyStore = defineStore('alchemy', () => {
     if (profession.value !== null) return false // one-time life pick
     if (key !== ALCHEMY_PROFESSION) return false // v1: only Alchemy
     profession.value = key
+    recordMilestoneFirst('chooseProfession') // slice 10 (D36)
     return true
   }
 

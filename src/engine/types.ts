@@ -15,6 +15,8 @@ export type RealmId = 'q' | 'f' | 'c' | 'n' | 's' | 'x'
 export type LayerId =
   | RealmId
   | 'b' // Body
+  | 'forge' // Core forge run-state (slice 7; life-scoped set-piece — rebuilt each life, dies at rebirth)
+  | 'trib' // First Tribulation run + latched grade (life-scoped set-piece — the crossing is re-earned each life)
   | 'gate' // Deeds (story-gate achievements)
   | 'dao' // Dao lattice
   | 'sect' // Sect standing
@@ -251,6 +253,7 @@ export type JournalEntryKey =
   | 'actOneLegacy'
   | 'actTwoOpens' // slice 9: Act II arrival (tribulationPassed — core meets() grammar)
   | 'firstManifestation' // slice 9: first Dao lattice node reaches Manifestation tier (anyDaoNode: 3)
+  | 'firstRebirth' // slice 10: the first Samsara crossing (rebirths: 1 — reveal on first rebirth, D11)
 
 // ---- Set-pieces ------------------------------------------------------------
 

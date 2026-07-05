@@ -48,10 +48,18 @@ export interface KarmaSlice {
    * (the n in `base × rⁿ`). Headlines and variants both get a key here.
    */
   firstsHistory: Record<string, number>
+  /**
+   * Grade personal-best latches (D40): grade-delta row key → best grade index
+   * earned across ALL lives so far. Soul-scoped (carries across rebirth):
+   * grade-delta rows pay ONLY on a strict improvement over this carried best
+   * (recordGradeDelta gates on it, at the moment the grade lands). This is the
+   * shape the dynasty harness proved in its KarmaCarry bridge, now made live.
+   */
+  gradeBests: Record<string, number>
 }
 
 export function freshKarmaSlice(): KarmaSlice {
-  return { balance: 0, lifeLedger: [], firstsHistory: {} }
+  return { balance: 0, lifeLedger: [], firstsHistory: {}, gradeBests: {} }
 }
 
 /** A single receipt line item (for the receipt UI, step 4). */
@@ -101,6 +109,7 @@ export const useKarmaStore = defineStore('karma', () => {
   const balance = ref(0)
   const lifeLedger = ref<KarmaLedgerEntry[]>([])
   const firstsHistory = ref<Record<string, number>>({})
+  const gradeBests = ref<Record<string, number>>({})
 
   const ledger = computed<readonly KarmaLedgerEntry[]>(() => lifeLedger.value)
 
@@ -126,6 +135,26 @@ export const useKarmaStore = defineStore('karma', () => {
       ...lifeLedger.value,
       { eventKey, class: row.class, resolvedQualifiers: { ...resolvedQualifiers } },
     ]
+  }
+
+  /**
+   * Record a grade-delta first — but ONLY on a STRICT improvement over the
+   * carried personal best (D40: the delta prices improvement; a repeat of the
+   * same grade is not an improvement and pays nothing). `row` is a grade-delta
+   * KARMA_DATA key (e.g. 'foundationGradeDelta'); `gradeIndex` is this life's
+   * grade index at the moment it landed. Latches the new best on the soul-scoped
+   * gradeBests map and appends the (unqualified) first to the ledger — the store
+   * then pays it decayed by firstsHistory at settle, exactly like the dynasty
+   * harness's inline gate. Idempotent within a life via the ledger dedup (a
+   * second improvement this life re-latches the best but records no second
+   * payment — one grade-delta payment per row per life, matching the sim).
+   */
+  function recordGradeDelta(row: string, gradeIndex: number): void {
+    if (gradeIndex < 0) return
+    const carriedBest = gradeBests.value[row] ?? -1
+    if (gradeIndex <= carriedBest) return // not a strict improvement — pays nothing
+    gradeBests.value = { ...gradeBests.value, [row]: gradeIndex }
+    recordFirst(row) // grade rows are unqualified; dedups within the life
   }
 
   /**
@@ -204,6 +233,7 @@ export const useKarmaStore = defineStore('karma', () => {
         resolvedQualifiers: { ...entry.resolvedQualifiers },
       })),
       firstsHistory: { ...firstsHistory.value },
+      gradeBests: { ...gradeBests.value },
     }
   }
   function load(slice: unknown): void {
@@ -218,6 +248,10 @@ export const useKarmaStore = defineStore('karma', () => {
       : []
     firstsHistory.value =
       s.firstsHistory && typeof s.firstsHistory === 'object' ? { ...s.firstsHistory } : {}
+    // gradeBests defaults cleanly for older saves (and for the sim seed, which
+    // omits it — the dynasty adapter carries its own bests externally).
+    gradeBests.value =
+      s.gradeBests && typeof s.gradeBests === 'object' ? { ...s.gradeBests } : {}
   }
   function fresh(): Record<string, unknown> {
     return freshKarmaSlice() as unknown as Record<string, unknown>
@@ -227,7 +261,9 @@ export const useKarmaStore = defineStore('karma', () => {
     balance,
     ledger,
     firstsHistory,
+    gradeBests,
     recordFirst,
+    recordGradeDelta,
     previewReceipt,
     settleLife,
     save,

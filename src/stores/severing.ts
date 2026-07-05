@@ -36,6 +36,9 @@ import { useDaoStore } from './dao'
 import { useGameStore } from './game'
 import { useRealmStore } from './realm'
 import { useSoulStore } from './soul'
+// Slice 10 (D36): a severance is a deed first (headline-only per KARMA_DATA).
+// Readerless karma write, deferred lookup keeps it cycle-free.
+import { recordSeveranceDeed } from '@/engine/karmaEvents'
 import type { CorpseKey, PillKey, SeverableKey, StanceKey } from '@/engine/types'
 
 export interface SeveranceRecord {
@@ -349,6 +352,7 @@ export const useSeveringStore = defineStore('severing', () => {
     }
     slice.value = { severances: [...slice.value.severances, record] }
     soul.recordSeverance(severable, PRE_SAMSARA_LIFE_NUMBER)
+    recordSeveranceDeed(severable) // slice 10 (D36): the cut is a deed first
     return true
   }
 
