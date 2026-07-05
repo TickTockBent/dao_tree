@@ -234,6 +234,26 @@ const SEVERANCE_DEED_ROWS: readonly KarmaEventRow[] = (
 }))
 
 /**
+ * Deed rows — TRANSCENDENCES (per severable key). Headline-only like the
+ * severance deeds. D43 #1: transcendence — cutting the same attachment across
+ * three distinct lives so it is gone permanently at full ramp — is the single
+ * highest-stakes irreversible in the game and the most significant moment a
+ * dynasty reaches; excluding it would mean that moment earns no karma. It is a
+ * headline deed (the choice/consummation is the identity moment; a buildMark or
+ * era qualifier would price circumstance a transcendence does not carry). NEVER
+ * fired by the sim's analytic dynasty rosters (they never transcend), so DYNASTY
+ * KARMA is byte-identical — this row set is inert until a live third cut.
+ */
+const TRANSCENDENCE_DEED_ROWS: readonly KarmaEventRow[] = (
+  ['soulAspect', 'profession', 'extraordinaryMeridians', 'manifestation', 'flowingForm'] as SeverableKey[]
+).map((severable): KarmaEventRow => ({
+  key: `transcended:${severable}`,
+  class: 'deed',
+  base: CLASS_BASE_V0.deed,
+  qualifiers: [],
+}))
+
+/**
  * Encounter rows — secret-realm sites first-cleared (per site), qualified by
  * the era the site was cleared in (sites persist and can be first-cleared
  * across several realms — realmEra has real spread).
@@ -254,6 +274,7 @@ export const KARMA_DATA: readonly KarmaEventRow[] = [
   ...GRADE_DELTA_ROWS,
   ...TRIAL_DEED_ROWS,
   ...SEVERANCE_DEED_ROWS,
+  ...TRANSCENDENCE_DEED_ROWS,
   ...SITE_ENCOUNTER_ROWS,
 ]
 

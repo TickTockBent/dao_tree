@@ -15,9 +15,8 @@ import { ref, computed } from 'vue'
 import { useRebirthStore } from '@/stores/rebirth'
 import { findRealm } from '@/data/realms'
 import { findSeverable } from '@/data/severing'
-import { ROOT_ELEMENTS, PURITY_GRADES, ROOT_PURITY_COST } from '@/data/rebirth'
+import { ROOT_ELEMENTS } from '@/data/rebirth'
 import type { Element, LatticeNodeKey } from '@/engine/types'
-import type { PurityGrade } from '@/data/rebirth'
 import { format } from '@/engine/format'
 
 const rebirth = useRebirthStore()
@@ -35,7 +34,11 @@ const transcended = computed(() => rebirth.transcendedCarry)
 const seeds = computed(() => rebirth.carryableSeeds())
 const selectedSeeds = computed(() => rebirth.selectedSeedKeys)
 const draftElements = computed(() => rebirth.rootDraftElements)
-const draftPurity = computed(() => rebirth.rootDraftPurity)
+// D43 #2: purity is a soul ratchet — current grade owned, one grade-up on offer.
+const currentPurity = computed(() => rebirth.currentPurity)
+const nextPurity = computed(() => rebirth.nextPurity)
+const nextPurityCost = computed(() => rebirth.nextPurityCost)
+const purityUpgradeSelected = computed(() => rebirth.purityUpgradeSelected)
 const spendTotal = computed(() => rebirth.spendTotal)
 const seedSpend = computed(() => rebirth.seedSpend)
 const rootSpend = computed(() => rebirth.rootSpend)
@@ -44,16 +47,12 @@ const affordable = computed(() => rebirth.spendAffordable)
 const balanceAfterSpend = computed(() => rebirth.balanceAfterSpend)
 
 const elements: readonly Element[] = ROOT_ELEMENTS
-const purities: readonly PurityGrade[] = PURITY_GRADES
 
 function seedSelected(key: LatticeNodeKey): boolean {
   return selectedSeeds.value.includes(key)
 }
 function titleCase(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1)
-}
-function purityCost(grade: PurityGrade): number {
-  return ROOT_PURITY_COST[grade]
 }
 function elementHeld(element: Element): boolean {
   return draftElements.value.includes(element)
@@ -171,7 +170,7 @@ function confirmCross(): void {
           <p class="slot-cost">Fragments: <strong>{{ format(seedSpend) }}</strong> karma</p>
         </div>
 
-        <!-- Roots — count + identity (config) and purity (the sink). -->
+        <!-- Roots — the per-life SHAPE (count + identity) and the soul's purity ratchet. -->
         <div class="slot">
           <span class="slot-name">Spiritual Roots</span>
           <p class="slot-help dim">Choose the body you build. Rootless is the default — no cost, no speed.</p>
@@ -184,16 +183,20 @@ function confirmCross(): void {
               @click="rebirth.toggleRootElement(element)"
             >{{ titleCase(element) }}</button>
           </div>
-          <div v-if="draftElements.length > 0" class="purity-row">
-            <span class="dim">Purity:</span>
+          <!-- D43 #2: purity is a soul ratchet — the current grade is owned, and
+               ONE grade-up is on offer (it carries to every future rooted life). -->
+          <div class="purity-row">
+            <span class="dim">Purity (soul):</span>
+            <span class="chip owned">{{ titleCase(currentPurity) }} · owned</span>
             <button
-              v-for="grade in purities"
-              :key="grade"
+              v-if="nextPurity !== null"
               class="chip"
-              :class="{ on: draftPurity === grade }"
-              @click="rebirth.setRootPurity(grade)"
-            >{{ titleCase(grade) }}<span class="chip-cost">{{ purityCost(grade) === 0 ? 'free' : format(purityCost(grade)) }}</span></button>
+              :class="{ on: purityUpgradeSelected }"
+              @click="rebirth.setPurityUpgrade(!purityUpgradeSelected)"
+            >Raise to {{ titleCase(nextPurity) }}<span class="chip-cost">{{ format(nextPurityCost) }}</span></button>
+            <span v-else class="dim">Heaven-grade — the summit; nothing left to buy.</span>
           </div>
+          <p v-if="nextPurity !== null" class="slot-help dim">A grade-up is forever — every rooted life you ever live carries it.</p>
           <p class="slot-cost">Roots: <strong>{{ format(rootSpend) }}</strong> karma</p>
         </div>
       </div>
@@ -225,9 +228,9 @@ function confirmCross(): void {
         <span class="spend-word">What you buy for the next life:</span>
         <template v-if="spendTotal > 0">
           {{ selectedSeeds.length }} carried
-          {{ selectedSeeds.length === 1 ? 'Seed' : 'Seeds' }}<template v-if="draftElements.length > 0">, a
-          {{ titleCase(draftPurity) }}-purity root of
-          {{ draftElements.map(titleCase).join(' / ') }}</template> — <strong>{{ format(spendTotal) }}</strong> karma.
+          {{ selectedSeeds.length === 1 ? 'Seed' : 'Seeds' }}<template v-if="draftElements.length > 0">, a root of
+          {{ draftElements.map(titleCase).join(' / ') }}</template><template v-if="purityUpgradeSelected && nextPurity !== null">; the soul's purity rises to
+          {{ titleCase(nextPurity) }} — forever</template> — <strong>{{ format(spendTotal) }}</strong> karma.
         </template>
         <template v-else>nothing — a rootless life, no fragments carried (the baseline).</template>
         <br />
@@ -434,6 +437,12 @@ function confirmCross(): void {
   background: #3a2c56;
   color: #e6d4ff;
   border-color: #8a6fd8;
+}
+.chip.owned {
+  background: #241d30;
+  color: #b6a8cf;
+  border-style: dashed;
+  cursor: default;
 }
 .chip-cost {
   margin-left: 0.3rem;

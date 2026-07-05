@@ -38,7 +38,7 @@ import { useRealmStore } from './realm'
 import { useSoulStore, TRANSCEND_LIVES } from './soul'
 // Slice 10 (D36): a severance is a deed first (headline-only per KARMA_DATA).
 // Readerless karma write, deferred lookup keeps it cycle-free.
-import { recordSeveranceDeed } from '@/engine/karmaEvents'
+import { recordSeveranceDeed, recordTranscendenceDeed } from '@/engine/karmaEvents'
 import type { CorpseKey, PillKey, SeverableKey, StanceKey } from '@/engine/types'
 
 export interface SeveranceRecord {
@@ -387,6 +387,9 @@ export const useSeveringStore = defineStore('severing', () => {
     // lives can pre-apply the transcendent multiplier at cap × m.
     if (soul.distinctLivesSevered(severable) >= TRANSCEND_LIVES) {
       soul.recordTranscendence(severable, record.severedQiMult, record.severedInsightMult)
+      // Slice 10 (D43 #1): transcendence is a headline deed first — the same
+      // detection path pays the receipt (key exists by construction; never throws).
+      recordTranscendenceDeed(severable)
     }
     return true
   }

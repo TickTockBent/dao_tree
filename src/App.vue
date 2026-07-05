@@ -65,6 +65,20 @@ const prestigeActionLabels: Record<RealmId, string> = {
 function onPrestige(id: RealmId) {
   realm.prestige(id)
 }
+
+// Levels v1 (D43 #4) — the inline current-substage readout on every climb realm
+// card (never veil the now). One line: the reached level's name, plus the next
+// threshold when one remains. Before any level is reached, only the next shows
+// ("1st Level at 1"); fully climbed, only the current ("13th Level"). Labels +
+// thresholds come from the realm data via the store getters — no literals here.
+function substageLine(id: RealmId): string {
+  const current = realm.currentSubstage(id)
+  const next = realm.nextSubstage(id)
+  if (current && next) return `${current.label} — ${next.label} at ${format(next.at)}`
+  if (current) return current.label
+  if (next) return `${next.label} at ${format(next.at)}`
+  return ''
+}
 function onHardReset() {
   if (confirm('Hard reset? This wipes your save.')) game.hardReset()
 }
@@ -110,6 +124,8 @@ const alchemyTabAvailable = computed(() => alchemy.isRevealed())
           <!-- D28: realm x is the Offering, not a qi climb — the generic
                Best/Gain/prestige-action block hides; SeveringPanel owns its UI. -->
           <template v-if="r.id !== 'x'">
+            <!-- Levels v1 (D43 #4): the inline current-substage readout + next threshold. -->
+            <p class="substage">{{ substageLine(r.id) }}</p>
             <p>Best: {{ format(realm.realmBest(r.id)) }}</p>
             <p v-if="realm.canReset(r.id)">Gain: +{{ format(realm.resetGain(r.id)) }}</p>
             <button :disabled="!realm.canReset(r.id)" @click="onPrestige(r.id)">
@@ -163,6 +179,7 @@ const alchemyTabAvailable = computed(() => alchemy.isRevealed())
 .tab-content { display: flex; flex-direction: column; gap: 1rem; }
 .panel { background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 1rem; }
 .panel h3 { margin: 0 0 0.5rem 0; color: #5fc9e0; }
+.panel .substage { margin: 0 0 0.4rem 0; color: #9a9a9a; font-size: 0.9rem; }
 button { font-family: inherit; font-size: 1rem; padding: 0.4rem 0.8rem; background: #2a2a2a; color: #dfdfdf; border: 1px solid #444; border-radius: 4px; cursor: pointer; margin: 0.25rem 0.25rem 0.25rem 0; }
 button:hover:not(:disabled) { background: #3a3a3a; }
 button:disabled { opacity: 0.4; cursor: not-allowed; }

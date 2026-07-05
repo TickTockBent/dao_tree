@@ -177,6 +177,35 @@ export const useRealmStore = defineStore('realm', () => {
     return substageLabelAtBest(findRealm(id), substageReachedValue(id))
   }
 
+  /**
+   * Levels v1 (D43 #4) — the CURRENT reached sub-stage (label + at-threshold) for
+   * a realm, or null when none is reached yet. Derived from the SAME reach math
+   * the qiMults use (substage reached ⇔ reachedValue >= at); the substages are
+   * ordered ascending, so the last one at or below the reach is the current one.
+   */
+  function currentSubstage(id: RealmId): { label: string; at: number } | null {
+    const reached = substageReachedValue(id)
+    let matched: { label: string; at: number } | null = null
+    for (const stage of findRealm(id).substages) {
+      if (reached >= stage.at) matched = { label: stage.label, at: stage.at }
+      else break
+    }
+    return matched
+  }
+
+  /**
+   * Levels v1 (D43 #4) — the NEXT sub-stage not yet reached (label + at-threshold)
+   * for a realm, or null when the realm is fully climbed. The first substage whose
+   * threshold exceeds the current reach.
+   */
+  function nextSubstage(id: RealmId): { label: string; at: number } | null {
+    const reached = substageReachedValue(id)
+    for (const stage of findRealm(id).substages) {
+      if (reached < stage.at) return { label: stage.label, at: stage.at }
+    }
+    return null
+  }
+
   /** Top sub-stage `at` value (the fully-climbed mark). */
   function realmTopSubstageAt(id: RealmId): number {
     const r = findRealm(id)
@@ -480,6 +509,8 @@ export const useRealmStore = defineStore('realm', () => {
     stateOf,
     realmBest,
     realmSubstageLabel,
+    currentSubstage,
+    nextSubstage,
     realmTopSubstageAt,
     hasMilestone,
     isUnlocked,

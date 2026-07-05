@@ -20,7 +20,11 @@ import { ref, computed } from 'vue'
 import Decimal from 'break_eternity.js'
 import { decimalOne } from '@/engine/decimal'
 import { ACCUMULATOR_DATA } from '@/data/accumulators'
+import { purityRank, type PurityGrade } from '@/data/rebirth'
 import type { RealmId, SeverableKey } from '@/engine/types'
+
+/** Mortal is the free default purity — a soul begins mortal-grade (D43 #2). */
+const DEFAULT_PURITY: PurityGrade = 'mortal'
 
 export interface SeveranceHistoryRow {
   severable: SeverableKey
@@ -83,6 +87,16 @@ export interface SoulSlice {
    * Manifestation re-walk discount. Data only; no consumer yet.
    */
   walkedManifestations: number
+  /**
+   * Slice 10 / D43 #2: the soul-scoped spiritual-root PURITY grade — a RATCHET,
+   * not per-life rent. Bought once per grade up (Earth 200, Heaven 800) at the
+   * rebirth crossing; latched forever (never moves down). "Bore a Heaven-grade
+   * root" is a permanent fact about the soul. Every future ROOTED life carries
+   * this grade automatically (the roots store reads it for the discount scale);
+   * a rootless life ignores it. Absent on pre-D43 saves → mortal (the free
+   * default).
+   */
+  purityGrade: PurityGrade
 }
 
 export function freshSoulSlice(): SoulSlice {
@@ -94,6 +108,7 @@ export function freshSoulSlice(): SoulSlice {
     rebirths: 0,
     trialsEndured: {},
     walkedManifestations: 0,
+    purityGrade: DEFAULT_PURITY,
   }
 }
 
@@ -111,6 +126,7 @@ export const useSoulStore = defineStore('soul', () => {
     () => slice.value.trialsEndured,
   )
   const walkedManifestations = computed(() => slice.value.walkedManifestations)
+  const purityGrade = computed<PurityGrade>(() => slice.value.purityGrade)
 
   /** An n/s cascade wiped c — the next re-climb is ascent k+1. Called from realm.ts. */
   function recordAscent(): void {
@@ -185,6 +201,17 @@ export const useSoulStore = defineStore('soul', () => {
     slice.value = { ...slice.value, rebirths: slice.value.rebirths + 1 }
   }
 
+  /**
+   * Ratchet the soul's purity grade UP to `grade` (D43 #2). Latch semantics:
+   * only ever rises (a lower or equal grade is a no-op), so buying Earth then
+   * Heaven latches Heaven and no crossing can drop it. The rebirth crossing
+   * calls this when a grade-up purchase clears.
+   */
+  function ratchetPurity(grade: PurityGrade): void {
+    if (purityRank(grade) <= purityRank(slice.value.purityGrade)) return
+    slice.value = { ...slice.value, purityGrade: grade }
+  }
+
   /** Add to the walked-path accumulator (D37). No consumer yet. */
   function recordWalkedManifestations(count: number): void {
     if (count <= 0) return
@@ -242,6 +269,8 @@ export const useSoulStore = defineStore('soul', () => {
           : {},
       walkedManifestations:
         typeof loaded.walkedManifestations === 'number' ? loaded.walkedManifestations : 0,
+      // D43 #2: backward-compatible — absent on pre-D43 saves → mortal.
+      purityGrade: loaded.purityGrade ?? DEFAULT_PURITY,
     }
   }
   function fresh(): Record<string, unknown> {
@@ -257,6 +286,8 @@ export const useSoulStore = defineStore('soul', () => {
     rebirths,
     trialsEndured,
     walkedManifestations,
+    purityGrade,
+    ratchetPurity,
     recordAscent,
     recordSeveranceRitual,
     recordSeverance,

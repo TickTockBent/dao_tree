@@ -75,6 +75,47 @@ describe('realm store: fresh state', () => {
   })
 })
 
+describe('realm store: substage getters (levels v1, D43 #4)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('none reached (best 0) → no current, next is the FIRST substage', () => {
+    const realm = useRealmStore()
+    expect(realm.currentSubstage('q')).toBeNull()
+    expect(realm.nextSubstage('q')).toEqual({ label: '1st Level', at: 1 })
+  })
+
+  it('exactly AT a threshold counts as reached (best 90 → 6th Level current, 7th next)', () => {
+    const realm = useRealmStore()
+    realm.stateOf('q').best = '90' // exactly the 6th Level threshold (at: 90)
+    expect(realm.currentSubstage('q')).toEqual({ label: '6th Level', at: 90 })
+    expect(realm.nextSubstage('q')).toEqual({ label: '7th Level', at: 170 })
+  })
+
+  it('one below a threshold stays on the prior level (best 89 → 5th Level, next 6th)', () => {
+    const realm = useRealmStore()
+    realm.stateOf('q').best = '89'
+    expect(realm.currentSubstage('q')).toEqual({ label: '5th Level', at: 45 })
+    expect(realm.nextSubstage('q')).toEqual({ label: '6th Level', at: 90 })
+  })
+
+  it('all reached (best past the top) → current is the last, next is null', () => {
+    const realm = useRealmStore()
+    realm.stateOf('q').best = '10000' // past the 13th Level threshold (at: 2800)
+    expect(realm.currentSubstage('q')).toEqual({ label: '13th Level', at: 2800 })
+    expect(realm.nextSubstage('q')).toBeNull()
+  })
+
+  it('renders named substages generically (f: Foundation tiers)', () => {
+    const realm = useRealmStore()
+    realm.stateOf('f').unlocked = true
+    realm.stateOf('f').best = '10' // exactly Late Foundation (at: 10)
+    expect(realm.currentSubstage('f')).toEqual({ label: 'Late Foundation', at: 10 })
+    expect(realm.nextSubstage('f')).toEqual({ label: 'Peak Foundation', at: 22 })
+  })
+})
+
 describe('realm store: canReset + resetGain math', () => {
   beforeEach(() => {
     setActivePinia(createPinia())

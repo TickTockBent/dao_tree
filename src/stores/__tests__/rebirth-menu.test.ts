@@ -16,6 +16,7 @@ import { useKarmaStore } from '@/stores/karma'
 import { useChronicleStore } from '@/stores/chronicle'
 import { useDaoStore } from '@/stores/dao'
 import { useRootsStore } from '@/stores/roots'
+import { useSoulStore } from '@/stores/soul'
 import { useTribulationStore } from '@/stores/tribulation'
 import { useGameStore } from '@/stores/game'
 import {
@@ -82,9 +83,12 @@ describe('roots store: the lattice-cost multiplier', () => {
     }
   })
 
-  it('a rooted life discounts ONLY the held elements, scaled by purity', () => {
+  it('a rooted life discounts ONLY the held elements, scaled by the SOUL purity (D43 #2)', () => {
     const roots = useRootsStore()
-    roots.configure(['metal'], 'heaven')
+    // D43 #2: the grade is a soul ratchet, read by the discount — set it, then
+    // choose only the shape.
+    useSoulStore().ratchetPurity('heaven')
+    roots.configure(['metal'])
     // metal is held → 1 − 0.35 = 0.65; wood is not held → 1 (untouched).
     expect(roots.latticeDiscountMultiplier('metal').toNumber()).toBeCloseTo(0.65, 10)
     expect(roots.latticeDiscountMultiplier('wood').eq(1)).toBe(true)
@@ -102,7 +106,8 @@ describe('the discount is SPEED, NEVER ACCESS (D38 read #3)', () => {
     // Rootless: full price.
     expect(dao.nodeCost('metal').toNumber()).toBe(metalBase)
 
-    roots.configure(['metal'], 'heaven')
+    useSoulStore().ratchetPurity('heaven')
+    roots.configure(['metal'])
     // Cost path discounted on the matching element…
     expect(dao.nodeCost('metal').toNumber()).toBe(Math.floor(metalBase * 0.65))
     // …but a non-matching element is byte-identical to rootless.
@@ -135,7 +140,9 @@ describe('the menu: spend accounting + overspend guard', () => {
     expect(rebirth.seedSpend).toBe(45) // 15 + 30
 
     rebirth.toggleRootElement('metal')
-    rebirth.setRootPurity('earth')
+    // D43 #2: the purity offer is the ONE grade-up from the soul's current grade
+    // (mortal → earth); selecting it adds the earth sink to the shape cost.
+    rebirth.setPurityUpgrade(true)
     expect(rebirth.rootSpend).toBe(ROOT_CONFIG_COST + ROOT_PURITY_COST.earth) // 3 + 200
     expect(rebirth.spendTotal).toBe(45 + ROOT_CONFIG_COST + ROOT_PURITY_COST.earth)
   })
@@ -224,26 +231,100 @@ describe('purchased roots apply to the next life; the chronicle records the dyin
 
     karma.balance = 300
     rebirth.toggleRootElement('fire')
-    rebirth.setRootPurity('earth')
+    rebirth.setPurityUpgrade(true) // buy the mortal → earth grade-up (the soul ratchets)
     expect(rebirth.spendAffordable).toBe(true)
 
     rebirth.cross()
 
     expect(roots.isRooted).toBe(true)
+    // The soul ratcheted to earth at the crossing; the fresh rooted life reads it.
+    expect(useSoulStore().purityGrade).toBe('earth')
     expect(roots.config).toEqual({ elements: ['fire'], purity: 'earth' })
     expect(karma.balance).toBe(300 - (ROOT_CONFIG_COST + ROOT_PURITY_COST.earth))
   })
 
-  it('the chronicle entry records the DYING life’s root config (null when rootless)', () => {
+  it('the chronicle entry records the DYING life’s EFFECTIVE root config incl. grade (D43 #2)', () => {
     const rebirth = useRebirthStore()
     const roots = useRootsStore()
     const chronicle = useChronicleStore()
     useTribulationStore().tribGrade = PASSING_TRIB_GRADE
 
-    // This life was already rooted (metal/water, Heaven) — set directly.
-    roots.configure(['metal', 'water'], 'heaven')
+    // This life was already rooted (metal/water) at a Heaven-grade soul.
+    useSoulStore().ratchetPurity('heaven')
+    roots.configure(['metal', 'water'])
     rebirth.cross()
 
+    // The chronicle records the life's full effective config including the grade.
     expect(chronicle.lives[0]!.rootConfig).toEqual({ elements: ['metal', 'water'], purity: 'heaven' })
+  })
+})
+
+// ---- The purity ratchet (D43 #2) -------------------------------------------
+
+describe('purity is a soul ratchet: buy once per grade, carried forever', () => {
+  beforeEach(() => bootTestStores())
+
+  /** Set up an affordable, tribulation-passed crossing. */
+  function readyCrossing(balance: number): ReturnType<typeof useRebirthStore> {
+    const rebirth = useRebirthStore()
+    useTribulationStore().tribGrade = PASSING_TRIB_GRADE
+    useKarmaStore().balance = balance
+    return rebirth
+  }
+
+  it('the offer is the ONE grade above the soul’s current grade (mortal → earth → heaven → none)', () => {
+    const rebirth = readyCrossing(0)
+    const soul = useSoulStore()
+    // Mortal (default): earth on offer.
+    expect(rebirth.currentPurity).toBe('mortal')
+    expect(rebirth.nextPurity).toBe('earth')
+    expect(rebirth.nextPurityCost).toBe(ROOT_PURITY_COST.earth)
+    // Earth: heaven on offer.
+    soul.ratchetPurity('earth')
+    expect(rebirth.currentPurity).toBe('earth')
+    expect(rebirth.nextPurity).toBe('heaven')
+    expect(rebirth.nextPurityCost).toBe(ROOT_PURITY_COST.heaven)
+    // Heaven: nothing left to buy.
+    soul.ratchetPurity('heaven')
+    expect(rebirth.nextPurity).toBeNull()
+    expect(rebirth.nextPurityCost).toBe(0)
+    rebirth.setPurityUpgrade(true) // no-op at Heaven — no offer to take
+    expect(rebirth.purityUpgradeSelected).toBe(false)
+  })
+
+  it('buying Earth latches it; crossing twice more never drops it (the ratchet)', () => {
+    const rebirth = readyCrossing(1000)
+    const soul = useSoulStore()
+
+    // Crossing 1: buy the earth grade-up.
+    rebirth.setPurityUpgrade(true)
+    rebirth.cross()
+    expect(soul.purityGrade).toBe('earth')
+
+    // Crossing 2 & 3: buy nothing — the grade holds (latch-never-down).
+    rebirth.cross()
+    expect(soul.purityGrade).toBe('earth')
+    rebirth.cross()
+    expect(soul.purityGrade).toBe('earth')
+  })
+
+  it('the full path mortal → earth → heaven costs two purchases and then offers nothing', () => {
+    const rebirth = readyCrossing(2000)
+    const soul = useSoulStore()
+
+    rebirth.setPurityUpgrade(true)
+    rebirth.cross() // → earth (−200)
+    expect(soul.purityGrade).toBe('earth')
+
+    rebirth.setPurityUpgrade(true)
+    rebirth.cross() // → heaven (−800)
+    expect(soul.purityGrade).toBe('heaven')
+
+    // At Heaven there is no further offer; a crossing spends nothing more on purity.
+    expect(rebirth.nextPurity).toBeNull()
+    const balanceAtHeaven = useKarmaStore().balance
+    rebirth.cross()
+    expect(soul.purityGrade).toBe('heaven')
+    expect(useKarmaStore().balance).toBe(balanceAtHeaven)
   })
 })

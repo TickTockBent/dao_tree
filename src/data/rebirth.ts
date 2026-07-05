@@ -67,6 +67,23 @@ export type PurityGrade = 'mortal' | 'earth' | 'heaven'
 export const PURITY_GRADES: readonly PurityGrade[] = ['mortal', 'earth', 'heaven']
 
 /**
+ * A grade's rank in the ratchet order (D43 #2). Mortal 0 < Earth 1 < Heaven 2 —
+ * the soul-scoped purity latch never moves down, so higher rank wins.
+ */
+export function purityRank(grade: PurityGrade): number {
+  return PURITY_GRADES.indexOf(grade)
+}
+
+/**
+ * The grade ONE step up from `grade` (the only purchase the rebirth menu offers,
+ * D43 #2), or null at the top (Heaven — nothing left to buy). Mortal → Earth →
+ * Heaven → null: two lifetime purchases total.
+ */
+export function nextPurityGrade(grade: PurityGrade): PurityGrade | null {
+  return PURITY_GRADES[purityRank(grade) + 1] ?? null
+}
+
+/**
  * ROOT_CONFIG_COST — the NOMINAL karma to declare a root's count + identity
  * (D38 read #1: "the first rebirth decision is a genre choice, not a power
  * choice" — a token cost that prevents thoughtless clicking, never a power

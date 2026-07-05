@@ -650,16 +650,16 @@ describe('SECLUSION_DATA (slice 8.5)', () => {
 })
 
 describe('KARMA_DATA (slice 10 / D36+D40)', () => {
-  it('has the 25-row v1 firsts table with the drafted class distribution', () => {
+  it('has the 30-row v1 firsts table with the drafted class distribution', () => {
     // ⚠️ DESIGN-REVIEWABLE: this row set is drafted from existing game events
     // and awaits Wes's review at the pricing pause. The pin makes any change
-    // deliberate.
-    expect(KARMA_DATA).toHaveLength(25)
+    // deliberate. D43 #1 added the 5 transcended:* deed rows (deed 8 → 13).
+    expect(KARMA_DATA).toHaveLength(30)
     const byClass = KARMA_DATA.reduce<Record<string, number>>((acc, row) => {
       acc[row.class] = (acc[row.class] ?? 0) + 1
       return acc
     }, {})
-    expect(byClass).toEqual({ milestone: 10, 'grade-delta': 4, deed: 8, encounter: 3 })
+    expect(byClass).toEqual({ milestone: 10, 'grade-delta': 4, deed: 13, encounter: 3 })
   })
 
   it('pins the exact row keys (the reviewable event list)', () => {
@@ -670,6 +670,8 @@ describe('KARMA_DATA (slice 10 / D36+D40)', () => {
       'endureTrial:whisperingDoubt', 'endureTrial:hungryShadow', 'endureTrial:hollowCrown',
       'severed:soulAspect', 'severed:profession', 'severed:extraordinaryMeridians',
       'severed:manifestation', 'severed:flowingForm',
+      'transcended:soulAspect', 'transcended:profession', 'transcended:extraordinaryMeridians',
+      'transcended:manifestation', 'transcended:flowingForm',
       'clearedSite:verdantHollow', 'clearedSite:invertedSpiritLand', 'clearedSite:shatteredStarVault',
     ])
   })
@@ -687,10 +689,10 @@ describe('KARMA_DATA (slice 10 / D36+D40)', () => {
     // e.g. roots shipping) changes this number deliberately.
     const expansion = karmaExpansion()
     expect(expansion).toEqual({
-      rows: 25,
-      headlines: 25,
+      rows: 30,
+      headlines: 30,
       variants: 96,
-      total: 121,
+      total: 126,
       variantsByClass: { milestone: 60, 'grade-delta': 0, deed: 18, encounter: 18 },
     })
   })

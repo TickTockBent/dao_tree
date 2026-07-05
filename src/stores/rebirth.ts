@@ -40,6 +40,7 @@ import { LATTICE_DATA } from '@/data/lattice'
 import {
   seedFragmentCost,
   seedFragmentTotal,
+  nextPurityGrade,
   ROOT_CONFIG_COST,
   ROOT_PURITY_COST,
   type PurityGrade,
@@ -222,9 +223,24 @@ export const useRebirthStore = defineStore('rebirth', () => {
 
   /** Ordered Seed selections (price escalates by selection order — 1st=15, 2nd=30…). */
   const selectedSeedKeys = ref<LatticeNodeKey[]>([])
-  /** Draft root identity (the elements this root holds) + purity for the next life. */
+  /** Draft root identity (the elements this root holds) for the next life's shape. */
   const rootDraftElements = ref<Element[]>([])
-  const rootDraftPurity = ref<PurityGrade>('mortal')
+  /**
+   * D43 #2: whether this crossing buys the ONE purity grade-up on offer (Mortal →
+   * Earth, or Earth → Heaven). Purity is a soul ratchet now, not a per-life pick:
+   * the draft is a single yes/no on the next grade, not a free choice of grade.
+   */
+  const purityUpgradeSelected = ref(false)
+
+  /** The soul's current (carried) purity grade — shown as owned; the floor to ratchet from. */
+  const currentPurity = computed<PurityGrade>(() => soul.purityGrade)
+  /** The one grade on offer this crossing (null at Heaven — nothing left to buy). */
+  const nextPurity = computed<PurityGrade | null>(() => nextPurityGrade(currentPurity.value))
+  /** The karma the grade-up on offer costs (0 at Heaven — no offer). */
+  const nextPurityCost = computed(() => {
+    const grade = nextPurity.value
+    return grade === null ? 0 : ROOT_PURITY_COST[grade]
+  })
 
   /** The dying life's carryable Seeds — nodes currently owned at Seed tier or above. */
   function carryableSeeds(): { key: LatticeNodeKey; name: string }[] {
@@ -254,28 +270,30 @@ export const useRebirthStore = defineStore('rebirth', () => {
       : [...rootDraftElements.value, element]
   }
 
-  /** Set the drafted root purity grade. */
-  function setRootPurity(grade: PurityGrade): void {
-    rootDraftPurity.value = grade
+  /** Select or clear the purity grade-up on offer (no-op at Heaven — no offer). */
+  function setPurityUpgrade(want: boolean): void {
+    purityUpgradeSelected.value = want && nextPurity.value !== null
   }
 
-  /** Clear all draft selections (rootless, no carry — the default). */
+  /** Clear all draft selections (rootless, no carry, no grade-up — the default). */
   function resetDraft(): void {
     selectedSeedKeys.value = []
     rootDraftElements.value = []
-    rootDraftPurity.value = 'mortal'
+    purityUpgradeSelected.value = false
   }
 
   /** The karma the NEXT selected Seed would cost (escalating; for the menu display). */
   const nextSeedPrice = computed(() => seedFragmentCost(selectedSeedKeys.value.length))
   /** Total karma for the carried Seeds. */
   const seedSpend = computed(() => seedFragmentTotal(selectedSeedKeys.value.length))
-  /** Total karma for the drafted root: nominal config cost + purity sink (0 when rootless). */
-  const rootSpend = computed(() =>
-    rootDraftElements.value.length === 0
-      ? 0
-      : ROOT_CONFIG_COST + ROOT_PURITY_COST[rootDraftPurity.value],
+  /** The nominal shape (config) cost — token cost to declare a root this life, 0 when rootless. */
+  const configSpend = computed(() => (rootDraftElements.value.length === 0 ? 0 : ROOT_CONFIG_COST))
+  /** The purity grade-up sink (0 unless the grade-up on offer is selected). */
+  const puritySpend = computed(() =>
+    purityUpgradeSelected.value && nextPurity.value !== null ? nextPurityCost.value : 0,
   )
+  /** Total karma for the roots slot: nominal shape cost + any purity grade-up. */
+  const rootSpend = computed(() => configSpend.value + puritySpend.value)
   /** The whole menu spend. */
   const spendTotal = computed(() => seedSpend.value + rootSpend.value)
 
@@ -326,23 +344,31 @@ export const useRebirthStore = defineStore('rebirth', () => {
 
     // The menu purchase: affordable against the JUST-SETTLED balance (the UI
     // guards this; defense in depth here). Free glimpse carry is unconditional;
-    // paid Seeds + the root config apply only when the spend clears.
+    // paid Seeds + the root shape + any purity grade-up apply only when the spend
+    // clears. Capture the grade-up BEFORE the ratchet (nextPurity shifts once the
+    // soul rises).
     const purchaseApplies = spendTotal.value <= karma.balance
+    const purchasedGrade = purityUpgradeSelected.value ? nextPurity.value : null
     if (purchaseApplies) {
       karma.spendKarma(spendTotal.value)
       for (const key of paidSeedKeys) carriedTiers[key] = SEED_TIER
+      // D43 #2: the purity grade-up ratchets the SOUL — carried forever, applied
+      // to every future rooted life. Done before the cascade (soul is eternal;
+      // the dying life's chronicle grade was already read into dyingRootConfig).
+      if (purchasedGrade !== null) soul.ratchetPurity(purchasedGrade)
     }
 
     // 4) The cascade — every life/tree layer resets; soul/world/file carry.
     game.reincarnate()
-    // 5 & 6) The new life begins; apply the carried comprehension + root config.
+    // 5 & 6) The new life begins; apply the carried comprehension + root shape.
     dao.applyCarriedTiers(carriedTiers)
     // D39: pre-apply transcended attachments to the fresh (just-reset) severing
     // slice — each gone at full ramp from breath one, no trough. Reuses the
     // severance ramp machinery (see severing.applyTranscendences).
     useSeveringStore().applyTranscendences()
     if (purchaseApplies && rootDraftElements.value.length > 0) {
-      roots.configure(rootDraftElements.value, rootDraftPurity.value)
+      // Only the SHAPE is re-chosen; the soul carries the (possibly just-raised) grade.
+      roots.configure(rootDraftElements.value)
     }
     resetDraft()
     return receipt
@@ -359,14 +385,19 @@ export const useRebirthStore = defineStore('rebirth', () => {
     // menu state + actions
     selectedSeedKeys,
     rootDraftElements,
-    rootDraftPurity,
+    purityUpgradeSelected,
+    currentPurity,
+    nextPurity,
+    nextPurityCost,
     carryableSeeds,
     toggleSeed,
     toggleRootElement,
-    setRootPurity,
+    setPurityUpgrade,
     resetDraft,
     nextSeedPrice,
     seedSpend,
+    configSpend,
+    puritySpend,
     rootSpend,
     spendTotal,
     balanceAfterCross,

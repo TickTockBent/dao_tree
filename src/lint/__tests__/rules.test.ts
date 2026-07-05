@@ -1067,10 +1067,10 @@ describe('§2 karma firsts table (D36 + D40)', () => {
     // (roots shipping grows rootShape past {rootless}), changes this number.
     const expansion = karmaExpansion()
     const PINNED = {
-      rows: 25,
-      headlines: 25,
+      rows: 30,
+      headlines: 30,
       variants: 96,
-      total: 121,
+      total: 126,
       variantsByClass: { milestone: 60, 'grade-delta': 0, deed: 18, encounter: 18 },
     }
     expect(

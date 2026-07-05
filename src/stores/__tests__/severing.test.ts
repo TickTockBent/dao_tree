@@ -10,6 +10,7 @@ import { useBodyStore } from '@/stores/body'
 import { useAlchemyStore } from '@/stores/alchemy'
 import { useRealmStore } from '@/stores/realm'
 import { useSoulStore } from '@/stores/soul'
+import { useKarmaStore } from '@/stores/karma'
 import { useGameStore } from '@/stores/game'
 import { useDaoStore } from '@/stores/dao'
 import { usePipelinesStore } from '@/stores/pipelines'
@@ -18,8 +19,11 @@ import { ACCUMULATOR_DATA } from '@/data/accumulators'
 import { OFFERING_DATA } from '@/data/severing'
 import { findBodyBuyable } from '@/data/body'
 import { findRecipe } from '@/data/alchemy'
+import { KARMA_DATA } from '@/data/karma'
 
 const CFG = SETPIECE_DATA.severance
+/** The transcended:* deed row's base (the deed class weight), read from data. */
+const CLASS_BASE_V0_DEED = KARMA_DATA.find((row) => row.key === 'transcended:soulAspect')!.base
 const EXT_LIMIT = findBodyBuyable('extraordinaryMeridian').limit
 const EXT_BASE = findBodyBuyable('extraordinaryMeridian').effectBase
 const GATHER_PILL_MULT = (() => {
@@ -338,6 +342,31 @@ describe('transcendence (D39 — the D24 Steam gate)', () => {
     expect(severing.sever('soulAspect')).toBe(true)
     expect(soul.isTranscended('soulAspect')).toBe(true)
     expect(soul.distinctLivesSevered('soulAspect')).toBe(3)
+  })
+
+  it('the transcended:* deed first fires at the THIRD cut and pays into the receipt (D43 #1)', () => {
+    const severing = useSeveringStore()
+    const karma = useKarmaStore()
+    unlockRealmX()
+    chooseAspect()
+
+    const transcendedPaid = (): number =>
+      karma
+        .previewReceipt()
+        .lines.filter((line) => line.key === 'transcended:soulAspect')
+        .reduce((sum, line) => sum + line.payout, 0)
+
+    // Life 1 + Life 2 cuts: severance deeds only — no transcended row yet.
+    expect(severing.sever('soulAspect')).toBe(true)
+    crossLifeBoundary()
+    expect(severing.sever('soulAspect')).toBe(true)
+    expect(transcendedPaid()).toBe(0)
+
+    // Life 3 — the THIRD cut transcends, and the transcended headline pays the
+    // full deed base (priorCount 0, first time this soul transcends the aspect).
+    crossLifeBoundary()
+    expect(severing.sever('soulAspect')).toBe(true)
+    expect(transcendedPaid()).toBe(CLASS_BASE_V0_DEED)
   })
 
   it('a transcended attachment leaves the severance menu forever (D31 runtime counting basis)', () => {

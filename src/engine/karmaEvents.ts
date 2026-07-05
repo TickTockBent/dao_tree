@@ -85,6 +85,16 @@ export function recordSeveranceDeed(severableKey: string): void {
   useKarmaStore().recordFirst(`severed:${severableKey}`, {})
 }
 
+/**
+ * Record a TRANSCENDENCE (deed; headline-only per KARMA_DATA) — the third
+ * distinct-life cut that gones an attachment permanently (D43 #1). Fired from
+ * the same detection path as soul.recordTranscendence. The `transcended:*` key
+ * exists for every SeverableKey by construction, so recordFirst never throws.
+ */
+export function recordTranscendenceDeed(severableKey: string): void {
+  useKarmaStore().recordFirst(`transcended:${severableKey}`, {})
+}
+
 /** Record a secret-realm site first-clear (encounter; realmEra qualifier). */
 export function recordSiteEncounter(siteKey: string): void {
   useKarmaStore().recordFirst(`clearedSite:${siteKey}`, { realmEra: liveRealmEra() })

@@ -35,6 +35,8 @@ describe('soul store: fresh slice shape', () => {
       rebirths: 0,
       trialsEndured: {},
       walkedManifestations: 0,
+      // D43 #2: the soul-scoped purity ratchet — mortal (the free default).
+      purityGrade: 'mortal',
     })
   })
 
@@ -43,6 +45,7 @@ describe('soul store: fresh slice shape', () => {
     expect(soul.rebirths).toBe(0)
     expect(soul.trialsEndured).toEqual({})
     expect(soul.walkedManifestations).toBe(0)
+    expect(soul.purityGrade).toBe('mortal')
   })
 })
 
@@ -56,6 +59,23 @@ describe('soul store: slice-10 soul-side recorders (D36/D37)', () => {
     soul.recordRebirth()
     soul.recordRebirth()
     expect(soul.rebirths).toBe(2)
+  })
+
+  it('ratchetPurity latches the grade UP and never down (D43 #2)', () => {
+    const soul = useSoulStore()
+    expect(soul.purityGrade).toBe('mortal')
+    soul.ratchetPurity('earth')
+    expect(soul.purityGrade).toBe('earth')
+    // A lower or equal grade is a no-op — the ratchet never drops.
+    soul.ratchetPurity('mortal')
+    expect(soul.purityGrade).toBe('earth')
+    soul.ratchetPurity('earth')
+    expect(soul.purityGrade).toBe('earth')
+    // Rising to Heaven latches; nothing takes it back down.
+    soul.ratchetPurity('heaven')
+    expect(soul.purityGrade).toBe('heaven')
+    soul.ratchetPurity('earth')
+    expect(soul.purityGrade).toBe('heaven')
   })
 
   it('recordTrialEndured accumulates per-trial-key endurance counts', () => {
