@@ -25,6 +25,19 @@ import { useHeartDemonsStore } from '@/stores/heartDemons'
 import { useDaoStore } from '@/stores/dao'
 import { useSectStore } from '@/stores/sect'
 import { useSoulStore } from '@/stores/soul'
+// Spiritual roots (slice 10 step 5 / D38): the root-dominance sweep (step-8
+// Gate-D, D43 #3) seeds root SHAPE (roots.configure) + carried purity grade
+// (soul.load purityGrade) via the REAL stores — the discount it measures is the
+// shipped dao.nodeCost discount, never a mirror. Import-only READ of the grid
+// data (ROOT_ELEMENTS / PURITY_GRADES) for the report.
+import { useRootsStore } from '@/stores/roots'
+import {
+  ROOT_ELEMENTS,
+  PURITY_GRADES,
+  MAX_ROOT_ELEMENTS,
+  type PurityGrade,
+} from '@/data/rebirth'
+import type { Element } from '@/engine/types'
 // Karma instrumentation (slice 10 step 2, D36 + D40). The karma store + firsts
 // table are used READ-ONLY (recordFirst/settleLife are the shipped receipt math;
 // deriveBuildMark is the shipped qualifier rule) — the sim measures the shipped
@@ -2479,31 +2492,36 @@ function printActIISpine(result: Act2Result, pinnedCompetentSeconds: number): vo
       'The load-bearing third cut for a non-meridian build (§2) is now reachable from a moderate bank. Sized per D34 criteria, signed off in range.',
   )
 
-  // --- §6 PREVIEW lines (NOT assertions; PREVIEW-OK / PREVIEW-BREACH only) ----
-  console.log('\n  -- §6 mechanical-assertion PREVIEW (NOT asserted — Gate-D gates the assertable form) --')
-  // 1) lifetime net >= 1 on every sampled severance.
+  // --- §6 mechanical assertions (PREVIEW→PINNED at Gate-D step-8, D43 #5) ------
+  // These printed PREVIEW-OK / PREVIEW-BREACH until step-8; the token is now
+  // PASS / FAIL. The FAIL token is emitted to STDOUT so CI's stdout-only grep
+  // (`npm run sim | tee sim-output.log`) actually gates on a breach — see the
+  // step-8 FINDING on the pre-existing console.error gap. Every invariant below
+  // HOLDS at the current calibration (the values in parens are the green pins).
+  console.log('\n  -- §6 mechanical assertions (PINNED at Gate-D step-8, D43 #5) --')
+  // 1) lifetime net >= 1 on every sampled severance. PIN: min ≥ 1 (measured 1.097).
   const lifetimeNets = result.rows.map((r) => Number(r.lifetimeNet))
   const minLifetimeNet = Math.min(...lifetimeNets)
   console.log(
     `  [1] lifetime net >= 1: min lifetimeNet ${minLifetimeNet.toFixed(3)} across ${result.rows.length} severances → ` +
-      `${minLifetimeNet >= 1 ? 'PREVIEW-OK' : 'PREVIEW-BREACH'} ` +
+      `${minLifetimeNet >= 1 ? 'PASS' : 'FAIL'} ` +
       '(severing is never a strict loss over a life).',
   )
-  // 2) breakeven within the ramp horizon (<= rampSteps) on every severance.
+  // 2) breakeven within the ramp horizon (<= rampSteps) on every severance. PIN: step ≤ 12 (measured 7).
   const breakevenOk = ACT2_BREAKEVEN_STEP_DISPLAY <= ACT2_RAMP_STEPS
   console.log(
     `  [2] breakeven within ramp horizon: step ${ACT2_BREAKEVEN_STEP_DISPLAY} <= ${ACT2_RAMP_STEPS} → ` +
-      `${breakevenOk ? 'PREVIEW-OK' : 'PREVIEW-BREACH'} (the weakness window is bounded).`,
+      `${breakevenOk ? 'PASS' : 'FAIL'} (the weakness window is bounded).`,
   )
-  // 3) >= 3 live severables at the (first) corpse choice — the shipping assertion.
+  // 3) >= 3 live severables at the (first) corpse choice — the shipping assertion. PIN: ≥ 3 (measured 3).
   const threeLiveOk = result.liveAtFirstChoice >= 3
   console.log(
     `  [3] >= 3 live severables: ${result.liveAtFirstChoice} live at the first corpse choice → ` +
-      `${threeLiveOk ? 'PREVIEW-OK' : 'PREVIEW-BREACH'} ` +
+      `${threeLiveOk ? 'PASS' : 'FAIL'} ` +
       '(three sequential severances require the build to offer >= 3; the count then decrements 3→2→1 as cuts land).',
   )
   console.log(
-    '  (ACT II SPINE ends — observation/model input for Gate-D; nothing here is asserted, no error token is emitted.)',
+    '  (ACT II SPINE ends — §6 invariants now PINNED (D43 #5); a breach prints the CI-fatal token on stdout.)',
   )
 }
 
@@ -3268,42 +3286,46 @@ function printActIIRoster(actors: Act2ActorResult[], spine: Act2Result): void {
     console.log(
       `  Lifetime net (m-independent ramp mean): ${actor.lifetimeNetConst.toFixed(3)} on every severance; min ${actor.minLifetimeNet.toFixed(3)}.`,
     )
-    // §6 PREVIEW lines (PREVIEW-OK / PREVIEW-BREACH — never asserted, Gate-D gates the assertable form).
+    // §6 assertions (PREVIEW→PINNED at Gate-D step-8, D43 #5): the token is now
+    // PASS / FAIL (was PREVIEW-OK / PREVIEW-BREACH), FAIL to STDOUT so CI gates.
     const net1 = actor.minLifetimeNet >= 1
     console.log(
-      `  §6[1] lifetime net ≥ 1: min ${actor.minLifetimeNet.toFixed(3)} → ${net1 ? 'PREVIEW-OK' : 'PREVIEW-BREACH'} (severing is never a strict loss over a life).`,
+      `  §6[1] lifetime net ≥ 1: min ${actor.minLifetimeNet.toFixed(3)} → ${net1 ? 'PASS' : 'FAIL'} (severing is never a strict loss over a life).`,
     )
     const be2 = actor.breakevenStepDisplay <= ACT2_RAMP_STEPS
     console.log(
-      `  §6[2] breakeven within horizon: step ${actor.breakevenStepDisplay} ≤ ${ACT2_RAMP_STEPS} → ${be2 ? 'PREVIEW-OK' : 'PREVIEW-BREACH'} (weakness window bounded).`,
+      `  §6[2] breakeven within horizon: step ${actor.breakevenStepDisplay} ≤ ${ACT2_RAMP_STEPS} → ${be2 ? 'PASS' : 'FAIL'} (weakness window bounded).`,
     )
     const live3 = actor.liveAtFirstChoice >= 3
     console.log(
-      `  §6[3] ≥ 3 live severables at first corpse choice: ${actor.liveAtFirstChoice} → ${live3 ? 'PREVIEW-OK' : 'PREVIEW-BREACH'}` +
+      `  §6[3] ≥ 3 live severables at first corpse choice: ${actor.liveAtFirstChoice} → ${live3 ? 'PASS' : 'FAIL'}` +
         `${live3 ? '' : ` — FINDING: ${actor.name} carries only ${actor.liveAtFirstChoice} live severables (missing: ${actor.missingSeverables.join(', ') || 'none named'}); three sequential severances are impossible for this build as-is`}.`,
     )
-    // §6[4] CONDITIONAL-CLASS PREVIEW (D35 / principle #35) — only for a build that
+    // §6[4] CONDITIONAL-CLASS assertion (D35 / principle #35) — only for a build that
     // severs the Flowing Form (baseline-1 form; cap·m > 1 every axis + breakeven-within-horizon).
+    // PREVIEW→PINNED: cap·m qi 1.400× / insight 4.000× (both > 1); qi baseline-1 breakeven step 10 ≤ 12.
     const ccp = actor.conditionalClassPreview
     if (ccp) {
       const capOk = ccp.capMQi > 1 && ccp.capMInsight > 1
       const beOk = ccp.baselineOneBreakevenStepQi <= ACT2_RAMP_STEPS
       console.log(
-        `  §6[4] conditional-class (Flowing Form, baseline-1): cap·m qi ${ccp.capMQi.toFixed(3)}× / insight ${ccp.capMInsight.toFixed(3)}× > 1 on every axis → ${capOk ? 'PREVIEW-OK' : 'PREVIEW-BREACH'}; ` +
+        `  §6[4] conditional-class (Flowing Form, baseline-1): cap·m qi ${ccp.capMQi.toFixed(3)}× / insight ${ccp.capMInsight.toFixed(3)}× > 1 on every axis → ${capOk ? 'PASS' : 'FAIL'}; ` +
           `qi-axis baseline-1 breakeven (ratio·m ≥ 1 → 0.7·ratio ≥ 1 → ratio ≥ 1.429) at step ${ccp.baselineOneBreakevenStepQi} ` +
-          `(LATER than the standard ratio-crosses-1 step ${ccp.standardBreakevenStep}) ≤ ${ACT2_RAMP_STEPS} horizon → ${beOk ? 'PREVIEW-OK' : 'PREVIEW-BREACH'} ` +
+          `(LATER than the standard ratio-crosses-1 step ${ccp.standardBreakevenStep}) ≤ ${ACT2_RAMP_STEPS} horizon → ${beOk ? 'PASS' : 'FAIL'} ` +
           '(insight axis clears baseline-1 at step 1 — 2.0·0.5 = 1.0; the qi axis is the binding one).',
       )
     }
     // D35 Call-1 SURVIVABILITY (the headline hard constraint) — the ×0.35 trough
-    // must still fill the next offering and make forward progress. SURVIVABLE / STALLED.
+    // must still fill the next offering and make forward progress. PREVIEW→PINNED:
+    // qi time-to-afford (16.8s measured) ≤ window budget (7198s) → SURVIVABLE.
     const ffs = actor.flowingFormSurvivability
     if (ffs) {
+      const survivable = ffs.verdict === 'SURVIVABLE' && ffs.qiTimeToAffordSeconds <= ffs.windowBudgetSeconds
       console.log(
         `  D35 SURVIVABILITY (Flowing Form trough): flowing-form qi factor ${ffs.troughFlowingFactorQi.toFixed(3)}× (= 0.7·0.5, the deepest window) → ` +
           `trough qi rate ${ffs.troughQiRate.toExponential(3)}/s (baseline ${ffs.baselineQiRate.toExponential(3)}/s) | next offering qi cost ${ffs.nextOfferingQiCost.toExponential(3)} ` +
           `(insight ${ffs.nextOfferingInsightCost.toExponential(3)}) | qi time-to-afford ${ffs.qiTimeToAffordSeconds.toFixed(1)}s vs pre-cut cadence ${ffs.preCutCadenceSeconds.toFixed(0)}s/offering ` +
-          `(window budget ${ffs.windowBudgetSeconds.toFixed(0)}s); first post-cut offering wall ${ffs.firstOfferingWallSeconds.toFixed(0)}s → VERDICT ${ffs.verdict}.`,
+          `(window budget ${ffs.windowBudgetSeconds.toFixed(0)}s); first post-cut offering wall ${ffs.firstOfferingWallSeconds.toFixed(0)}s → VERDICT ${ffs.verdict} → ${survivable ? 'PASS' : 'FAIL'}.`,
       )
     }
   }
@@ -3327,18 +3349,21 @@ function printActIIRoster(actors: Act2ActorResult[], spine: Act2Result): void {
         `insight-bound ${insShare.toFixed(1)}% of waited time / qi-bound ${(100 - insShare).toFixed(1)}%.`,
     )
   }
+  // §6[3] roster status (PREVIEW→PINNED, D43 #5): EVERY viable actor carries ≥ 3
+  // live severables at the first corpse choice. PIN: breach count 0. FAIL to stdout.
   const breaches = actors.filter((a) => a.liveAtFirstChoice < 3)
   console.log(
-    `  §6[3] roster status: ${breaches.length === 0 ? 'all actors PREVIEW-OK' : `${breaches.length} PREVIEW-BREACH → [${breaches.map((b) => `${b.name}: ${b.liveAtFirstChoice} live`).join('; ')}]`}` +
+    `  §6[3] roster status: ${breaches.length === 0 ? 'PASS — all actors ≥ 3 live' : `FAIL → ${breaches.length} under 3 live [${breaches.map((b) => `${b.name}: ${b.liveAtFirstChoice} live`).join('; ')}]`}` +
       ' — D35 closed both prior breaches through CHOICES (D31): Lattice via the Flowing Form (it wears the trance), Meridian via the cheap-Manifestation route (~12k insight).',
   )
-  // D35 SURVIVABILITY headline — restated at roster scope so the hard constraint is unmissable.
+  // D35 SURVIVABILITY headline (PREVIEW→PINNED, D43 #5) — restated at roster scope so the hard constraint is unmissable.
   const survActor = actors.find((a) => a.flowingFormSurvivability)
   if (survActor?.flowingFormSurvivability) {
     const s = survActor.flowingFormSurvivability
+    const survivableHeadline = s.verdict === 'SURVIVABLE' && s.qiTimeToAffordSeconds <= s.windowBudgetSeconds
     console.log(
       `  D35 SURVIVABILITY (Call 1, headline): ${survActor.name} Flowing-Form trough qi ${s.troughQiRate.toExponential(3)}/s (${s.troughFlowingFactorQi.toFixed(3)}× = 0.35·baseline) ` +
-        `fills the next offering's ${s.nextOfferingQiCost.toExponential(3)} qi in ${s.qiTimeToAffordSeconds.toFixed(1)}s (window budget ${s.windowBudgetSeconds.toFixed(0)}s) → VERDICT ${s.verdict}. ` +
+        `fills the next offering's ${s.nextOfferingQiCost.toExponential(3)} qi in ${s.qiTimeToAffordSeconds.toFixed(1)}s (window budget ${s.windowBudgetSeconds.toFixed(0)}s) → VERDICT ${s.verdict} → ${survivableHeadline ? 'PASS' : 'FAIL'}. ` +
         'The ×0.35 qi trough is the deepest window in the game; insight (2.0·0.5 = 1.0 at trough, ramping to 4.0) never dips — the Lattice actor stays insight-bound and makes forward progress.',
     )
   }
@@ -3704,6 +3729,221 @@ const DYNASTY_KARMA_ROSTER: DynastySequenceSpec<Act2ActorPolicy>[] = [
 
 /** Exposed for the dynasty test harness (import-safe: see the main-module guard at EOF). */
 export { runLifeToTribulation, DYNASTY_COMPETENT_POLICY, DYNASTY_REALISTIC_POLICY, DYNASTY_LATTICE_POLICY }
+
+// ---- ROOT-DOMINANCE SWEEP (D38 pin / D43 #3 — step-8 Gate-D) -----------------
+//
+// D38 pinned "no root configuration dominates — swept across count/identity/
+// purity at EVERY purity grade (dominance emerges at Heaven where discounts are
+// large, not at Mortal where everything looks equal)"; D43 #3 held the discount
+// grid ⟨tune⟩ until THIS sweep rules on it. The sweep seeds root shape + carried
+// purity through the REAL stores (roots.configure + soul.load purityGrade) so the
+// measured effect is the shipped dao.nodeCost discount (SPEED, never access), and
+// measures Act I hours-to-tribulation for the two builds that exercise the
+// lattice hardest: the lattice specialist (its whole Act I is lattice-Insight
+// bound) and Competent (the generalist — lattice is one axis of many).
+//
+// IDENTITY = best case for the discount (the dominance question is about the best
+// case): the count-k root holds the first k canonical elements. Both builds buy
+// lattice nodes cheapest-first across ALL FIVE symmetric element arms
+// (data/lattice.ts — five identical root/ring-2/ring-2b cost ladders), so a
+// count-k root covers ~k/5 of the lattice spend REGARDLESS of which k elements it
+// names — identity is coverage-equivalent by the lattice's element symmetry, and
+// naming the first k is the faithful best case.
+//
+// MORTAL BY CONSTRUCTION: ROOT_PURITY_SCALE.mortal = 0 → rootDiscountFraction
+// returns 0 at Mortal for every count → dao.nodeCost multiplier is exactly 1 →
+// the Act I run is byte-identical to rootless. The 5 Mortal configs therefore
+// REUSE the rootless baseline (proven, not re-run) — the sweep runs rootless +
+// Earth×5 + Heaven×5 per build (11 runs × 2 builds = 22), not a redundant 32.
+//
+// PURE INSERTION: every sweep run is its own bootSim (fresh pinia); the pinned
+// Act I bands and every existing section run rootless and are untouched. No sim
+// actor outside this sweep ever roots.
+
+/** Whole-hours divisor for the sweep's hours-to-tribulation readout. */
+const SECONDS_PER_HOUR_SIM = 3600
+
+/** The two builds the sweep drives (the lattice specialist + the generalist). */
+const SWEEP_BUILDS: readonly { readonly label: string; readonly policy: Act2ActorPolicy }[] = [
+  { label: 'Lattice', policy: DYNASTY_LATTICE_POLICY },
+  { label: 'Competent', policy: DYNASTY_COMPETENT_POLICY },
+]
+
+/**
+ * Run ONE rooted life to the First Tribulation and return its Act I seconds.
+ * Seeds the carried purity grade (soul) + root shape (roots) AFTER bootSim but
+ * BEFORE the policy runs — exactly how runActIIActor seeds the soul carry — so
+ * the lattice discount is live for every dao.nodeCost during Act I. `elements`
+ * empty = rootless (no seed at all → byte-identical to the base Act I run).
+ */
+function runRootedLifeSeconds(policy: Act2ActorPolicy, elements: readonly Element[], purity: PurityGrade): number {
+  const runner = (state: SimState): void => {
+    if (elements.length > 0) {
+      useSoulStore().load({ ascents: 0, severanceRituals: 0, severanceHistory: [], purityGrade: purity })
+      useRootsStore().configure(elements)
+    }
+    policy.actIRunner(state)
+  }
+  return runProfileQuiet(runner).simSeconds
+}
+
+/** One build's swept hours: rootless baseline + a purity×count grid of hours. */
+interface SweepBuildResult {
+  readonly label: string
+  readonly rootlessHours: number
+  /** hours[purity][count] — count 1..5; Mortal reuses rootlessHours by construction. */
+  readonly hours: Record<PurityGrade, number[]>
+  /** The strictly-fastest count at Heaven (1..5), the deep-narrow⇄wide-shallow argmin. */
+  readonly heavenBestCount: number
+  /** rootlessHours / hours[heaven][heavenBestCount] — this build's max root speedup. */
+  readonly heavenBestSpeedup: number
+}
+
+/** Hours for count-k at a purity (Mortal short-circuits to the rootless baseline). */
+function sweepConfigSeconds(policy: Act2ActorPolicy, count: number, purity: PurityGrade, rootlessSeconds: number): number {
+  if (purity === 'mortal') return rootlessSeconds // scale 0 → discount 0 → identical run
+  const elements: Element[] = ROOT_ELEMENTS.slice(0, count) as Element[]
+  return runRootedLifeSeconds(policy, elements, purity)
+}
+
+function sweepBuild(build: { label: string; policy: Act2ActorPolicy }): SweepBuildResult {
+  const rootlessSeconds = runRootedLifeSeconds(build.policy, [], 'mortal')
+  const hours: Record<PurityGrade, number[]> = { mortal: [], earth: [], heaven: [] }
+  for (const purity of PURITY_GRADES) {
+    for (let count = 1; count <= MAX_ROOT_ELEMENTS; count++) {
+      hours[purity].push(sweepConfigSeconds(build.policy, count, purity, rootlessSeconds) / SECONDS_PER_HOUR_SIM)
+    }
+  }
+  // argmin count at Heaven (the largest-discount grade — where dominance, if any, emerges).
+  let heavenBestCount = 1
+  for (let count = 2; count <= MAX_ROOT_ELEMENTS; count++) {
+    if (hours.heaven[count - 1]! < hours.heaven[heavenBestCount - 1]!) heavenBestCount = count
+  }
+  const rootlessHours = rootlessSeconds / SECONDS_PER_HOUR_SIM
+  const heavenBestSpeedup = rootlessHours / hours.heaven[heavenBestCount - 1]!
+  return { label: build.label, rootlessHours, hours, heavenBestCount, heavenBestSpeedup }
+}
+
+/**
+ * The wider-not-taller BOUND: the sweep pins the maximum root speedup across
+ * both builds as a multiple of rootless (the "maxed rooted life vs cold file"
+ * ratio). A root never trivializes a life — the multiple must stay small so the
+ * game reads the same at dynasty endgame (D38: "finishes lives faster but never
+ * trivially, the bounded multiple keeping the game recognizable"). This ceiling
+ * is the FAIL-able bound; the report states the measured ratio + headroom.
+ */
+const WIDER_NOT_TALLER_BOUND_MAX = 2.0
+
+/**
+ * Append the ROOT-DOMINANCE SWEEP section + its Gate-D assertions. Observation
+ * table first (config × build → hours), then the dominance verdict and the
+ * wider-not-taller bound. The dominance + bound lines are FAIL-able (D43 #3 /
+ * D38 pins): a breach is a FINDING that moves the ⟨tune⟩ grid, per rule 0.1 —
+ * numbers move only on Wes's ruling, so the sweep FLAGS, it never edits the grid.
+ */
+function printRootDominanceSweep(): void {
+  console.log('\n=== ROOT-DOMINANCE SWEEP (D38 pin / D43 #3; hours-to-tribulation; roots = SPEED not access) ===')
+  console.log(
+    '  Seeds root shape (roots.configure) + carried purity (soul.load) through the REAL stores; the effect is the',
+  )
+  console.log(
+    '  shipped dao.nodeCost lattice discount. Identity = first k canonical elements (best case; the five element',
+  )
+  console.log(
+    '  arms are symmetric, so a count-k root covers ~k/5 of lattice spend for any k names). Mortal = rootless by',
+  )
+  console.log('  construction (purity scale 0 → discount 0). Grid ⟨tune⟩ is D43 #3\'s open question — this sweep rules it.')
+
+  const results = SWEEP_BUILDS.map(sweepBuild)
+
+  for (const r of results) {
+    console.log(`\n  -- ${r.label} (rootless baseline ${r.rootlessHours.toFixed(3)}h to tribulation) --`)
+    console.log('     count │   Mortal      Earth      Heaven   (hours to tribulation; Δ vs rootless)')
+    for (let count = 1; count <= MAX_ROOT_ELEMENTS; count++) {
+      const cell = (purity: PurityGrade): string => {
+        const h = r.hours[purity][count - 1]!
+        const deltaPct = ((r.rootlessHours - h) / r.rootlessHours) * 100
+        return `${h.toFixed(3)}h (${deltaPct >= 0 ? '-' : '+'}${Math.abs(deltaPct).toFixed(2)}%)`
+      }
+      console.log(`       ${count}   │ ${cell('mortal')}  ${cell('earth')}  ${cell('heaven')}`)
+    }
+    console.log(
+      `     Heaven argmin: count ${r.heavenBestCount} (fastest at Heaven) — max root speedup ` +
+        `${r.heavenBestSpeedup.toFixed(4)}× vs rootless.`,
+    )
+  }
+
+  // --- DOMINANCE VERDICT (D38 / D43 #3) --------------------------------------
+  // "Dominates" = the SAME count is the strict Heaven argmin for BOTH builds AND
+  // beats every other count on both by a non-marginal margin. Non-dominance = the
+  // fastest count differs by build (deep-narrow suits a concentrated build,
+  // wide-shallow a spread one) OR the spread is within noise. The dominance
+  // question is asked at Heaven (largest discounts), per D38.
+  const lattice = results.find((r) => r.label === 'Lattice')!
+  const competent = results.find((r) => r.label === 'Competent')!
+  const sameArgmin = lattice.heavenBestCount === competent.heavenBestCount
+  // Spread across counts at Heaven, per build (max−min hours as % of rootless) —
+  // how much the count choice even matters. A tiny spread ⇒ no config can dominate.
+  const heavenSpreadPct = (r: SweepBuildResult): number => {
+    const hs = r.hours.heaven
+    return ((Math.max(...hs) - Math.min(...hs)) / r.rootlessHours) * 100
+  }
+  const latticeSpread = heavenSpreadPct(lattice)
+  const competentSpread = heavenSpreadPct(competent)
+  const MARGINAL_SPREAD_PCT = 1.0 // below this, the count choice is within noise
+  const bothMarginal = latticeSpread < MARGINAL_SPREAD_PCT && competentSpread < MARGINAL_SPREAD_PCT
+  const dominates = sameArgmin && !bothMarginal
+  console.log('\n  -- DOMINANCE VERDICT (D38 pin; asked at Heaven) --')
+  console.log(
+    `  Heaven argmin count: Lattice ${lattice.heavenBestCount}, Competent ${competent.heavenBestCount} ` +
+      `(${sameArgmin ? 'SAME' : 'DIFFER'}); Heaven count-spread: Lattice ${latticeSpread.toFixed(2)}%, ` +
+      `Competent ${competentSpread.toFixed(2)}% of rootless (${bothMarginal ? 'both within noise' : 'material'}).`,
+  )
+  // ASSERTION (D43 #3 / D38): no configuration dominates across the board. FAIL =
+  // a FINDING (the ⟨tune⟩ grid moves BEFORE hardening), never a silent pass. If it
+  // holds, this is the pinned no-dominance assertion Wes signs.
+  if (!dominates) {
+    console.log(
+      `  ASSERT no-dominance → PASS: no root configuration is strictly best across both builds at Heaven ` +
+        `(${sameArgmin ? 'shared argmin but within-noise spread — the count choice is a wash' : 'the fastest count differs by build — deep-narrow vs wide-shallow trade by build concentration'}). ` +
+        'The ⟨tune⟩ grid is validated by the sweep (D43 #3); no number moves.',
+    )
+  } else {
+    // FAIL to STDOUT so CI's stdout-only grep gates on it (see the step-8 console.error FINDING).
+    console.log(
+      `  FAIL (FINDING — report, do NOT retune here; rule 0.1): root count ${lattice.heavenBestCount} DOMINATES at ` +
+        `Heaven for both builds (Lattice spread ${latticeSpread.toFixed(2)}%, Competent ${competentSpread.toFixed(2)}%). ` +
+        'D43 #3: the discount grid ⟨tune⟩ moves before this assertion hardens — Wes reprices the count ladder.',
+    )
+  }
+
+  // --- WIDER-NOT-TALLER BOUND (D38 pin) --------------------------------------
+  const bound = Math.max(...results.map((r) => r.heavenBestSpeedup))
+  const boundBuild = results.find((r) => r.heavenBestSpeedup === bound)!
+  console.log('\n  -- WIDER-NOT-TALLER BOUND (D38 pin; maxed rooted life vs cold rootless) --')
+  console.log(
+    `  Max root speedup (Heaven, best count, ${boundBuild.label}): ${bound.toFixed(4)}× vs rootless — headroom ` +
+      `${(WIDER_NOT_TALLER_BOUND_MAX - bound).toFixed(4)} under the ${WIDER_NOT_TALLER_BOUND_MAX.toFixed(1)}× ceiling. ` +
+      'NOTE: the harness models the ROOT axis only; memory-fragment Seed-carry is out of v1 harness scope ' +
+      '(SoulBridge carries no fragments), so this is a FLOOR on the maxed-life speedup — carried Seeds would widen it.',
+  )
+  if (bound <= WIDER_NOT_TALLER_BOUND_MAX) {
+    console.log(
+      `  ASSERT wider-not-taller → PASS: maxed root speedup ${bound.toFixed(4)}× ≤ ${WIDER_NOT_TALLER_BOUND_MAX.toFixed(1)}× ` +
+        '(roots finish lives faster but never trivially — the game stays recognizable at dynasty endgame).',
+    )
+  } else {
+    // FAIL to STDOUT so CI's stdout-only grep gates on it.
+    console.log(
+      `  FAIL (FINDING — rule 0.1): maxed root speedup ${bound.toFixed(4)}× > ${WIDER_NOT_TALLER_BOUND_MAX.toFixed(1)}× ceiling ` +
+        '— roots have become taller-not-wider; the discount grid ⟨tune⟩ moves before hardening (D43 #3).',
+    )
+  }
+  console.log(
+    '\n  (ROOT-DOMINANCE SWEEP end — the D38 pins, ruled by the sweep per D43 #3. A breach here is a FINDING that ' +
+      'moves the ⟨tune⟩ grid before the assertion hardens, not a silent pass.)',
+  )
+}
 
 function runProfile(name: string, fn: (state: SimState) => void): SimState {
   bootSim()
@@ -4524,6 +4764,12 @@ export function runPacingSim(): void {
     repeatLabel: DYNASTY_KARMA_REPEAT_LABEL,
     breadthLabel: DYNASTY_KARMA_BREADTH_LABEL,
   })
+
+  // The root-dominance sweep (D38 pins, ruled by the sweep per D43 #3). Pure
+  // insertion — every sweep run is its own bootSim; the pinned Act I bands and
+  // every existing section run rootless and are byte-identical. Its assertions
+  // are FAIL-able (a breach is a FINDING that moves the ⟨tune⟩ grid, rule 0.1).
+  printRootDominanceSweep()
 }
 
 // Executed via `npm run sim` (tsx src/sim/pacing.ts) — the sim's sole entry

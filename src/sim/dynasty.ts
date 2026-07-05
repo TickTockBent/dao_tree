@@ -21,6 +21,13 @@
 // harness stays unit-testable in isolation. pacing.ts imports FROM here (one
 // direction only) and passes its real single-life adapter in.
 
+// The shipped karma decay ratio (r in base × rⁿ). Imported as DATA only (no
+// store, no side effect, no pacing.ts dependency — the module stays unit-testable
+// in isolation): the farm-income convergence assertion (D36, step-8 hardening)
+// bounds the repeat sequence's cumulative income by the geometric ceiling
+// life-1 / (1 − r), which is only legible against the real r.
+import { KARMA_DECAY_RATIO } from '@/data/karma'
+
 /** Whole-hours conversion for the observation lines. */
 const SECONDS_PER_HOUR = 3600
 
@@ -319,7 +326,7 @@ export function printDynastyKarmaSection<Policy>(
   comparison: { readonly repeatLabel: string; readonly breadthLabel: string },
 ): void {
   console.log(
-    '\n=== DYNASTY KARMA (measurement; D41-ruled bases 8/8/7/4, variantShare 0.4 — ⟨tune⟩; PREVIEW, no assertion) ===',
+    '\n=== DYNASTY KARMA (D41-ruled bases 8/8/7/4, variantShare 0.4; D36 breadth>repeat + farm convergence PINNED step-8; class shape is measurement) ===',
   )
   console.log(
     '  Per-actor karma income across the dynasty sequences, decomposed by the four D40 classes (milestone',
@@ -336,9 +343,11 @@ export function printDynastyKarmaSection<Policy>(
   console.log('  encounter 7 / grade-delta 4, variantShare 0.4, decay 0.5) — ⟨tune⟩ pending the Gate-D re-run sign-off.')
 
   const shapeByLabel = new Map<string, KarmaShapeTotals>()
+  const livesByLabel = new Map<string, DynastyLife[]>()
   for (const spec of specs) {
     const { lives, shape } = measureSequenceKarma(spec.sequence, runLife)
     shapeByLabel.set(spec.label, shape)
+    livesByLabel.set(spec.label, lives)
 
     console.log(`\n  -- ${spec.label} (${spec.sequence.length} lives) --`)
     for (const life of lives) {
@@ -366,11 +375,16 @@ export function printDynastyKarmaSection<Policy>(
     )
   }
 
-  // Breadth-vs-repeat (D36 repeat<breadth at equal length + competence). MEASURED.
+  // Breadth-vs-repeat (D36 repeat<breadth at equal length + competence).
+  // PREVIEW→PINNED (Gate-D step-8, D43 #5): the direction is now ASSERTED —
+  // breadth strictly out-earns an equal-length, equal-competence repeat. The
+  // exact ratio stays measured (D41 signed 1.14× as the honest structural
+  // ceiling; only the DIRECTION is the invariant). FAIL prints to STDOUT so CI
+  // gates (the sim's stdout-only grep; see pacing.ts's step-8 FINDING).
   const repeat = shapeByLabel.get(comparison.repeatLabel)
   const breadth = shapeByLabel.get(comparison.breadthLabel)
   if (repeat && breadth) {
-    console.log('\n  -- breadth vs repeat (D36 repeat<breadth; equal length + competence; MEASURED, not asserted) --')
+    console.log('\n  -- breadth vs repeat (D36 repeat<breadth; equal length + competence; PINNED — direction asserted) --')
     console.log(
       `  repeat  [${comparison.repeatLabel}]: dynasty income ${repeat.total.toFixed(2)} ` +
         `(headlines decay ×KARMA_DECAY_RATIO per re-earn; grade deltas dry up once bests latch).`,
@@ -381,15 +395,47 @@ export function printDynastyKarmaSection<Policy>(
     )
     const delta = breadth.total - repeat.total
     const ratio = repeat.total > 0 ? breadth.total / repeat.total : 0
+    // ASSERT (D36): breadth > repeat. PIN: delta > 0 (measured +27.60, ratio 1.14×).
     console.log(
-      `  observed: breadth − repeat = ${delta.toFixed(2)} ` +
-        `(breadth/repeat = ${ratio.toFixed(2)}×) — ` +
-        `${delta > 0 ? 'breadth out-earns repeat, the D36 direction' : 'repeat ≥ breadth here (see report)'}.`,
+      `  ASSERT breadth > repeat: breadth − repeat = ${delta.toFixed(2)} ` +
+        `(breadth/repeat = ${ratio.toFixed(2)}×) → ${delta > 0 ? 'PASS' : 'FAIL'} ` +
+        `(${delta > 0 ? 'breadth out-earns repeat, the D36 direction — exact ratio measured, only the sign is pinned' : 'repeat ≥ breadth — the D36 direction inverted; report before retuning'}).`,
+    )
+  }
+
+  // Farm-income convergence (D36 "farm income converges"; PREVIEW→PINNED step-8).
+  // A repeat dynasty's per-life income is bounded: headlines decay ×r per re-earn
+  // and grade deltas dry up once bests latch, so income is non-increasing life to
+  // life and the cumulative is bounded by the geometric ceiling life-1 / (1 − r)
+  // (each post-first life ≤ life-1 × rⁿ). Two invariants, both asserted.
+  const repeatLives = livesByLabel.get(comparison.repeatLabel)
+  if (repeatLives && repeatLives.length >= 2) {
+    const incomes = repeatLives.map((life) => life.result.karma.total)
+    const cumulative = incomes.reduce((sum, income) => sum + income, 0)
+    const EPSILON = 1e-9
+    let nonIncreasing = true
+    for (let index = 1; index < incomes.length; index++) {
+      if (incomes[index]! > incomes[index - 1]! + EPSILON) nonIncreasing = false
+    }
+    const geometricCeiling = incomes[0]! / (1 - KARMA_DECAY_RATIO)
+    const bounded = cumulative <= geometricCeiling + EPSILON
+    const converges = nonIncreasing && bounded
+    console.log('\n  -- farm-income convergence (D36; repeat income bounded; PINNED — asserted) --')
+    console.log(
+      `  repeat per-life income [${comparison.repeatLabel}]: ${incomes.map((income) => income.toFixed(2)).join(' → ')} ` +
+        `(non-increasing: ${nonIncreasing ? 'yes' : 'NO'}); cumulative ${cumulative.toFixed(2)} vs geometric ceiling ` +
+        `life-1/(1−r) = ${geometricCeiling.toFixed(2)} (r = ${KARMA_DECAY_RATIO}).`,
+    )
+    // ASSERT (D36): income non-increasing AND cumulative ≤ life-1/(1−r) — a finite
+    // farm ceiling even over an unbounded repeat. PIN: 113.60→52.80→26.40, Σ 192.80 ≤ 227.20.
+    console.log(
+      `  ASSERT farm income converges: ${converges ? 'PASS' : 'FAIL'} ` +
+        `(${converges ? 'per-life income decays and the cumulative stays under the geometric ceiling — the farm has a finite karma horizon' : 'repeat income is NOT bounded by the decay ceiling; report before retuning'}).`,
     )
   }
 
   console.log(
-    '\n  (DYNASTY KARMA section end — observation-only; D41-ruled bases; the Gate-D re-run, nothing asserted, no error token.)',
+    '\n  (DYNASTY KARMA section end — D36 breadth>repeat + farm convergence now PINNED (D43 #5); the class shape stays measurement (D40). A breach prints the CI-fatal token on stdout.)',
   )
 }
 

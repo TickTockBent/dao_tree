@@ -46,10 +46,13 @@ jobs:
           echo "OK: no __daoDebug symbol in dist/."
 
       # The pacing sim prints PASS/FAIL lines (incl. the Gate-D pinned bands)
-      # but always exits 0 — enforce the FAIL lines here.
+      # but always exits 0 — enforce the FAIL lines here. 2>&1 matters: the
+      # Act I pinned-band FAILs go to console.error, and a stdout-only tee was
+      # stderr-blind — those bands were never actually CI-fatal until this fix
+      # (step-8 Finding A, signed off 2026-07-05).
       - name: Pacing sim (pinned bands)
         run: |
-          npm run sim | tee sim-output.log
+          npm run sim 2>&1 | tee sim-output.log
           if grep -q "FAIL" sim-output.log; then
             echo "::error::Pacing sim reported FAIL lines (see log above)"
             exit 1
