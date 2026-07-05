@@ -23,6 +23,7 @@ import HintBar from '@/components/HintBar.vue'
 import SecretRealmTab from '@/components/SecretRealmTab.vue'
 import AlchemyTab from '@/components/AlchemyTab.vue'
 import AchievementsPanel from '@/components/AchievementsPanel.vue'
+import ChroniclePanel from '@/components/ChroniclePanel.vue'
 import SeveringPanel from '@/components/SeveringPanel.vue'
 import RebirthPanel from '@/components/RebirthPanel.vue'
 import { useSecretRealmStore } from '@/stores/secretRealm'
@@ -135,7 +136,7 @@ const alchemyTabAvailable = computed(() => alchemy.isRevealed())
       <div v-else-if="currentTab === 'sect'" class="tab-content"><SectTab /></div>
       <div v-else-if="currentTab === 'secret'" class="tab-content"><SecretRealmTab /></div>
       <div v-else-if="currentTab === 'alchemy'" class="tab-content"><AlchemyTab /></div>
-      <div v-else-if="currentTab === 'journal'" class="tab-content"><JournalView /><AchievementsPanel /></div>
+      <div v-else-if="currentTab === 'journal'" class="tab-content"><JournalView /><AchievementsPanel /><ChroniclePanel /></div>
 
       <div v-else-if="currentTab === 'save'" class="tab-content">
         <section class="panel dev">
