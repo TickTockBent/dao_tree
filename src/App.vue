@@ -7,7 +7,7 @@ import { useDaoStore } from '@/stores/dao'
 import { useSectStore } from '@/stores/sect'
 import { usePipelinesStore } from '@/stores/pipelines'
 import { format } from '@/engine/format'
-import { exportSave } from '@/engine/save'
+import { exportSave, importSave } from '@/engine/save'
 import type { RealmId } from '@/engine/types'
 import { REALM_DATA } from '@/data/realms'
 import DaoLatticeGraph from '@/components/DaoLatticeGraph.vue'
@@ -82,11 +82,31 @@ function substageLine(id: RealmId): string {
 function onHardReset() {
   if (confirm('Hard reset? This wipes your save.')) game.hardReset()
 }
+// Feedback lives in the itch page comments for now. Single constant —
+// repoint here (e.g. to a Discord) once there's an audience to hold one.
+const FEEDBACK_URL = 'https://ticktockbent.itch.io/dao-tree'
+
+const importText = ref('')
+
 function onExport() {
   const data = game.buildSave()
   const encoded = exportSave(data)
   navigator.clipboard?.writeText(encoded)
-  alert('Save copied to clipboard.')
+  alert('Save copied to clipboard. Paste it into a comment to make a bug report far more useful.')
+}
+function onImport() {
+  const encoded = importText.value.trim()
+  if (!encoded) return
+  if (!confirm('Import this save? It replaces your current progress.')) return
+  try {
+    const save = importSave(encoded)
+    game.applySave(save)
+    game.saveNow()
+    importText.value = ''
+    alert('Save imported.')
+  } catch {
+    alert('That save code could not be read. Check that it was copied in full.')
+  }
 }
 
 const daoTabAvailable = computed(() => dao.isRevealed())
@@ -155,12 +175,23 @@ const alchemyTabAvailable = computed(() => alchemy.isRevealed())
       <div v-else-if="currentTab === 'journal'" class="tab-content"><JournalView /><AchievementsPanel /><ChroniclePanel /></div>
 
       <div v-else-if="currentTab === 'save'" class="tab-content">
+        <section class="panel feedback">
+          <h3>Feedback</h3>
+          <p>Dao Tree is in active development. Bug reports and thoughts go in the
+            comments on the itch page — they genuinely shape what gets built next.</p>
+          <p class="nudge">Hit a bug? Export your save below and paste it into your
+            comment — a save turns "it broke" into something I can actually fix.</p>
+          <a class="link-button" :href="FEEDBACK_URL" target="_blank" rel="noopener">Open the itch page →</a>
+        </section>
         <section class="panel dev">
           <h3>Save</h3>
           <p>Time played: {{ format(game.timePlayed) }}s</p>
           <button @click="game.saveNow()">Save</button>
           <button @click="onExport">Export</button>
           <button @click="onHardReset">Hard reset</button>
+          <p class="import-label">Import a save (moves progress between devices or platforms):</p>
+          <textarea v-model="importText" class="import-box" rows="3" placeholder="Paste an exported save code here…"></textarea>
+          <button :disabled="!importText.trim()" @click="onImport">Import</button>
         </section>
       </div>
     </main>
@@ -184,4 +215,10 @@ button { font-family: inherit; font-size: 1rem; padding: 0.4rem 0.8rem; backgrou
 button:hover:not(:disabled) { background: #3a3a3a; }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
 .dev { border-color: #555; }
+.feedback p { margin: 0 0 0.5rem 0; color: #cfcfcf; font-size: 0.92rem; line-height: 1.4; }
+.feedback .nudge { color: #9a9a9a; }
+.link-button { display: inline-block; font-size: 1rem; padding: 0.4rem 0.8rem; background: #2a2a2a; color: #dfdfdf; border: 1px solid #444; border-radius: 4px; text-decoration: none; margin: 0.25rem 0; }
+.link-button:hover { background: #3a3a3a; }
+.import-label { margin: 0.75rem 0 0.25rem 0; color: #9a9a9a; font-size: 0.9rem; }
+.import-box { display: block; width: 100%; box-sizing: border-box; font-family: inherit; font-size: 0.85rem; background: #111; color: #dfdfdf; border: 1px solid #444; border-radius: 4px; padding: 0.5rem; resize: vertical; margin-bottom: 0.25rem; }
 </style>
