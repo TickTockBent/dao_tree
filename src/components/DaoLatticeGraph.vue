@@ -10,7 +10,7 @@
 // Click a node to buy its next tier; a blocked buy shows its reason (D22
 // Manifestation gate / flow-stillness conflict) as a hover title + badge.
 
-import { computed } from 'vue'
+import { computed, ref, onMounted, nextTick } from 'vue'
 import { useDaoStore } from '@/stores/dao'
 import { usePipelinesStore } from '@/stores/pipelines'
 import { LATTICE_DATA, findLatticeNode } from '@/data/lattice'
@@ -20,8 +20,23 @@ import type { Element, LatticeNodeKey } from '@/engine/types'
 const dao = useDaoStore()
 const pipelines = usePipelinesStore()
 
+// The lattice renders at a fixed pixel size and scrolls inside a viewport, so
+// nodes keep their size on every screen (a native overflow container pans by
+// touch on mobile for free). Open scrolled to the lattice's heart rather than
+// the top-left corner.
+const viewportRef = ref<HTMLDivElement | null>(null)
+onMounted(async () => {
+  await nextTick()
+  const viewport = viewportRef.value
+  if (!viewport) return
+  viewport.scrollLeft = (viewport.scrollWidth - viewport.clientWidth) / 2
+  viewport.scrollTop = (viewport.scrollHeight - viewport.clientHeight) / 2
+})
+
 // ---- Layout constants (named per §11) --------------------------------------
-const VIEWBOX_SIZE = 500
+// Sized to fit the full graph (outermost ring at radius 290 + node + label);
+// 500 clipped the outer Manifestation ring. Keep in sync with .lattice-svg px.
+const VIEWBOX_SIZE = 700
 const CENTER = VIEWBOX_SIZE / 2
 const ROOT_RING_RADIUS = 90
 const RING2_RADIUS = 175
@@ -176,6 +191,7 @@ const conflictLabel = computed(() =>
       <span class="insight-label">Insight: <b>{{ format(dao.insight) }}</b></span>
       <span class="insight-rate">(+{{ insightPerSec }}/s)</span>
     </div>
+    <div ref="viewportRef" class="lattice-viewport">
     <svg :viewBox="`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`" class="lattice-svg">
       <!-- Edges (requires) -->
       <line
@@ -221,6 +237,7 @@ const conflictLabel = computed(() =>
         </text>
       </g>
     </svg>
+    </div>
     <p v-if="positionedNodes.every((n) => n.tier === 0)" class="hint-text">
       Click a root node (inner ring) to glimpse it for {{ format(dao.nodeCost('metal')) }} Insight.
     </p>
@@ -249,10 +266,20 @@ const conflictLabel = computed(() =>
   font-size: 0.9em;
   margin-left: 0.5rem;
 }
-.lattice-svg {
+.lattice-viewport {
   width: 100%;
-  max-width: 500px;
-  height: auto;
+  max-height: 70vh;
+  overflow: auto;
+}
+/* Fixed size keeps nodes legible on every screen; the viewport scrolls (and
+   pans by touch on mobile). Width/height must match VIEWBOX_SIZE. margin auto
+   centers it when the viewport is wider, and collapses to 0 (left-aligned,
+   fully scrollable) when it isn't. */
+.lattice-svg {
+  display: block;
+  width: 700px;
+  height: 700px;
+  margin: 0 auto;
 }
 .lattice-edge {
   stroke: #444;
