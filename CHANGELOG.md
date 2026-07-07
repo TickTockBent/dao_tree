@@ -3,6 +3,22 @@
 All notable changes to **Dao Tree**. Versions track the itch.io releases;
 **0.2** was the first public release, so earlier development is folded into it.
 
+## 0.6.1 — 2026-07-07
+
+### Added
+- **A way to talk back.** The Save tab now carries a feedback link — bug
+  reports and thoughts go to the itch.io page comments — beside a nudge to
+  attach your exported save. A save turns "it broke" into something that can
+  actually be fixed.
+- **Import your save.** Export finally has its partner: paste an exported
+  save to restore it. The same code moves your progress between devices —
+  and, one day, off itch onto another platform. Your run is yours to carry.
+
+### Fixed
+- **The Dao lattice fits the screen.** The outermost ring of Manifestations
+  was drawn past the canvas edge and clipped from view; the whole lattice
+  now scales to its panel, every truth visible at once.
+
 ## 0.6.0 — 2026-07-05 — the wheel turns
 
 ### Added
